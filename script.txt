@@ -5,6 +5,110 @@ SafeSpot.Name = "Spot"
 SafeSpot.Size = Vector3.new(500, 50, 500)
 SafeSpot.Anchored = true
 SafeSpot.Transparency = 0.5
+slapRemotes = {
+	Extended = game.ReplicatedStorage.b,
+
+	ZZZZZZZ = game.ReplicatedStorage.ZZZZZZZHit,
+	Brick = game.ReplicatedStorage.BrickHit,
+	Snow = game.ReplicatedStorage.SnowHit,
+	Pull = game.ReplicatedStorage.PullHit,
+	Flash = game.ReplicatedStorage.FlashHit,
+	Spring = game.ReplicatedStorage.springhit,
+	Swapper = game.ReplicatedStorage.HitSwapper,
+	Bull = game.ReplicatedStorage.BullHit,
+	Dice = game.ReplicatedStorage.DiceHit,
+	Ghost = game.ReplicatedStorage.GhostHit,
+	Stun = game.ReplicatedStorage.HtStun,
+	["Za Hando"] = game.ReplicatedStorage.zhramt,
+	Fort = game.ReplicatedStorage.Fort,
+	Magnet = game.ReplicatedStorage.MagnetHIT,
+	Pusher = game.ReplicatedStorage.PusherHit,
+	Anchor = game.ReplicatedStorage.hitAnchor,
+	Space = game.ReplicatedStorage.HtSpace,
+	Boomerang = game.ReplicatedStorage.BoomerangH,
+	Speedrun = game.ReplicatedStorage.Speedrunhit,
+	Mail = game.ReplicatedStorage.MailHit,
+	Golden = game.ReplicatedStorage.GoldenHit,
+	MR = game.ReplicatedStorage.MisterHit,
+	Reaper = game.ReplicatedStorage.ReaperHit,
+	Replica = game.ReplicatedStorage.ReplicaHit,
+	Defense = game.ReplicatedStorage.DefenseHit,
+	Killstreak = game.ReplicatedStorage.KSHit,
+	Reverse = game.ReplicatedStorage.ReverseHit,
+	Shukuchi = game.ReplicatedStorage.ShukuchiHit,
+	Duelist = game.ReplicatedStorage.DuelistHit,
+	woah = game.ReplicatedStorage.woahHit,
+	Ice = game.ReplicatedStorage.IceHit,
+	Adios = game.ReplicatedStorage.hitAdios,
+	Blocked = game.ReplicatedStorage.BlockedHit,
+	Engineer = game.ReplicatedStorage.engiehit,
+	Rocky = game.ReplicatedStorage.RockyHit,
+	Conveyor = game.ReplicatedStorage.ConvHit,
+	STOP = game.ReplicatedStorage.STOP,
+	Phantom = game.ReplicatedStorage.PhantomHit,
+	Wormhole = game.ReplicatedStorage.WormHit,
+	Acrobat = game.ReplicatedStorage.AcHit,
+	Plague = game.ReplicatedStorage.PlagueHit,
+	["[REDACTED]"] = game.ReplicatedStorage.ReHit,
+	bus = game.ReplicatedStorage.hitbus,
+	Phase = game.ReplicatedStorage.PhaseH,
+	Warp = game.ReplicatedStorage.WarpHt,
+	Bomb = game.ReplicatedStorage.BombHit,
+	Bubble = game.ReplicatedStorage.BubbleHit,
+	Jet = game.ReplicatedStorage.JetHit,
+	Shard = game.ReplicatedStorage.ShardHIT,
+	potato = game.ReplicatedStorage.potatohit,
+	CULT = game.ReplicatedStorage.CULTHit,
+	bob = game.ReplicatedStorage.bobhit,
+	Buddies = game.ReplicatedStorage.buddiesHIT,
+	Spy = game.ReplicatedStorage.SpyHit,
+	Detonator = game.ReplicatedStorage.DetonatorHit,
+	Rage = game.ReplicatedStorage.GRRRR,
+	Trap = game.ReplicatedStorage.traphi,
+	Orbit = game.ReplicatedStorage.Orbihit,
+	Hybrid = game.ReplicatedStorage.HybridCLAP,
+	Slapple = game.ReplicatedStorage.SlappleHit,
+	Disarm = game.ReplicatedStorage.DisarmH,
+	Dominance = game.ReplicatedStorage.DominanceHit,
+	Link = game.ReplicatedStorage.LinkHit,
+	Rojo = game.ReplicatedStorage.RojoHit,
+	rob = game.ReplicatedStorage.robhit,
+	Rhythm = game.ReplicatedStorage.rhythmhit,
+	Nightmare = game.ReplicatedStorage.nightmarehit,
+	Hitman = game.ReplicatedStorage.HitmanHit,
+	Thor = game.ReplicatedStorage.ThorHit,
+	Retro = game.ReplicatedStorage.RetroHit,
+	Cloud = game.ReplicatedStorage.CloudHit,
+	Null = game.ReplicatedStorage.NullHit,
+	spin = game.ReplicatedStorage.spinhit,
+
+	Poltergeist = game.ReplicatedStorage.UTGHit,
+	Clock = game.ReplicatedStorage.UTGHit,
+	["Untitled Tag Glove"] = game.ReplicatedStorage.UTGHit,
+
+	Kinetic = game.ReplicatedStorage.HtStun,
+	Recall = game.ReplicatedStorage.HtStun,
+	Balloony = game.ReplicatedStorage.HtStun,
+	Sparky = game.ReplicatedStorage.HtStun,
+	Boogie = game.ReplicatedStorage.HtStun,
+	Stun = game.ReplicatedStorage.HtStun,
+	Coil = game.ReplicatedStorage.HtStun,
+
+	Diamond = game.ReplicatedStorage.DiamondHit,
+	Megarock = game.ReplicatedStorage.DiamondHit,
+
+	Moon = game.ReplicatedStorage.CelestialHit,
+	Jupiter = game.ReplicatedStorage.CelestialHit,
+
+	Mitten = game.ReplicatedStorage.MittenHit,
+	["Hallow Jack"] = game.ReplicatedStorage.HallowHIT,
+
+	OVERKILL = game.ReplicatedStorage.Overkillhit,
+	["The Flex"] = game.ReplicatedStorage.FlexHit,
+	Custom = game.ReplicatedStorage.CustomHit,
+	["God's Hand"] = game.ReplicatedStorage.Godshand,
+	Error = game.ReplicatedStorage.Errorhit
+}
 local Window = Rayfield:CreateWindow({
    Name = "Ethan's Metal",
    Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
@@ -39,11 +143,96 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
-local Tab = Window:CreateTab("Main", "rewind")
-
-
-
+local Tab = Window:CreateTab("Main", "sword")
 local Section = Tab:CreateSection("Main")
+local Toggle = Tab:CreateToggle({
+   Name = "Slap Aura",
+   CurrentValue = false,
+   Flag = "SlapAuraToggle",
+   Callback = function(Value)
+       getgenv().slapAura = Value
+
+       function usingParry(player)
+           for i,v in pairs(player.Character.Humanoid:GetPlayingAnimationTracks()) do
+               if v.Animation.AnimationId == "rbxassetid://16102819260" then
+                   return true
+               end
+           end
+           return false
+       end
+
+       if getgenv().slapAura then
+           task.spawn(function()
+               while getgenv().slapAura do
+                   for _,v in pairs(game.Players:GetChildren()) do
+                       if v ~= User and User.Character:FindFirstChild("HumanoidRootPart") and v.Character then
+                           if v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Ragdolled") 
+                              and not v.Character.HumanoidRootPart:FindFirstChild("BlockedShield") 
+                              and not v.Character:FindFirstChild("Counterd") 
+                              and not v.Character:FindFirstChild("Mirage") 
+                              and not v.Character:FindFirstChild("rock") 
+                              and not usingParry(v) 
+                              and v.Character.Ragdolled.Value == false then
+
+                               local Magnitude = (User.Character.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude
+                               if Magnitude <= 20 then -- Default range value
+                                   if User.Character:FindFirstChild("Default") or User.Backpack:FindFirstChild("Default") then
+                                       game.ReplicatedStorage.b:FireServer(v.Character.HumanoidRootPart, true)
+                                   elseif User.leaderstats.Glove.Value == "Boxer" then
+                                       game.ReplicatedStorage.Events.Boxing:FireServer(v.Character, true)
+                                   else
+                                       game.ReplicatedStorage.GeneralHit:FireServer(v.Character.HumanoidRootPart, true)
+                                   end
+                                   for _,g in pairs(User.Character:GetChildren()) do
+                                       if g:IsA("Tool") and g:FindFirstChild("Glove") then
+                                           g:Activate()
+                                       end
+                                   end
+                               end
+                           end
+                       end
+                   end
+                   wait(0.1)
+               end
+           end)
+       end
+   end
+})
+
+local Toggle = Tab:CreateToggle({
+   Name = "Rhythm Note Spam + Auto Press (Equip Rhythm)",
+   CurrentValue = false,
+   Flag = "RhythmSpamToggle",
+   Callback = function(Value)
+       getgenv().RhythmNoteSpam = Value -- Store toggle state globally
+
+       if Value then
+           task.spawn(function()
+               while getgenv().RhythmNoteSpam do
+                   local player = game.Players.LocalPlayer
+                   if player.leaderstats.Glove.Value == "Rhythm" and player.Character then
+                       local gui = player.PlayerGui:FindFirstChild("Rhythm")
+                       local char = player.Character:FindFirstChild("Rhythm")
+
+                       -- **Step 1:** Enable & Disable LocalScript (For Note Spam)
+                       if gui and gui:FindFirstChild("LocalScript") then
+                           gui.LocalScript.Disabled = false
+                           gui.LocalScript.Disabled = true
+                       end
+
+                       -- **Step 2:** Activate Rhythm Glove
+                       if char then
+                           char:Activate()
+                       end
+                   end
+
+                   task.wait() -- Prevents script from freezing
+               end
+           end)
+       end
+   end,
+})
+
 local Toggle = Tab:CreateToggle({
    Name = "Rojo Spam (All gloves)",
    CurrentValue = false,
@@ -201,40 +390,39 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 local Button = Tab:CreateButton({
-   Name = "Godmode (Breaks alot of gloves)",
+   Name = "Enable Godmode",
    Callback = function()
-       if game.Players.LocalPlayer.Character:FindFirstChild("entered") == nil then
-           firetouchinterest(game.Players.LocalPlayer.Character:WaitForChild("Head"), workspace.Lobby.Teleport1, 0)
-           firetouchinterest(game.Players.LocalPlayer.Character:WaitForChild("Head"), workspace.Lobby.Teleport1, 1)
+       if not User.Character:FindFirstChild("entered") then
+           firetouchinterest(User.Character:WaitForChild("HumanoidRootPart"), workspace.Lobby.Teleport1, 0)
+           firetouchinterest(User.Character:WaitForChild("HumanoidRootPart"), workspace.Lobby.Teleport1, 1)
        end
-       
-       repeat task.wait() until game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Tool") 
-           or game.Players.LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
 
-       for i, v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
-           if v.ClassName == "Tool" then
+       repeat wait() until User.Character:FindFirstChildOfClass("Tool") or User.Backpack:FindFirstChildOfClass("Tool")
+       wait(0.1)
+
+       for _, v in pairs(User.Character:GetChildren()) do
+           if v:IsA("Tool") and v:FindFirstChild("Glove") then
                v.Parent = game.LogService
            end
        end
-       
-       for i, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
-           v.Parent = game.LogService
+
+       for _, v in pairs(User.Backpack:GetChildren()) do
+           if v:IsA("Tool") and v:FindFirstChild("Glove") then
+               v.Parent = game.LogService
+           end
        end
 
-       game:GetService("ReplicatedStorage"):WaitForChild("HumanoidDied"):FireServer(game.Players.LocalPlayer.Character, false)
-       wait(3.75)
+       User.Character.Humanoid.Health = 0
+       wait(3.8)
 
-       for i, v in pairs(game.LogService:GetChildren()) do
-           v.Parent = game.Players.LocalPlayer.Backpack
+       for _, v in pairs(game.LogService:GetChildren()) do
+           v.Parent = User.Backpack
        end
 
-       for i, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
-           game.Players.LocalPlayer.Character.Humanoid:EquipTool(v)
-       end 
-
-       game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.workspace.Origo.CFrame * CFrame.new(0, -5, 0)
-   end,
+       User.Character.HumanoidRootPart.CFrame = CFrame.new(-4, -5, 2)
+   end
 })
+
 
 local Button = Tab:CreateButton({
    Name = "Player Hitbox Script",
@@ -374,7 +562,7 @@ local Button = Tab:CreateButton({
    end,
 })
 
-local Tab = Window:CreateTab("Visual", "rewind")
+local Tab = Window:CreateTab("Visual", "eye")
 local Toggle = Tab:CreateToggle({
    Name = "Glove ESP",
    CurrentValue = false,
@@ -434,7 +622,66 @@ local Toggle = Tab:CreateToggle({
        end
    end,
 })
-local Tab = Window:CreateTab("Antis", "rewind")
+local Tab = Window:CreateTab("Antis", "x")
+local Toggle = Tab:CreateToggle({
+   Name = "Anti Kick",
+   CurrentValue = false,
+   Flag = "AntiKickToggle",
+   Callback = function(Value)
+       AntiKick = Value
+       
+       task.spawn(function()
+           while AntiKick do
+               for _, v in pairs(game.CoreGui.RobloxPromptGui.promptOverlay:GetDescendants()) do
+                   if v.Name == "ErrorPrompt" then
+                       game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, game.Players.LocalPlayer)
+                   end
+               end
+               task.wait()
+           end
+       end)
+   end
+})
+local Toggle = Tab:CreateToggle({
+   Name = "Anti Mail",
+   CurrentValue = false,
+   Flag = "AntiMailToggle",
+   Callback = function(Value)
+       AntiMail = Value
+
+       task.spawn(function()
+           while AntiMail do
+               local player = game.Players.LocalPlayer
+               if player.Character and player.Character:FindFirstChild("YouHaveGotMail") then
+                   player.Character.YouHaveGotMail.Disabled = true
+               end
+               task.wait()
+           end
+       end)
+   end
+})
+local Toggle = Tab:CreateToggle({
+   Name = "Anti Iceskate",
+   CurrentValue = false,
+   Flag = "AntiIceskateToggle",
+   Callback = function(Value)
+       getgenv().antiIceskate = Value
+
+       task.spawn(function()
+           while getgenv().antiIceskate do
+               if User.Character and User.Character:FindFirstChild("IceSkateEffect") then
+                   User.Character.IceSkateEffect.Disabled = true
+               end
+               task.wait()
+           end
+       end)
+
+       if not getgenv().antiIceskate and User.Character and User.Character:FindFirstChild("IceSkateEffect") then
+           User.Character.IceSkateEffect.Disabled = false
+       end
+   end
+})
+
 local AntiRockToggle = Tab:CreateToggle({
     Name = "Anti Megarock/Custom",
     CurrentValue = false,
@@ -582,7 +829,7 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
-local Tab = Window:CreateTab("Farm", "rewind")
+local Tab = Window:CreateTab("Farm", "medal")
 local Section = Tab:CreateSection("Teleports")
 local Button = Tab:CreateButton({
    Name = "Safe spot",
@@ -713,7 +960,7 @@ local Button = Tab:CreateButton({
 
 
 
-local Tab = Window:CreateTab("Misc", "rewind")
+local Tab = Window:CreateTab("Misc", "ellipsis")
 local Button = Tab:CreateButton({
    Name = "Destroy GUI",
    Callback = function()
