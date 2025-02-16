@@ -94,75 +94,77 @@ local Toggle = Tab:CreateToggle({
    CurrentValue = false,
    Flag = "AbilitySpamToggle", -- Unique flag identifier
    Callback = function(Value)
-       local On = Value  -- Directly set On based on toggle value
+       getgenv().AbilitySpam = Value  -- Store toggle state globally
 
-       task.spawn(function()
-           while On do
-               local player = game.Players.LocalPlayer
-               local glove = player.leaderstats.Glove.Value
-               local ReplicatedStorage = game:GetService("ReplicatedStorage")
+       if Value then
+           task.spawn(function()
+               while getgenv().AbilitySpam do
+                   local player = game.Players.LocalPlayer
+                   local glove = player.leaderstats.Glove.Value
+                   local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-               local abilities = {
-                   Replica = function()
-                       ReplicatedStorage.Duplicate:FireServer()
-                       wait(5.1)
-                   end,
-                   Fort = function()
-                       ReplicatedStorage.Fortlol:FireServer()
-                       wait(3.1)
-                   end,
-                   ["Home Run"] = function()
-                       ReplicatedStorage.HomeRun:FireServer({["start"] = true})
-                       ReplicatedStorage.HomeRun:FireServer({["finished"] = true})
-                       wait(1)
-                   end,
-                   ["🗿"] = function()
-                       ReplicatedStorage.GeneralAbility:FireServer(CFrame.new(math.random(-70, 63), -5.72, math.random(-90, 93)))
-                       wait(3.1)
-                   end,
-                   Killstreak = function()
-                       ReplicatedStorage.KSABILI:FireServer()
-                       wait(6.1)
-                   end,
-                   Shield = function()
-                       ReplicatedStorage.GeneralAbility:FireServer()
-                       wait(3.1)
-                   end,
-                   Bomb = function()
-                       ReplicatedStorage.BombThrow:FireServer()
-                       wait(2.5)
-                       ReplicatedStorage.BombThrow:FireServer()
-                       wait(4.1)
-                   end,
-                   ["Tableflip"] = function()
-                       game:GetService("ReplicatedStorage").GeneralAbility:FireServer()
-                       wait(3.1)
-                   end,
-                   ["God's Hand"] = function()
-                       ReplicatedStorage.TimestopJump:FireServer()
-                       ReplicatedStorage.Timestopchoir:FireServer()
-                       ReplicatedStorage.Timestop:FireServer()
-                       wait(50.1)
-                   end,
-                   ["Za Hando"] = function()
-                       ReplicatedStorage.Erase:FireServer()
-                       wait(5.1)
-                   end,
-                   ["bus"] = function()
-                       while On and game.Players.LocalPlayer.leaderstats.Glove.Value == "bus" do
-                           ReplicatedStorage.busmoment:FireServer()
+                   local abilities = {
+                       Replica = function()
+                           ReplicatedStorage.Duplicate:FireServer()
                            wait(5.1)
+                       end,
+                       Fort = function()
+                           ReplicatedStorage.Fortlol:FireServer()
+                           wait(3.1)
+                       end,
+                       ["Home Run"] = function()
+                           ReplicatedStorage.HomeRun:FireServer({["start"] = true})
+                           ReplicatedStorage.HomeRun:FireServer({["finished"] = true})
+                           wait(1)
+                       end,
+                       ["🗿"] = function()
+                           ReplicatedStorage.GeneralAbility:FireServer(CFrame.new(math.random(-70, 63), -5.72, math.random(-90, 93)))
+                           wait(3.1)
+                       end,
+                       Killstreak = function()
+                           ReplicatedStorage.KSABILI:FireServer()
+                           wait(6.1)
+                       end,
+                       Shield = function()
+                           ReplicatedStorage.GeneralAbility:FireServer()
+                           wait(3.1)
+                       end,
+                       Bomb = function()
+                           ReplicatedStorage.BombThrow:FireServer()
+                           wait(2.5)
+                           ReplicatedStorage.BombThrow:FireServer()
+                           wait(4.1)
+                       end,
+                       Tableflip = function()
+                           ReplicatedStorage.GeneralAbility:FireServer()
+                           wait(3.1)
+                       end,
+                       ["God's Hand"] = function()
+                           ReplicatedStorage.TimestopJump:FireServer()
+                           ReplicatedStorage.Timestopchoir:FireServer()
+                           ReplicatedStorage.Timestop:FireServer()
+                           wait(50.1)
+                       end,
+                       ["Za Hando"] = function()
+                           ReplicatedStorage.Erase:FireServer()
+                           wait(5.1)
+                       end,
+                       ["bus"] = function()
+                           while getgenv().AbilitySpam and player.leaderstats.Glove.Value == "bus" do
+                               ReplicatedStorage.busmoment:FireServer()
+                               wait(5.1)
+                           end
                        end
+                   }
+
+                   if abilities[glove] then
+                       abilities[glove]()
                    end
-               }
 
-               if abilities[glove] then
-                   abilities[glove]()
+                   wait(0.5)
                end
-
-               wait(0.5)
-           end
-       end)
+           end)
+       end
    end,
 })
 local Button = Tab:CreateButton({
