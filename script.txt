@@ -1,0 +1,693 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local SafeSpot = Instance.new("Part", workspace)
+SafeSpot.Position = Vector3.new(math.random(-25000, -2500), 500, math.random(-25000, -2500))
+SafeSpot.Name = "Spot"
+SafeSpot.Size = Vector3.new(500, 50, 500)
+SafeSpot.Anchored = true
+SafeSpot.Transparency = 0.5
+local Window = Rayfield:CreateWindow({
+   Name = "Ethan's Metal",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "Ethan's Metal",
+   LoadingSubtitle = "by Ethan",
+   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from warning when the script has a version mismatch with the interface
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = true, -- Create a custom folder for your hub/game
+      FileName = "Ethan's Metal"
+   },
+
+   Discord = {
+      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "noinvitelink", -- The Discord invite code, do not include discord.gg/. E.g. discord.gg/ ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the discord every time they load it up
+   },
+
+   KeySystem = false, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "get",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
+      FileName = "Key", -- It is recommended to use something unique as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"Hello"} -- List of keys that will be accepted by the system, can be RAW file links (pastebin, github etc) or simple strings ("hello","key22")
+   }
+})
+
+local Tab = Window:CreateTab("Main", "rewind")
+
+
+
+local Section = Tab:CreateSection("Main")
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Enter Arena",
+   CurrentValue = false,
+   Flag = "AutoEnterArena", -- Unique flag identifier
+   Callback = function(Value)
+       AutoEnterArena = Value
+       
+       task.spawn(function()
+           while AutoEnterArena do
+               if game.Players.LocalPlayer.Character:FindFirstChild("entered") == nil 
+                  and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                   firetouchinterest(game.Players.LocalPlayer.Character:WaitForChild("Head"), workspace.Lobby.Teleport1, 0)
+                   firetouchinterest(game.Players.LocalPlayer.Character:WaitForChild("Head"), workspace.Lobby.Teleport1, 1)
+               end
+               task.wait()
+           end
+       end)
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Instant Kinetic",
+   Callback = function()
+   for i = 1, 100 do
+        game.ReplicatedStorage.SelfKnockback:FireServer({["Force"] = 0, ["Direction"] = Vector3.new(0, 0.01, 0)})
+        wait(0.05)
+    end
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Invisibilty (Use In Lobby, Must have Ghost Glove)",
+   Callback = function()
+   if game.Players.LocalPlayer.Character:FindFirstChild("entered") == nil and game.Players.LocalPlayer.leaderstats.Slaps.Value >= 666 then
+        local OGlove = game.Players.LocalPlayer.leaderstats.Glove.Value
+        wait(0.5) -- Added delay before switching to Ghost
+        fireclickdetector(workspace.Lobby.Ghost.ClickDetector)
+        wait(0.5) -- Added delay before activating invisibility
+        game.ReplicatedStorage.Ghostinvisibilityactivated:FireServer()
+        wait(0.5) -- Added delay before switching back to OGlove
+        fireclickdetector(workspace.Lobby[OGlove].ClickDetector)
+    end
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Toggle = Tab:CreateToggle({
+   Name = "Ability Spam (DO NOT SPAM BUTTON OR ELSE KICK)",
+   CurrentValue = false,
+   Flag = "AbilitySpamToggle", -- Unique flag identifier
+   Callback = function(Value)
+       local On = Value  -- Directly set On based on toggle value
+
+       task.spawn(function()
+           while On do
+               local player = game.Players.LocalPlayer
+               local glove = player.leaderstats.Glove.Value
+               local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+               local abilities = {
+                   Replica = function()
+                       ReplicatedStorage.Duplicate:FireServer()
+                       wait(5.1)
+                   end,
+                   Fort = function()
+                       ReplicatedStorage.Fortlol:FireServer()
+                       wait(3.1)
+                   end,
+                   ["Home Run"] = function()
+                       ReplicatedStorage.HomeRun:FireServer({["start"] = true})
+                       ReplicatedStorage.HomeRun:FireServer({["finished"] = true})
+                       wait(1)
+                   end,
+                   ["🗿"] = function()
+                       ReplicatedStorage.GeneralAbility:FireServer(CFrame.new(math.random(-70, 63), -5.72, math.random(-90, 93)))
+                       wait(3.1)
+                   end,
+                   Killstreak = function()
+                       ReplicatedStorage.KSABILI:FireServer()
+                       wait(6.1)
+                   end,
+                   Shield = function()
+                       ReplicatedStorage.GeneralAbility:FireServer()
+                       wait(3.1)
+                   end,
+                   Bomb = function()
+                       ReplicatedStorage.BombThrow:FireServer()
+                       wait(2.5)
+                       ReplicatedStorage.BombThrow:FireServer()
+                       wait(4.1)
+                   end,
+                   ["Tableflip"] = function()
+                       game:GetService("ReplicatedStorage").GeneralAbility:FireServer()
+                       wait(3.1)
+                   end,
+                   ["God's Hand"] = function()
+                       ReplicatedStorage.TimestopJump:FireServer()
+                       ReplicatedStorage.Timestopchoir:FireServer()
+                       ReplicatedStorage.Timestop:FireServer()
+                       wait(50.1)
+                   end,
+                   ["Za Hando"] = function()
+                       ReplicatedStorage.Erase:FireServer()
+                       wait(5.1)
+                   end,
+                   ["bus"] = function()
+                       while On and game.Players.LocalPlayer.leaderstats.Glove.Value == "bus" do
+                           ReplicatedStorage.busmoment:FireServer()
+                           wait(5.1)
+                       end
+                   end
+               }
+
+               if abilities[glove] then
+                   abilities[glove]()
+               end
+
+               wait(0.5)
+           end
+       end)
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Godmode (Breaks alot of gloves)",
+   Callback = function()
+       if game.Players.LocalPlayer.Character:FindFirstChild("entered") == nil then
+           firetouchinterest(game.Players.LocalPlayer.Character:WaitForChild("Head"), workspace.Lobby.Teleport1, 0)
+           firetouchinterest(game.Players.LocalPlayer.Character:WaitForChild("Head"), workspace.Lobby.Teleport1, 1)
+       end
+       
+       repeat task.wait() until game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Tool") 
+           or game.Players.LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+
+       for i, v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+           if v.ClassName == "Tool" then
+               v.Parent = game.LogService
+           end
+       end
+       
+       for i, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+           v.Parent = game.LogService
+       end
+
+       game:GetService("ReplicatedStorage"):WaitForChild("HumanoidDied"):FireServer(game.Players.LocalPlayer.Character, false)
+       wait(3.75)
+
+       for i, v in pairs(game.LogService:GetChildren()) do
+           v.Parent = game.Players.LocalPlayer.Backpack
+       end
+
+       for i, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+           game.Players.LocalPlayer.Character.Humanoid:EquipTool(v)
+       end 
+
+       game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.workspace.Origo.CFrame * CFrame.new(0, -5, 0)
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Player Hitbox Script",
+   Callback = function()
+       -- Gui to Lua
+       -- Version: 3.2
+
+       -- Instances:
+
+       local Close = Instance.new("TextButton")
+       local Open2 = Instance.new("ScreenGui")
+       local Open = Instance.new("TextButton")
+       local FightingGui = Instance.new("ScreenGui")
+       local main = Instance.new("Frame")
+       local HitBox = Instance.new("TextBox")
+       local Red = Instance.new("TextBox")
+       local Green = Instance.new("TextBox")
+       local Blue = Instance.new("TextBox")
+       local TextLabel = Instance.new("TextLabel")
+
+       -- Properties:
+
+       FightingGui.Name = "FightingGui"
+       FightingGui.Parent = game.CoreGui
+       FightingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+       FightingGui.Enabled = false  -- Initially hidden
+
+       Open2.Name = "Tools"
+       Open2.Parent = game.CoreGui
+       Open2.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+       Open.Name = "Open"
+       Open.Parent = Open2
+       Open.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+       Open.Position = UDim2.new(0, 0, 0.451871663, 0)
+       Open.Size = UDim2.new(0, 78, 0, 50)
+       Open.Font = Enum.Font.SourceSans
+       Open.Text = "Open"
+       Open.TextColor3 = Color3.fromRGB(250, 0, 0)
+       Open.TextScaled = true
+       Open.TextWrapped = true
+       Open.MouseButton1Down:Connect(function()
+           FightingGui.Enabled = true
+       end)
+
+       Close.Name = "Close"
+       Close.Parent = main
+       Close.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       Close.Position = UDim2.new(1, 0, -0.226244345, 0)
+       Close.Size = UDim2.new(0, 60, 0, 50)
+       Close.Font = Enum.Font.SourceSans
+       Close.Text = "X"
+       Close.TextColor3 = Color3.fromRGB(0, 0, 0)
+       Close.TextScaled = true
+       Close.TextWrapped = true
+       Close.MouseButton1Down:Connect(function()
+           FightingGui.Enabled = false
+       end)
+
+       main.Parent = FightingGui
+       main.Active = true
+       main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+       main.Position = UDim2.new(0.073, 0, 0.237, 0)
+       main.Size = UDim2.new(0, 273, 0, 221)
+       main.Draggable = true
+
+       HitBox.Name = "HitBox"
+       HitBox.Parent = main
+       HitBox.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       HitBox.Position = UDim2.new(0.0586, 0, 0.0995, 0)
+       HitBox.Size = UDim2.new(0, 65, 0, 50)
+       HitBox.Font = Enum.Font.SourceSans
+       HitBox.PlaceholderText = "Hitbox"
+       HitBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+       HitBox.TextScaled = true
+       HitBox.TextWrapped = true
+
+       Red.Name = "Red"
+       Red.Parent = main
+       Red.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       Red.Position = UDim2.new(0.485, 0, 0.0995, 0)
+       Red.Size = UDim2.new(0, 37, 0, 31)
+       Red.Font = Enum.Font.SourceSans
+       Red.PlaceholderText = "Red"
+       Red.TextColor3 = Color3.fromRGB(0, 0, 0)
+
+       Green.Name = "Green"
+       Green.Parent = main
+       Green.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+       Green.Position = UDim2.new(0.665, 0, 0.0995, 0)
+       Green.Size = UDim2.new(0, 37, 0, 31)
+       Green.Font = Enum.Font.SourceSans
+       Green.PlaceholderText = "Green"
+       Green.TextColor3 = Color3.fromRGB(0, 0, 0)
+
+       Blue.Name = "Blue"
+       Blue.Parent = main
+       Blue.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+       Blue.Position = UDim2.new(0.837, 0, 0.0995, 0)
+       Blue.Size = UDim2.new(0, 37, 0, 31)
+       Blue.Font = Enum.Font.SourceSans
+       Blue.PlaceholderText = "Blue"
+       Blue.TextColor3 = Color3.fromRGB(0, 0, 0)
+
+       TextLabel.Parent = main
+       TextLabel.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       TextLabel.Position = UDim2.new(0.471, 0, 0.325, 0)
+       TextLabel.Size = UDim2.new(0, 140, 0, 37)
+       TextLabel.Font = Enum.Font.SourceSans
+       TextLabel.Text = "Colors"
+       TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+       TextLabel.TextScaled = true
+       TextLabel.TextWrapped = true
+
+       -- Update player hitbox
+       game:GetService('RunService').RenderStepped:Connect(function()
+           for _, v in ipairs(game:GetService('Players'):GetPlayers()) do
+               if v ~= game:GetService('Players').LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                   local rootPart = v.Character.HumanoidRootPart
+
+                   -- Convert text input to numbers
+                   local hitboxSize = tonumber(HitBox.Text) or 5
+                   local red = tonumber(Red.Text) or 255
+                   local green = tonumber(Green.Text) or 255
+                   local blue = tonumber(Blue.Text) or 255
+
+                   pcall(function()
+                       rootPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                       rootPart.Transparency = 0.8
+                       rootPart.Color = Color3.fromRGB(red, green, blue)
+                       rootPart.Material = Enum.Material.Neon
+                       rootPart.CanCollide = false
+                   end)
+               end
+           end
+       end)
+   end,
+})
+
+local Tab = Window:CreateTab("Visual", "rewind")
+local Toggle = Tab:CreateToggle({
+   Name = "Glove ESP",
+   CurrentValue = false,
+   Flag = "Gloveesp",
+   Callback = function(Value)
+       _G.GloveESP = Value -- Store ESP state globally
+
+       if _G.GloveESP then
+           -- Create a loop to continuously update ESP
+           _G.GloveESPUpdater = task.spawn(function()
+               while _G.GloveESP do
+                   for _, player in ipairs(game.Players:GetPlayers()) do
+                       if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("entered") and player.Character.IsInDefaultArena.Value == false then
+                           
+                           local head = player.Character.Head
+                           local existingESP = head:FindFirstChild("GloveEsp")
+
+                           if not existingESP then
+                               -- Create ESP if it doesn't exist
+                               local GloveEsp = Instance.new("BillboardGui", head)
+                               GloveEsp.Adornee = head
+                               GloveEsp.Name = "GloveEsp"
+                               GloveEsp.Size = UDim2.new(0, 100, 0, 150)
+                               GloveEsp.StudsOffset = Vector3.new(0, 3, 0)
+                               GloveEsp.AlwaysOnTop = true
+
+                               local GloveEspText = Instance.new("TextLabel", GloveEsp)
+                               GloveEspText.BackgroundTransparency = 1
+                               GloveEspText.Size = UDim2.new(0, 100, 0, 100)
+                               GloveEspText.TextSize = 25
+                               GloveEspText.Font = Enum.Font.SourceSansSemibold
+                               GloveEspText.TextColor3 = Color3.fromRGB(255, 255, 255)
+                               GloveEspText.TextStrokeTransparency = 0
+                               GloveEspText.Text = player.leaderstats.Glove.Value
+                           else
+                               -- Update existing ESP text
+                               existingESP.TextLabel.Text = player.leaderstats.Glove.Value
+                           end
+                       end
+                   end
+                   task.wait(0.1) -- Updates every 0.1 seconds for smooth real-time updates
+               end
+           end)
+       else
+           -- Disable ESP & remove all ESP objects
+           for _, player in ipairs(game.Players:GetPlayers()) do
+               if player.Character and player.Character:FindFirstChild("Head") and player.Character.Head:FindFirstChild("GloveEsp") then
+                   player.Character.Head.GloveEsp:Destroy()
+               end
+           end
+
+           -- Stop the update loop
+           if _G.GloveESPUpdater then
+               task.cancel(_G.GloveESPUpdater)
+               _G.GloveESPUpdater = nil
+           end
+       end
+   end,
+})
+local Tab = Window:CreateTab("Antis", "rewind")
+local AntiRockToggle = Tab:CreateToggle({
+    Name = "Anti Megarock/Custom",
+    CurrentValue = false,
+    Flag = "AntiRockToggle",
+    Callback = function(Value)
+        getgenv().AntiRock = Value
+
+        if Value then
+            task.spawn(function()
+                while getgenv().AntiRock do
+                    for _, v in pairs(game.Workspace:GetDescendants()) do
+                        if v.Name == "rock" then
+                            v.CanTouch = false
+                            v.CanQuery = false
+                        end
+                    end
+                    task.wait()
+                end
+            end)
+        end
+    end
+})
+local AntiStunToggle = Tab:CreateToggle({
+    Name = "Anti Stun",
+    CurrentValue = false,
+    Flag = "AntiStunToggle",
+    Callback = function(Value)
+        getgenv().AntiStun = Value
+
+        if Value then
+            task.spawn(function()
+                while getgenv().AntiStun do
+                    local player = game.Players.LocalPlayer
+                    local character = player.Character
+                    if character and character:FindFirstChild("Humanoid") and game.Workspace:FindFirstChild("Shockwave") then
+                        if character:FindFirstChild("Ragdolled") and character.Ragdolled.Value == false then
+                            character.Humanoid.PlatformStand = false
+                        end
+                    end
+                    task.wait()
+                end
+            end)
+        end
+    end
+})
+
+local Toggle = Tab:CreateToggle({
+    Name = "Anti Reaper",
+    CurrentValue = false,
+    Flag = "AntiReaper", -- Unique flag identifier
+    Callback = function(Value)
+        AntiReaper = Value
+        task.spawn(function()
+            while AntiReaper do
+                for _, v in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+                    if v.Name == "DeathMark" then
+                        game:GetService("ReplicatedStorage").ReaperGone:FireServer(v)
+                        local deathMarkEffect = game:GetService("Lighting"):FindFirstChild("DeathMarkColorCorrection")
+                        if deathMarkEffect then
+                            deathMarkEffect:Destroy()
+                        end
+                    end
+                end
+                task.wait()
+            end
+        end)
+    end,
+})
+local Toggle = Tab:CreateToggle({
+    Name = "Anti Cube of Death",
+    CurrentValue = false,
+    Flag = "AntiCubeOfDeath", -- Unique flag identifier
+    Callback = function(Value)
+        local cube = workspace.Arena.CubeOfDeathArea:FindFirstChild("the cube of death(i heard it kills)")
+        if cube then
+            cube.CanTouch = not Value
+        end
+    end,
+})
+local Toggle = Tab:CreateToggle({
+    Name = "Anti Knockback",
+    StartingState = false,
+    Description = "Stops you from taking knockback.",
+    Callback = function(Value)
+        getgenv().antiKnockback = Value
+        while getgenv().antiKnockback do
+            local player = game.Players.LocalPlayer
+            if player.Character and player.Character:FindFirstChild("Torso") and player.Character:FindFirstChild("Ragdolled") then
+                if player.Character.Ragdolled.Value == true then
+                    player.Character.Torso.Anchored = true
+                    repeat task.wait() until not player.Character:FindFirstChild("Ragdolled") or player.Character.Ragdolled.Value == false
+                    if player.Character:FindFirstChild("Torso") then
+                        player.Character.Torso.Anchored = false
+                    end
+                end
+            end
+            task.wait()
+        end
+    end
+})
+local Toggle = Tab:CreateToggle({
+   Name = "Anti Squid",
+   CurrentValue = false,
+   Flag = "AntiSquidToggle", -- Unique identifier for saving state
+   Callback = function(Value)
+       AntiSquid = Value
+
+       if not AntiSquid then
+           game.Players.LocalPlayer.PlayerGui.SquidInk.Enabled = true
+           return
+       end
+
+       task.spawn(function()
+           while AntiSquid do
+               if game.Players.LocalPlayer.PlayerGui:FindFirstChild("SquidInk") then
+                   game.Players.LocalPlayer.PlayerGui.SquidInk.Enabled = false
+               end
+               task.wait()
+           end
+       end)
+   end,
+})
+local AntiZaHando = false  -- Variable to track toggle state
+local RunService = game:GetService("RunService")
+local Connection  -- Holds the loop connection
+
+local Toggle = Tab:CreateToggle({
+   Name = "Anti Za Hando",
+   CurrentValue = false,
+   Flag = "AntiZA", -- Ensure unique flag for config saving
+   Callback = function(Value)
+       AntiZaHando = Value  -- Set toggle state
+
+       if AntiZaHando then
+           Connection = RunService.Heartbeat:Connect(function()
+               for _, v in pairs(game.Workspace:GetChildren()) do
+                   if v:IsA("Part") and v.Name == "Part" then
+                       v:Destroy()
+                   end
+               end
+           end)
+       else
+           if Connection then Connection:Disconnect() end  -- Stop removing parts
+       end
+   end,
+})
+
+local Tab = Window:CreateTab("Farm", "rewind")
+local Section = Tab:CreateSection("Teleports")
+local Button = Tab:CreateButton({
+   Name = "Safe spot",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = workspace.Spot.CFrame * CFrame.new(0,28,0)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Arena",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.workspace.Origo.CFrame * CFrame.new(0,-5,0)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Moai Island",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(215, -15.5, 0.5)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Slapple Island",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = game.workspace.Arena.island5.Union.CFrame * CFrame.new(0,3.25,0)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Plate",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = workspace.Arena.Plate.CFrame * CFrame.new(0,2,0)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Default Arena",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(120,360,-3)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Lobby",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-800,328,-2.5)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Hunter Basement",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(17893, -129, -3533)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Cannon Island",
+   Callback = function()
+   game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(287, 39, 217)
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Section = Tab:CreateSection("Badges")
+local PhaseFarmToggle = false
+
+local Toggle = Tab:CreateToggle({
+    Name = "Phase Farm",
+    Default = false,
+    Callback = function(Value)
+        PhaseFarmToggle = Value
+        while PhaseFarmToggle do
+            local player = game.Players.LocalPlayer
+            local character = player.Character
+            if character and character:FindFirstChild("Head") then
+                for _, v in pairs(game.Workspace:GetChildren()) do
+                    if v.Name == "PhaseOrb" and v:FindFirstChild("TouchInterest") then
+                        firetouchinterest(character.Head, v, 0)
+                        firetouchinterest(character.Head, v, 1)
+                    end
+                end
+            end
+            task.wait()
+        end
+    end
+})
+local JetFarmToggle = false
+
+local Toggle = Tab:CreateToggle({
+    Name = "Jet Farm",
+    Default = false,
+    Callback = function(Value)
+        JetFarmToggle = Value
+        while JetFarmToggle do
+            local player = game.Players.LocalPlayer
+            local character = player.Character
+            if character and character:FindFirstChild("Head") then
+                for _, v in pairs(game.Workspace:GetChildren()) do
+                    if v.Name == "JetOrb" and v:FindFirstChild("TouchInterest") then
+                        firetouchinterest(character.Head, v, 0)
+                        firetouchinterest(character.Head, v, 1)
+                    end
+                end
+            end
+            task.wait()
+        end
+    end
+})
+local Button = Tab:CreateButton({
+    Name = "Get [REDACTED] (Needs 5k slaps)",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        if player.leaderstats.Slaps.Value >= 5000 then
+            local Door = 0
+            for i = 1, 10 do
+                Door = Door + 1
+                if not game:GetService("BadgeService"):UserHasBadgeAsync(player.UserId, 2124847850) then
+                    firetouchinterest(player.Character:WaitForChild("Head"), workspace.PocketDimension.Doors[Door], 0)
+                    firetouchinterest(player.Character:WaitForChild("Head"), workspace.PocketDimension.Doors[Door], 1)
+                    task.wait(3.75)
+                end
+            end
+        end
+    end
+})
+
+
+
+
+local Tab = Window:CreateTab("Misc", "rewind")
+local Button = Tab:CreateButton({
+   Name = "Destroy GUI",
+   Callback = function()
+   Rayfield:Destroy()
+   -- The function that takes place when the button is pressed
+   end,
+})
+
+
+
+
+Rayfield:LoadConfiguration()
