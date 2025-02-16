@@ -121,6 +121,10 @@ local Toggle = Tab:CreateToggle({
                            ReplicatedStorage.GeneralAbility:FireServer(CFrame.new(math.random(-70, 63), -5.72, math.random(-90, 93)))
                            wait(3.1)
                        end,
+                       ["Stun"] = function()
+                           game.ReplicatedStorage.StunR:FireServer(game.Players.LocalPlayer.Character.Stun)
+                           wait(9.8)
+                       end,
                        Killstreak = function()
                            ReplicatedStorage.KSABILI:FireServer()
                            wait(6.1)
