@@ -45,6 +45,26 @@ local Tab = Window:CreateTab("Main", "rewind")
 
 local Section = Tab:CreateSection("Main")
 local Toggle = Tab:CreateToggle({
+   Name = "Rojo Spam (All gloves)",
+   CurrentValue = false,
+   Flag = "RojoSpamToggle", -- Unique flag identifier
+   Callback = function(Value)
+       getgenv().RojoSpam = Value -- Store toggle state globally
+
+       if Value then
+           task.spawn(function()
+               while getgenv().RojoSpam do
+                   local player = game.Players.LocalPlayer
+                   if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                       game:GetService("ReplicatedStorage"):WaitForChild("RojoAbility"):FireServer("Release", {player.Character.HumanoidRootPart.CFrame})
+                   end
+                   task.wait()
+               end
+           end)
+       end
+   end,
+})
+local Toggle = Tab:CreateToggle({
    Name = "Auto Enter Arena",
    CurrentValue = false,
    Flag = "AutoEnterArena", -- Unique flag identifier
