@@ -956,6 +956,21 @@ local Button = Tab:CreateButton({
         end
     end
 })
+local Section = Tab:CreateSection("Scripts")
+local Button = Tab:CreateButton({
+   Name = "Mastery Helper 1",
+   Callback = function()
+   loadstring(game:HttpGet("https://raw.githubusercontent.com/DonjoScripts/Public-Scripts/refs/heads/Slap-Battles/Mastery-HelperGui"))()
+   -- The function that takes place when the button is pressed
+   end,
+})
+local Button = Tab:CreateButton({
+   Name = "Mastery Helper 2",
+   Callback = function()
+   loadstring(game:HttpGet('https://raw.githubusercontent.com/Pro666Pro/MasteryFarmGui/refs/heads/main/main.lua'))()
+   -- The function that takes place when the button is pressed
+   end,
+})
 
 
 
