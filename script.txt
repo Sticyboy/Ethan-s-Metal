@@ -5,110 +5,6 @@ SafeSpot.Name = "Spot"
 SafeSpot.Size = Vector3.new(500, 50, 500)
 SafeSpot.Anchored = true
 SafeSpot.Transparency = 0.5
-slapRemotes = {
-	Extended = game.ReplicatedStorage.b,
-
-	ZZZZZZZ = game.ReplicatedStorage.ZZZZZZZHit,
-	Brick = game.ReplicatedStorage.BrickHit,
-	Snow = game.ReplicatedStorage.SnowHit,
-	Pull = game.ReplicatedStorage.PullHit,
-	Flash = game.ReplicatedStorage.FlashHit,
-	Spring = game.ReplicatedStorage.springhit,
-	Swapper = game.ReplicatedStorage.HitSwapper,
-	Bull = game.ReplicatedStorage.BullHit,
-	Dice = game.ReplicatedStorage.DiceHit,
-	Ghost = game.ReplicatedStorage.GhostHit,
-	Stun = game.ReplicatedStorage.HtStun,
-	["Za Hando"] = game.ReplicatedStorage.zhramt,
-	Fort = game.ReplicatedStorage.Fort,
-	Magnet = game.ReplicatedStorage.MagnetHIT,
-	Pusher = game.ReplicatedStorage.PusherHit,
-	Anchor = game.ReplicatedStorage.hitAnchor,
-	Space = game.ReplicatedStorage.HtSpace,
-	Boomerang = game.ReplicatedStorage.BoomerangH,
-	Speedrun = game.ReplicatedStorage.Speedrunhit,
-	Mail = game.ReplicatedStorage.MailHit,
-	Golden = game.ReplicatedStorage.GoldenHit,
-	MR = game.ReplicatedStorage.MisterHit,
-	Reaper = game.ReplicatedStorage.ReaperHit,
-	Replica = game.ReplicatedStorage.ReplicaHit,
-	Defense = game.ReplicatedStorage.DefenseHit,
-	Killstreak = game.ReplicatedStorage.KSHit,
-	Reverse = game.ReplicatedStorage.ReverseHit,
-	Shukuchi = game.ReplicatedStorage.ShukuchiHit,
-	Duelist = game.ReplicatedStorage.DuelistHit,
-	woah = game.ReplicatedStorage.woahHit,
-	Ice = game.ReplicatedStorage.IceHit,
-	Adios = game.ReplicatedStorage.hitAdios,
-	Blocked = game.ReplicatedStorage.BlockedHit,
-	Engineer = game.ReplicatedStorage.engiehit,
-	Rocky = game.ReplicatedStorage.RockyHit,
-	Conveyor = game.ReplicatedStorage.ConvHit,
-	STOP = game.ReplicatedStorage.STOP,
-	Phantom = game.ReplicatedStorage.PhantomHit,
-	Wormhole = game.ReplicatedStorage.WormHit,
-	Acrobat = game.ReplicatedStorage.AcHit,
-	Plague = game.ReplicatedStorage.PlagueHit,
-	["[REDACTED]"] = game.ReplicatedStorage.ReHit,
-	bus = game.ReplicatedStorage.hitbus,
-	Phase = game.ReplicatedStorage.PhaseH,
-	Warp = game.ReplicatedStorage.WarpHt,
-	Bomb = game.ReplicatedStorage.BombHit,
-	Bubble = game.ReplicatedStorage.BubbleHit,
-	Jet = game.ReplicatedStorage.JetHit,
-	Shard = game.ReplicatedStorage.ShardHIT,
-	potato = game.ReplicatedStorage.potatohit,
-	CULT = game.ReplicatedStorage.CULTHit,
-	bob = game.ReplicatedStorage.bobhit,
-	Buddies = game.ReplicatedStorage.buddiesHIT,
-	Spy = game.ReplicatedStorage.SpyHit,
-	Detonator = game.ReplicatedStorage.DetonatorHit,
-	Rage = game.ReplicatedStorage.GRRRR,
-	Trap = game.ReplicatedStorage.traphi,
-	Orbit = game.ReplicatedStorage.Orbihit,
-	Hybrid = game.ReplicatedStorage.HybridCLAP,
-	Slapple = game.ReplicatedStorage.SlappleHit,
-	Disarm = game.ReplicatedStorage.DisarmH,
-	Dominance = game.ReplicatedStorage.DominanceHit,
-	Link = game.ReplicatedStorage.LinkHit,
-	Rojo = game.ReplicatedStorage.RojoHit,
-	rob = game.ReplicatedStorage.robhit,
-	Rhythm = game.ReplicatedStorage.rhythmhit,
-	Nightmare = game.ReplicatedStorage.nightmarehit,
-	Hitman = game.ReplicatedStorage.HitmanHit,
-	Thor = game.ReplicatedStorage.ThorHit,
-	Retro = game.ReplicatedStorage.RetroHit,
-	Cloud = game.ReplicatedStorage.CloudHit,
-	Null = game.ReplicatedStorage.NullHit,
-	spin = game.ReplicatedStorage.spinhit,
-
-	Poltergeist = game.ReplicatedStorage.UTGHit,
-	Clock = game.ReplicatedStorage.UTGHit,
-	["Untitled Tag Glove"] = game.ReplicatedStorage.UTGHit,
-
-	Kinetic = game.ReplicatedStorage.HtStun,
-	Recall = game.ReplicatedStorage.HtStun,
-	Balloony = game.ReplicatedStorage.HtStun,
-	Sparky = game.ReplicatedStorage.HtStun,
-	Boogie = game.ReplicatedStorage.HtStun,
-	Stun = game.ReplicatedStorage.HtStun,
-	Coil = game.ReplicatedStorage.HtStun,
-
-	Diamond = game.ReplicatedStorage.DiamondHit,
-	Megarock = game.ReplicatedStorage.DiamondHit,
-
-	Moon = game.ReplicatedStorage.CelestialHit,
-	Jupiter = game.ReplicatedStorage.CelestialHit,
-
-	Mitten = game.ReplicatedStorage.MittenHit,
-	["Hallow Jack"] = game.ReplicatedStorage.HallowHIT,
-
-	OVERKILL = game.ReplicatedStorage.Overkillhit,
-	["The Flex"] = game.ReplicatedStorage.FlexHit,
-	Custom = game.ReplicatedStorage.CustomHit,
-	["God's Hand"] = game.ReplicatedStorage.Godshand,
-	Error = game.ReplicatedStorage.Errorhit
-}
 local Window = Rayfield:CreateWindow({
    Name = "Ethan's Metal",
    Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
@@ -145,60 +41,6 @@ local Window = Rayfield:CreateWindow({
 
 local Tab = Window:CreateTab("Main", "sword")
 local Section = Tab:CreateSection("Main")
-local Toggle = Tab:CreateToggle({
-   Name = "Slap Aura",
-   CurrentValue = false,
-   Flag = "SlapAuraToggle",
-   Callback = function(Value)
-       getgenv().slapAura = Value
-
-       function usingParry(player)
-           for i,v in pairs(player.Character.Humanoid:GetPlayingAnimationTracks()) do
-               if v.Animation.AnimationId == "rbxassetid://16102819260" then
-                   return true
-               end
-           end
-           return false
-       end
-
-       if getgenv().slapAura then
-           task.spawn(function()
-               while getgenv().slapAura do
-                   for _,v in pairs(game.Players:GetChildren()) do
-                       if v ~= User and User.Character:FindFirstChild("HumanoidRootPart") and v.Character then
-                           if v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Ragdolled") 
-                              and not v.Character.HumanoidRootPart:FindFirstChild("BlockedShield") 
-                              and not v.Character:FindFirstChild("Counterd") 
-                              and not v.Character:FindFirstChild("Mirage") 
-                              and not v.Character:FindFirstChild("rock") 
-                              and not usingParry(v) 
-                              and v.Character.Ragdolled.Value == false then
-
-                               local Magnitude = (User.Character.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude
-                               if Magnitude <= 20 then -- Default range value
-                                   if User.Character:FindFirstChild("Default") or User.Backpack:FindFirstChild("Default") then
-                                       game.ReplicatedStorage.b:FireServer(v.Character.HumanoidRootPart, true)
-                                   elseif User.leaderstats.Glove.Value == "Boxer" then
-                                       game.ReplicatedStorage.Events.Boxing:FireServer(v.Character, true)
-                                   else
-                                       game.ReplicatedStorage.GeneralHit:FireServer(v.Character.HumanoidRootPart, true)
-                                   end
-                                   for _,g in pairs(User.Character:GetChildren()) do
-                                       if g:IsA("Tool") and g:FindFirstChild("Glove") then
-                                           g:Activate()
-                                       end
-                                   end
-                               end
-                           end
-                       end
-                   end
-                   wait(0.1)
-               end
-           end)
-       end
-   end
-})
-
 local Toggle = Tab:CreateToggle({
    Name = "Rhythm Note Spam + Auto Press (Equip Rhythm)",
    CurrentValue = false,
@@ -387,178 +229,6 @@ local Toggle = Tab:CreateToggle({
                end
            end)
        end
-   end,
-})
-local Button = Tab:CreateButton({
-   Name = "Enable Godmode",
-   Callback = function()
-       if not User.Character:FindFirstChild("entered") then
-           firetouchinterest(User.Character:WaitForChild("HumanoidRootPart"), workspace.Lobby.Teleport1, 0)
-           firetouchinterest(User.Character:WaitForChild("HumanoidRootPart"), workspace.Lobby.Teleport1, 1)
-       end
-
-       repeat wait() until User.Character:FindFirstChildOfClass("Tool") or User.Backpack:FindFirstChildOfClass("Tool")
-       wait(0.1)
-
-       for _, v in pairs(User.Character:GetChildren()) do
-           if v:IsA("Tool") and v:FindFirstChild("Glove") then
-               v.Parent = game.LogService
-           end
-       end
-
-       for _, v in pairs(User.Backpack:GetChildren()) do
-           if v:IsA("Tool") and v:FindFirstChild("Glove") then
-               v.Parent = game.LogService
-           end
-       end
-
-       User.Character.Humanoid.Health = 0
-       wait(3.8)
-
-       for _, v in pairs(game.LogService:GetChildren()) do
-           v.Parent = User.Backpack
-       end
-
-       User.Character.HumanoidRootPart.CFrame = CFrame.new(-4, -5, 2)
-   end
-})
-
-
-local Button = Tab:CreateButton({
-   Name = "Player Hitbox Script",
-   Callback = function()
-       -- Gui to Lua
-       -- Version: 3.2
-
-       -- Instances:
-
-       local Close = Instance.new("TextButton")
-       local Open2 = Instance.new("ScreenGui")
-       local Open = Instance.new("TextButton")
-       local FightingGui = Instance.new("ScreenGui")
-       local main = Instance.new("Frame")
-       local HitBox = Instance.new("TextBox")
-       local Red = Instance.new("TextBox")
-       local Green = Instance.new("TextBox")
-       local Blue = Instance.new("TextBox")
-       local TextLabel = Instance.new("TextLabel")
-
-       -- Properties:
-
-       FightingGui.Name = "FightingGui"
-       FightingGui.Parent = game.CoreGui
-       FightingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-       FightingGui.Enabled = false  -- Initially hidden
-
-       Open2.Name = "Tools"
-       Open2.Parent = game.CoreGui
-       Open2.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-       Open.Name = "Open"
-       Open.Parent = Open2
-       Open.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-       Open.Position = UDim2.new(0, 0, 0.451871663, 0)
-       Open.Size = UDim2.new(0, 78, 0, 50)
-       Open.Font = Enum.Font.SourceSans
-       Open.Text = "Open"
-       Open.TextColor3 = Color3.fromRGB(250, 0, 0)
-       Open.TextScaled = true
-       Open.TextWrapped = true
-       Open.MouseButton1Down:Connect(function()
-           FightingGui.Enabled = true
-       end)
-
-       Close.Name = "Close"
-       Close.Parent = main
-       Close.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-       Close.Position = UDim2.new(1, 0, -0.226244345, 0)
-       Close.Size = UDim2.new(0, 60, 0, 50)
-       Close.Font = Enum.Font.SourceSans
-       Close.Text = "X"
-       Close.TextColor3 = Color3.fromRGB(0, 0, 0)
-       Close.TextScaled = true
-       Close.TextWrapped = true
-       Close.MouseButton1Down:Connect(function()
-           FightingGui.Enabled = false
-       end)
-
-       main.Parent = FightingGui
-       main.Active = true
-       main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-       main.Position = UDim2.new(0.073, 0, 0.237, 0)
-       main.Size = UDim2.new(0, 273, 0, 221)
-       main.Draggable = true
-
-       HitBox.Name = "HitBox"
-       HitBox.Parent = main
-       HitBox.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-       HitBox.Position = UDim2.new(0.0586, 0, 0.0995, 0)
-       HitBox.Size = UDim2.new(0, 65, 0, 50)
-       HitBox.Font = Enum.Font.SourceSans
-       HitBox.PlaceholderText = "Hitbox"
-       HitBox.TextColor3 = Color3.fromRGB(0, 0, 0)
-       HitBox.TextScaled = true
-       HitBox.TextWrapped = true
-
-       Red.Name = "Red"
-       Red.Parent = main
-       Red.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-       Red.Position = UDim2.new(0.485, 0, 0.0995, 0)
-       Red.Size = UDim2.new(0, 37, 0, 31)
-       Red.Font = Enum.Font.SourceSans
-       Red.PlaceholderText = "Red"
-       Red.TextColor3 = Color3.fromRGB(0, 0, 0)
-
-       Green.Name = "Green"
-       Green.Parent = main
-       Green.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-       Green.Position = UDim2.new(0.665, 0, 0.0995, 0)
-       Green.Size = UDim2.new(0, 37, 0, 31)
-       Green.Font = Enum.Font.SourceSans
-       Green.PlaceholderText = "Green"
-       Green.TextColor3 = Color3.fromRGB(0, 0, 0)
-
-       Blue.Name = "Blue"
-       Blue.Parent = main
-       Blue.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
-       Blue.Position = UDim2.new(0.837, 0, 0.0995, 0)
-       Blue.Size = UDim2.new(0, 37, 0, 31)
-       Blue.Font = Enum.Font.SourceSans
-       Blue.PlaceholderText = "Blue"
-       Blue.TextColor3 = Color3.fromRGB(0, 0, 0)
-
-       TextLabel.Parent = main
-       TextLabel.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-       TextLabel.Position = UDim2.new(0.471, 0, 0.325, 0)
-       TextLabel.Size = UDim2.new(0, 140, 0, 37)
-       TextLabel.Font = Enum.Font.SourceSans
-       TextLabel.Text = "Colors"
-       TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
-       TextLabel.TextScaled = true
-       TextLabel.TextWrapped = true
-
-       -- Update player hitbox
-       game:GetService('RunService').RenderStepped:Connect(function()
-           for _, v in ipairs(game:GetService('Players'):GetPlayers()) do
-               if v ~= game:GetService('Players').LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-                   local rootPart = v.Character.HumanoidRootPart
-
-                   -- Convert text input to numbers
-                   local hitboxSize = tonumber(HitBox.Text) or 5
-                   local red = tonumber(Red.Text) or 255
-                   local green = tonumber(Green.Text) or 255
-                   local blue = tonumber(Blue.Text) or 255
-
-                   pcall(function()
-                       rootPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-                       rootPart.Transparency = 0.8
-                       rootPart.Color = Color3.fromRGB(red, green, blue)
-                       rootPart.Material = Enum.Material.Neon
-                       rootPart.CanCollide = false
-                   end)
-               end
-           end
-       end)
    end,
 })
 
@@ -958,19 +628,150 @@ local Button = Tab:CreateButton({
 })
 local Section = Tab:CreateSection("Scripts")
 local Button = Tab:CreateButton({
-   Name = "Mastery Helper 1",
-   Callback = function()
-   loadstring(game:HttpGet("https://raw.githubusercontent.com/DonjoScripts/Public-Scripts/refs/heads/Slap-Battles/Mastery-HelperGui"))()
-   -- The function that takes place when the button is pressed
-   end,
-})
-local Button = Tab:CreateButton({
-   Name = "Mastery Helper 2",
+   Name = "Mastery Helper",
    Callback = function()
    loadstring(game:HttpGet('https://raw.githubusercontent.com/Pro666Pro/MasteryFarmGui/refs/heads/main/main.lua'))()
    -- The function that takes place when the button is pressed
    end,
 })
+local Button = Tab:CreateButton({
+   Name = "Player Hitbox Script",
+   Callback = function()
+       -- Gui to Lua
+       -- Version: 3.2
+
+       -- Instances:
+
+       local Close = Instance.new("TextButton")
+       local Open2 = Instance.new("ScreenGui")
+       local Open = Instance.new("TextButton")
+       local FightingGui = Instance.new("ScreenGui")
+       local main = Instance.new("Frame")
+       local HitBox = Instance.new("TextBox")
+       local Red = Instance.new("TextBox")
+       local Green = Instance.new("TextBox")
+       local Blue = Instance.new("TextBox")
+       local TextLabel = Instance.new("TextLabel")
+
+       -- Properties:
+
+       FightingGui.Name = "FightingGui"
+       FightingGui.Parent = game.CoreGui
+       FightingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+       FightingGui.Enabled = false  -- Initially hidden
+
+       Open2.Name = "Tools"
+       Open2.Parent = game.CoreGui
+       Open2.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+       Open.Name = "Open"
+       Open.Parent = Open2
+       Open.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+       Open.Position = UDim2.new(0, 0, 0.451871663, 0)
+       Open.Size = UDim2.new(0, 78, 0, 50)
+       Open.Font = Enum.Font.SourceSans
+       Open.Text = "Open"
+       Open.TextColor3 = Color3.fromRGB(250, 0, 0)
+       Open.TextScaled = true
+       Open.TextWrapped = true
+       Open.MouseButton1Down:Connect(function()
+           FightingGui.Enabled = true
+       end)
+
+       Close.Name = "Close"
+       Close.Parent = main
+       Close.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       Close.Position = UDim2.new(1, 0, -0.226244345, 0)
+       Close.Size = UDim2.new(0, 60, 0, 50)
+       Close.Font = Enum.Font.SourceSans
+       Close.Text = "X"
+       Close.TextColor3 = Color3.fromRGB(0, 0, 0)
+       Close.TextScaled = true
+       Close.TextWrapped = true
+       Close.MouseButton1Down:Connect(function()
+           FightingGui.Enabled = false
+       end)
+
+       main.Parent = FightingGui
+       main.Active = true
+       main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+       main.Position = UDim2.new(0.073, 0, 0.237, 0)
+       main.Size = UDim2.new(0, 273, 0, 221)
+       main.Draggable = true
+
+       HitBox.Name = "HitBox"
+       HitBox.Parent = main
+       HitBox.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       HitBox.Position = UDim2.new(0.0586, 0, 0.0995, 0)
+       HitBox.Size = UDim2.new(0, 65, 0, 50)
+       HitBox.Font = Enum.Font.SourceSans
+       HitBox.PlaceholderText = "Hitbox"
+       HitBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+       HitBox.TextScaled = true
+       HitBox.TextWrapped = true
+
+       Red.Name = "Red"
+       Red.Parent = main
+       Red.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       Red.Position = UDim2.new(0.485, 0, 0.0995, 0)
+       Red.Size = UDim2.new(0, 37, 0, 31)
+       Red.Font = Enum.Font.SourceSans
+       Red.PlaceholderText = "Red"
+       Red.TextColor3 = Color3.fromRGB(0, 0, 0)
+
+       Green.Name = "Green"
+       Green.Parent = main
+       Green.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+       Green.Position = UDim2.new(0.665, 0, 0.0995, 0)
+       Green.Size = UDim2.new(0, 37, 0, 31)
+       Green.Font = Enum.Font.SourceSans
+       Green.PlaceholderText = "Green"
+       Green.TextColor3 = Color3.fromRGB(0, 0, 0)
+
+       Blue.Name = "Blue"
+       Blue.Parent = main
+       Blue.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+       Blue.Position = UDim2.new(0.837, 0, 0.0995, 0)
+       Blue.Size = UDim2.new(0, 37, 0, 31)
+       Blue.Font = Enum.Font.SourceSans
+       Blue.PlaceholderText = "Blue"
+       Blue.TextColor3 = Color3.fromRGB(0, 0, 0)
+
+       TextLabel.Parent = main
+       TextLabel.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+       TextLabel.Position = UDim2.new(0.471, 0, 0.325, 0)
+       TextLabel.Size = UDim2.new(0, 140, 0, 37)
+       TextLabel.Font = Enum.Font.SourceSans
+       TextLabel.Text = "Colors"
+       TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+       TextLabel.TextScaled = true
+       TextLabel.TextWrapped = true
+
+       -- Update player hitbox
+       game:GetService('RunService').RenderStepped:Connect(function()
+           for _, v in ipairs(game:GetService('Players'):GetPlayers()) do
+               if v ~= game:GetService('Players').LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                   local rootPart = v.Character.HumanoidRootPart
+
+                   -- Convert text input to numbers
+                   local hitboxSize = tonumber(HitBox.Text) or 5
+                   local red = tonumber(Red.Text) or 255
+                   local green = tonumber(Green.Text) or 255
+                   local blue = tonumber(Blue.Text) or 255
+
+                   pcall(function()
+                       rootPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                       rootPart.Transparency = 0.8
+                       rootPart.Color = Color3.fromRGB(red, green, blue)
+                       rootPart.Material = Enum.Material.Neon
+                       rootPart.CanCollide = false
+                   end)
+               end
+           end
+       end)
+   end,
+})
+
 
 
 
