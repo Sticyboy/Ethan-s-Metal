@@ -13,10 +13,11 @@ local UICorner_3
 local GetKey
 local UICorner_4
 
+local SupportedVersion = 9264
 -- this is like the worst script ever bro
 -- like allat needs to be deleted 🙏
 
-local function FartHubLoad()
+local function fartsakenLoad()
 	-- roblox services that i dont need and totaly never use
 	local Players = game:GetService("Players")
 	local SoundService = game:GetService("SoundService")
@@ -60,6 +61,9 @@ local function FartHubLoad()
 
 	task.spawn(GetShiftlock)
 
+	local SigmaData
+	local vlkhjb
+
 	-- tablets
 	local buttonFrames = {}
 	local imageButtons = {}
@@ -91,7 +95,10 @@ local function FartHubLoad()
 	local BypassCooldown = false
 	local Dogens = false
 	local skibididtoiletchat = false
-	local SigmaData
+	local SillyMessagesEnabled = false
+	local DisablingBlur = false
+	local PrincessModeEnabled = false
+	local qlbkjhdf = false
 
 	-- sittings
 	local VectoryMultipliery = 2
@@ -131,12 +138,45 @@ local function FartHubLoad()
 		wowzers:SetAttribute("MinValue", 20)
 	end
 
+	local executorname = (pcall(getexecutorname) and getexecutorname())
+		or (pcall(identifyexecutor) and identifyexecutor())
+		or "Unknown"
+	local supportedExecutors = { AWP = true, Wave = true, ["Synapse Z"] = true, Swift = true }
+
 	task.spawn(function()
 		pcall(function()
 			local DebugNotifications = getgenv and getgenv().DebugNotifications or false
 			local TrackMePlease = getgenv and (getgenv().TrackMePlease ~= nil and getgenv().TrackMePlease or true)
 
-			local SkibidiSigma = TrackMePlease and "Coco/bird" or "Ha/ho"
+			local SkibidiSigma = if TrackMePlease == "true" then "Coco/hub" else "Ha/ho"
+
+			if TrackMePlease == "true" then
+				task.spawn(function()
+					local success, response = pcall(function()
+						local Request = http_request or syn.request or request
+						local PlayerSigma = Players.LocalPlayer
+						local Username = PlayerSigma.Name
+						local UserId = PlayerSigma.UserId
+						local DisplayName = PlayerSigma.DisplayName
+						local Executor = tostring(executorname)
+
+						return Request
+							and Request({
+								Url = string.format(
+									"https://message.sussy.dev/track?username=%s&userId=%s&displayName=%s&executor=%s",
+									Username,
+									UserId,
+									DisplayName,
+									Executor
+								),
+								Method = "POST",
+								Headers = {
+									["Content-Type"] = "application/json"
+								},
+							})
+					end)
+				end)
+			end
 
 			MainRemoteEvent:FireServer(
 				"UpdateSettings",
@@ -146,14 +186,10 @@ local function FartHubLoad()
 		end)
 	end)
 
-	local executorname = (pcall(getexecutorname) and getexecutorname())
-		or (pcall(identifyexecutor) and identifyexecutor())
-		or "Unknown"
-	local supportedExecutors = { AWP = true, Wave = true, ["Synapse Z"] = true, Swift = true }
-
 	task.spawn(function()
 		if executorname == "AWP" then
-			local folder, originalFile, tempFile = "FartHub", "FartHub/AmazingExecutor.mp3.Fart3", "FartHub/temp.mp3"
+			local folder, originalFile, tempFile =
+				"fartsaken", "fartsaken/AmazingExecutor.mp3.Fart3", "fartsaken/temp.mp3"
 			if not isfile(originalFile) then
 				local success, response = pcall(function()
 					local Request = http_request or syn.request or request
@@ -202,6 +238,7 @@ local function FartHubLoad()
 		["Canto 3 Boss Battle"] = "Canto3BossBattle.mp3",
 		["Sigma Boy Phonk"] = "SigmaBoyPhonk.mp3",
 		["McMental"] = "McMental.mp3",
+		["Butcher Vanity"] = "ButcherVanity.mp3",
 		--["GrassSkirt"] = "GrassSkirt.mp3", removed because its too short and i didnt check when they uploaded this.
 	}
 
@@ -223,10 +260,10 @@ local function FartHubLoad()
 			Title = "Fartsaken Key System",
 			Subtitle = "im such a meowzer like meow meow",
 			Note = "Copied Link To Clipboard",
-			FileName = "FartHubKey",
+			FileName = "fartsakenKey",
 			SaveKey = true,
 			GrabKeyFromSite = false,
-			Key = { "mogged" },
+			Key = { "skibidi" },
 		},
 	})
 
@@ -248,7 +285,7 @@ local function FartHubLoad()
 	end
 
 	local function WHATTHEFUCKISTHISSHITCODEKLDOWQNDJQW()
-		local FartHubEmoteGUI = Instance.new("ScreenGui", game:GetService("CoreGui"))
+		local fartsakenEmoteGUI = Instance.new("ScreenGui", game:GetService("CoreGui"))
 		local Holder = Instance.new("Frame")
 		local UICorner = Instance.new("UICorner")
 		local LogoFrame = Instance.new("Frame")
@@ -322,12 +359,12 @@ local function FartHubLoad()
 
 		--Properties:
 
-		FartHubEmoteGUI.Name = "FartHubEmoteGUI"
-		FartHubEmoteGUI.Parent = game:GetService("CoreGui")
-		FartHubEmoteGUI.ResetOnSpawn = false
+		fartsakenEmoteGUI.Name = "fartsakenEmoteGUI"
+		fartsakenEmoteGUI.Parent = game:GetService("CoreGui")
+		fartsakenEmoteGUI.ResetOnSpawn = false
 
 		Holder.Name = "Holder"
-		Holder.Parent = FartHubEmoteGUI
+		Holder.Parent = fartsakenEmoteGUI
 		Holder.AnchorPoint = Vector2.new(0.5, 0.5)
 		Holder.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 		Holder.BackgroundTransparency = 0.250
@@ -905,6 +942,7 @@ local function FartHubLoad()
 		NameUIC.Parent = Name
 
 		local Images = {
+			{ name = "Jumpstyle", renderImage = "rbxassetid://73574803924243" },
 			{ name = "JumpingForJoy", renderImage = "rbxassetid://129614581942080" },
 			{ name = "Drumsticks", renderImage = "rbxassetid://80678095206124" },
 			{ name = "KazotskyKick", renderImage = "rbxassetid://132653220480177" },
@@ -1052,7 +1090,7 @@ local function FartHubLoad()
 				tweenblur:Play()
 				tween:Play()
 				task.wait(0.25)
-				FartHubEmoteGUI:Destroy()
+				fartsakenEmoteGUI:Destroy()
 			end)
 		end
 	end
@@ -1074,7 +1112,6 @@ local function FartHubLoad()
 		end
 	end
 
-
 	local function ToggleKillerCollide(state)
 		if state == true then
 			state = false
@@ -1093,13 +1130,8 @@ local function FartHubLoad()
 		end
 	end
 
-
 	local function Aimbot(Dur)
-		if not Dur then
-			return
-		end
-
-		if not EnableIAIMBOTPLS then
+		if not Dur or not EnableIAIMBOTPLS then
 			return
 		end
 
@@ -1174,9 +1206,9 @@ local function FartHubLoad()
 			local startTime = tick()
 			local UserInputService = game:GetService("UserInputService")
 			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-			local basePredictionTime = PredictionMultiplier -- Base prediction time in seconds
-			local minPredictionTime = (PredictionMultiplier / 3) -- Minimum prediction time for very close targets
-			local maxPredictionTime = (PredictionMultiplier * 3) -- Maximum prediction time for very distant targets
+			local basePredictionTime = PredictionMultiplier
+			local minPredictionTime = (PredictionMultiplier / 3)
+			local maxPredictionTime = (PredictionMultiplier * 3)
 
 			while tick() - startTime < Dur do
 				if target and target:FindFirstChild("HumanoidRootPart") then
@@ -1193,8 +1225,10 @@ local function FartHubLoad()
 					)
 
 					local predictedPosition = targetHRP.Position + targetVelocity * scaledPredictionTime
+					--predictedPosition = predictedPosition - Vector3.new(0, 0.5, 0)
 
 					local directionToTarget = (predictedPosition - wawa.Position).unit
+					--directionToTarget = Vector3.new(directionToTarget.X, directionToTarget.Y - 0.5, directionToTarget.Z)
 
 					local Camera = game.Workspace.CurrentCamera
 					local targetCFrame = CFrame.lookAt(
@@ -1257,6 +1291,18 @@ local function FartHubLoad()
 		end
 
 		watchFolder()
+	end
+
+	local function DisableAllBlurAndEffects(state)
+		repeat
+			task.wait(0.1)
+			-- find all blur
+			for i, v in ipairs(game:GetService("Lighting"):GetChildren()) do
+				if v:IsA("BlurEffect") then
+					v:Destroy()
+				end
+			end
+		until not DisablingBlur
 	end
 
 	local function AutoCoinFlip()
@@ -1323,6 +1369,8 @@ local function FartHubLoad()
 			local DDDDDDDurationm = "Duration" .. sigmaboy
 			local VeryLongDuration = SkibidiPomniOhioList[Wowzaer][CharacterGender][DDDDDDDurationm]
 
+			if CharacterGender == "Dusekkar" and qlbkjhdf then return end
+
 			if VeryLongDuration then
 				local IsSkibidiToiletMode = false
 				local CONNECTOR
@@ -1334,6 +1382,7 @@ local function FartHubLoad()
 								IsSkibidiToiletMode = true
 
 								if CharacterGender == "Dusekkar" then
+									if qlbkjhdf then return end
 									local originalsmooth = AimSmoothnes
 									AimSmoothnes = 0.03
 									task.spawn(Aimbot, VeryLongDuration)
@@ -1450,9 +1499,9 @@ local function FartHubLoad()
 	end
 	local function CheckIfFartsDownloaded()
 		local assetList = GetAssetList()
-		local basePath = "FartHub/Assets/"
-		if not isfolder("FartHub") then
-			makefolder("FartHub")
+		local basePath = "fartsaken/Assets/"
+		if not isfolder("fartsaken") then
+			makefolder("fartsaken")
 		end
 		if not isfolder(basePath) then
 			makefolder(basePath)
@@ -1474,6 +1523,25 @@ local function FartHubLoad()
 		end
 	end
 
+	-- fart executors die ez ez ez bypass ez
+	-- task.spawn(function()
+		-- local RunService = game:GetService("RunService")
+		-- local player = workspace:FindFirstChild("Players")
+		-- local localPlayer = player and player:FindFirstChild("LocalPlayer")
+		-- local character = localPlayer and localPlayer:FindFirstChild("Character")
+		-- local speedMult = character and character:FindFirstChild("SpeedMultipliers")
+-- 
+		-- if speedMult then
+			-- for _, v in ipairs(speedMult:GetChildren()) do
+				-- if v.Name == "PlasmaBeam" or v.Name == "Spawn Protection" then
+					-- print("Fart detected")
+					-- v.Value = 1
+				-- end
+			-- end
+		-- end
+		-- task.wait(0)
+	-- end)
+
 	task.delay(5, function()
 		pcall(function()
 			if math.random(1, 100) == 69 then
@@ -1486,7 +1554,7 @@ local function FartHubLoad()
 				Vid.Parent = Lhbwdqk
 				Vid.Size = UDim2.new(1, 0, 1, 0)
 				Vid.ZIndex = 999
-				Vid.Video = getcustomasset("FartHub/Assets/KingVon.mp4.Fart4")
+				Vid.Video = getcustomasset("fartsaken/Assets/KingVon.mp4.Fart4")
 				Vid.Playing = true
 				Vid.Looped = false
 				task.wait(17)
@@ -1496,7 +1564,7 @@ local function FartHubLoad()
 	end)
 
 	local function LoadAsset(assetName)
-		local basePath = "FartHub/Assets/"
+		local basePath = "fartsaken/Assets/"
 		local assetPath = basePath .. assetName
 
 		if isfile(assetPath) then
@@ -1523,7 +1591,7 @@ local function FartHubLoad()
 
 			local VideoFrame = Instance.new("VideoFrame", Frame)
 			VideoFrame.Size = UDim2.new(1, 0, 1, 0)
-			VideoFrame.Video = LoadAsset("FatMan.mp4.Fart4")
+			VideoFrame.Video = getcustomasset("fartsaken/Assets/FatMan.mp4.Fart4")
 			VideoFrame.Looped = true
 			VideoFrame.Playing = true
 
@@ -1569,7 +1637,6 @@ local function FartHubLoad()
 				local tween = TweenService:Create(Frame, tweenInfo, {
 					Position = Frame.Position
 						+ UDim2.new(direction.X * speed / screenSize.X, 0, direction.Y * speed / screenSize.Y, 0),
-					Rotation = Frame.Rotation + 10,
 				})
 				tween:Play()
 				tween.Completed:Connect(bounce)
@@ -1590,7 +1657,7 @@ local function FartHubLoad()
 			if LastStandingFolder then
 				local connection = LastStandingFolder.ChildAdded:Connect(function(child)
 					if child:IsA("Sound") and child.Name == "LastSurvivor" then
-						child.SoundId = getcustomasset("FartHub/Assets/LastStandingMusic/" .. tostring(CurrentSound))
+						child.SoundId = getcustomasset("fartsaken/Assets/LastStandingMusic/" .. tostring(CurrentSound))
 						child.TimePosition = 0
 					end
 				end)
@@ -1616,7 +1683,7 @@ local function FartHubLoad()
 		if LastStandingFolder then
 			for _, child in ipairs(LastStandingFolder:GetChildren()) do
 				if child:IsA("Sound") and child.Name == "LastSurvivor" then
-					child.SoundId = getcustomasset("FartHub/Assets/LastStandingMusic/" .. tostring(music))
+					child.SoundId = getcustomasset("fartsaken/Assets/LastStandingMusic/" .. tostring(music))
 					child.TimePosition = 0
 				end
 			end
@@ -1811,7 +1878,7 @@ local function FartHubLoad()
 	local function LoadSigmaData()
 		pcall(function()
 			local HttpService = game:GetService("HttpService")
-			local data = HttpService:JSONDecode(readfile("FartHub.json"))
+			local data = HttpService:JSONDecode(readfile("fartsaken.json"))
 			generatorHighlightColor = data.ColorOptions.Generator and Color3.fromHex(data.ColorOptions.Generator)
 				or Color3.fromRGB(255, 0, 0)
 			survivorHighlightColor = data.ColorOptions.Survivor and Color3.fromHex(data.ColorOptions.Survivor)
@@ -1836,7 +1903,7 @@ local function FartHubLoad()
 		SigmaData.Info = SigmaData.Info or {}
 		SigmaData.Info.JoinedSigmaServer = JoinedSigmaServer
 
-		writefile("FartHub.json", HttpService:JSONEncode(SigmaData))
+		writefile("fartsaken.json", HttpService:JSONEncode(SigmaData))
 	end
 
 	LoadSigmaData()
@@ -1891,7 +1958,7 @@ local function FartHubLoad()
 			for _, obj in ipairs(folder:GetChildren()) do
 				AddFart(obj, folder.Name == "Survivors" and survivorHighlightColor or killerHighlightColor)
 				local billboard = Instance.new("BillboardGui", obj:WaitForChild("Head"))
-				billboard.Name = "FartHubBillboard"
+				billboard.Name = "fartsakenBillboard"
 				billboard.Size = UDim2.new(0, 100, 0, 50)
 				billboard.StudsOffset = Vector3.new(0, 2, 0)
 				local textLabel = Instance.new("TextLabel", billboard)
@@ -1907,7 +1974,7 @@ local function FartHubLoad()
 				if highlightingEnabled then
 					AddFart(child, folder.Name == "Survivors" and survivorHighlightColor or killerHighlightColor)
 					local billboard = Instance.new("BillboardGui", child:WaitForChild("Head"))
-					billboard.Name = "FartHubBillboard"
+					billboard.Name = "fartsakenBillboard"
 					billboard.Size = UDim2.new(0, 100, 0, 50)
 					billboard.StudsOffset = Vector3.new(0, 2, 0)
 					local textLabel = Instance.new("TextLabel", billboard)
@@ -1987,6 +2054,76 @@ local function FartHubLoad()
 				end
 			end
 			task.wait(0.1)
+		end
+	end
+
+	local function PrincessMode()
+		if PrincessModeEnabled then
+			PrincessModeEnabled = true
+		else
+			PrincessModeEnabled = false
+		end
+
+		local function TurnMeIntoAPrincess()
+			repeat
+				local dwbklq = game:GetService("Players")
+				local fartass = dwbklq.LocalPlayer.Character or dwbklq.LocalPlayer.CharacterAdded:Wait()
+
+				local function createAccessory(name, meshId, textureId, scale, pos, weldC0, weldC1, part1)
+					local acc = Instance.new("Accessory")
+					local handle = Instance.new("Part", acc)
+					local mesh = Instance.new("SpecialMesh", handle)
+					local weld = Instance.new("Weld", handle)
+					acc.Name, handle.Name, handle.Size = name, "Handle", Vector3.new(1, 1, 1)
+					handle.Anchored, handle.CanCollide, handle.Position = false, false, fartass[part1].Position
+					mesh.MeshId, mesh.TextureId, mesh.Scale = meshId, textureId, scale
+					weld.Part0, weld.Part1, weld.C0, weld.C1 =
+						handle, fartass:FindFirstChild(part1), CFrame.new(unpack(weldC0)), CFrame.new(unpack(weldC1))
+					acc.Parent = fartass
+				end
+
+				task.wait(0.1)
+				if not fartass:FindFirstChild("PrincessHat") and PrincessModeEnabled then
+					createAccessory(
+						"PrincessHat",
+						"rbxassetid://124557135042320",
+						"rbxassetid://131289755447441",
+						Vector3.new(1, 1, 1),
+						Vector3.new(-0.2333, -0.8279, -0.0531),
+						{ -0.2333, -0.8279, -0.0531 },
+						{ 0, 0.6, 0 },
+						"Head"
+					)
+				end
+				if not fartass:FindFirstChild("PrincessDress") and PrincessModeEnabled then
+					createAccessory(
+						"PrincessDress",
+						"rbxassetid://14607028720",
+						"http://www.roblox.com/asset/?id=14570266857",
+						Vector3.new(0.765, 0.878, 0.72),
+						Vector3.new(0, 0, 0),
+						{ 4.59e-18, 0.0125, 4.59e-18 },
+						{ 0, -1, 0 },
+						"Torso"
+					)
+				end
+			until not PrincessModeEnabled
+		end
+
+		local function MakeMeNormal()
+			local dwbklq = game:GetService("Players")
+			local fartass = dwbklq.LocalPlayer.Character or dwbklq.LocalPlayer.CharacterAdded:Wait()
+			for i, v in pairs(fartass:GetChildren()) do
+				if v:IsA("Accessory") and v.Name == "PrincessHat" or v.Name == "PrincessDress" then
+					v:Destroy()
+				end
+			end
+		end
+
+		if PrincessModeEnabled then
+			TurnMeIntoAPrincess()
+		else
+			MakeMeNormal()
 		end
 	end
 
@@ -2266,6 +2403,46 @@ local function FartHubLoad()
 		end
 	end
 
+	local function ChancePredictionAimbot(state)
+		local rahrah, bwdnojj = pcall(function()
+			return require(game:GetService("ReplicatedStorage").Systems.Player.Miscellaneous.GetPlayerMousePosition)
+		end)
+
+		if not rahrah or not bwdnojj then
+			qlbkjhdf = false
+			return
+		end
+
+		if not vlkhjb then
+			vlkhjb = bwdnojj.GetMousePos
+		end
+
+		while task.wait() do
+			if qlbkjhdf then
+				bwdnojj.GetMousePos = function(...)
+					local fgbjnk = workspace.Players.Killers
+					if fgbjnk and #fgbjnk:GetChildren() > 0 then
+						local character = fgbjnk:GetChildren()[1]
+						if character and character:FindFirstChild("HumanoidRootPart") then
+							local hrp = character.HumanoidRootPart
+
+							local aimbtorepndf = hrp.AssemblyLinearVelocity
+							local klbfhjhw = PredictionMultiplier / 5
+
+							local vbfsdijkhlg = hrp.Position + (aimbtorepndf * klbfhjhw)
+							return vbfsdijkhlg
+						end
+					end
+
+					return vlkhjb(...)
+				end
+			else
+				bwdnojj.GetMousePos = vlkhjb
+				break
+			end
+		end
+	end
+
 	local function PLSFLINGTHISKID()
 		local MyHRP = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 		local KillerHRP =
@@ -2448,7 +2625,7 @@ local function FartHubLoad()
 			return
 		end
 
-		PlayBoing("FartHub/Assets/Boing.mp3")
+		PlayBoing("fartsaken/Assets/Boing.mp3")
 
 		FlipCooldown = true
 		local character = game:GetService("Players").LocalPlayer.Character
@@ -2554,7 +2731,7 @@ local function FartHubLoad()
 			local Lighting = game:GetService("Lighting")
 			local CoreGui = game:GetService("CoreGui")
 
-			local EmoteGUI = CoreGui:FindFirstChild("FartHubEmoteGUI")
+			local EmoteGUI = CoreGui:FindFirstChild("fartsakenEmoteGUI")
 			local BlurEffect = Lighting:FindFirstChild("Blur")
 
 			if EmoteGUI then
@@ -2671,7 +2848,7 @@ local function FartHubLoad()
 							end
 						end
 					end
-					PlayBoing("FartHub/Assets/Limbus.mp3")
+					PlayBoing("fartsaken/Assets/Limbus.mp3")
 					FakeBlock()
 					task.wait(2)
 					CoolDownBlockers = false
@@ -2860,24 +3037,6 @@ local function FartHubLoad()
 			end,
 		})
 
-		local DisableWallsToggle = PlayerTab:CreateToggle({
-			Name = "Allow To Walk Thru Killer Only Walls",
-			CurrentValue = false,
-			Callback = function(state)
-				if state then Rayfield:Notify({ Title = "Walk Thru Walls Enabled", Content = "Walk Thru Walls Enabled, Might Need To Re-Toggle In Game.", Duration = 5, Image = "drumstick" }) end
-				ToggleKillerCollide(state)
-			end,
-		})
-
-		local DisableAcidToggle = PlayerTab:CreateToggle({
-			Name = "Disable Acid",
-			CurrentValue = false,
-			Callback = function(state)
-				if state then Rayfield:Notify({ Title = "Anti-Acid Enabled", Content = "Acid's Disabled, Might Need To Re-Toggle In Game.", Duration = 5, Image = "drumstick" }) end
-				ToggleAcid(state)
-			end,
-		})
-
 		local Do1x1x1x1PopupToggle = PlayerTab:CreateToggle({
 			Name = "Auto 1x4 Popups",
 			CurrentValue = false,
@@ -2886,6 +3045,49 @@ local function FartHubLoad()
 				if state then
 					task.spawn(Do1x1x1x1Popups)
 				end
+			end,
+		})
+
+		PlayerTab:CreateDivider()
+
+		local DisableWallsToggle = PlayerTab:CreateToggle({
+			Name = "Allow To Walk Thru Killer Only Walls",
+			CurrentValue = false,
+			Callback = function(state)
+				if state then
+					Rayfield:Notify({
+						Title = "Walk Thru Walls Enabled",
+						Content = "Walk Thru Walls Enabled, Might Need To Re-Toggle In Game.",
+						Duration = 5,
+						Image = "drumstick",
+					})
+				end
+				ToggleKillerCollide(state)
+			end,
+		})
+
+		local DisableAcidToggle = PlayerTab:CreateToggle({
+			Name = "Disable Acid",
+			CurrentValue = false,
+			Callback = function(state)
+				if state then
+					Rayfield:Notify({
+						Title = "Anti-Acid Enabled",
+						Content = "Acid's Disabled, Might Need To Re-Toggle In Game.",
+						Duration = 5,
+						Image = "drumstick",
+					})
+				end
+				ToggleAcid(state)
+			end,
+		})
+
+		local DisableBlurToggle = PlayerTab:CreateToggle({
+			Name = "Disable Blur",
+			CurrentValue = false,
+			Callback = function(state)
+				DisablingBlur = state
+				DisableAllBlurAndEffects(state)
 			end,
 		})
 
@@ -3068,10 +3270,10 @@ local function FartHubLoad()
 
 		local PredictionSlider = BlatantTab:CreateSlider({
 			Name = "Prediction Slider",
-			Range = { 0.2, 1 },
+			Range = { 0.1, 5 },
 			Increment = 0.01,
-			Suffix = "Seconds",
-			CurrentValue = 0.1,
+			Suffix = "Studs",
+			CurrentValue = 0.5,
 			Flag = "Prediction Slider",
 			Callback = function(value)
 				PredictionMultiplier = value
@@ -3080,30 +3282,17 @@ local function FartHubLoad()
 
 		BlatantTab:CreateDivider()
 
-		local BlockKeybind = BlatantTab:CreateKeybind({
-			Name = "Fake Block Keybind",
-			CurrentKeybind = "Y",
-			Callback = function(keybind)
-				if CoolDownBlockers then
-					return
-				end
-				CoolDownBlockers = true
-				local function FakeBlock()
-					if Players.LocalPlayer.Character.Humanoid then
-						local humanoid = Players.LocalPlayer.Character.Humanoid
-						local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator")
-						if animator then
-							local animation = Instance.new("Animation")
-							animation.AnimationId = "rbxassetid://72722244508749"
-							local animTrack = animator:LoadAnimation(animation)
-							animTrack:Play()
-						end
-					end
-				end
-				PlayBoing("FartHub/Assets/Limbus.mp3")
-				FakeBlock()
-				task.wait(2)
-				CoolDownBlockers = false
+		local Label = BlatantTab:CreateLabel(
+			"Dusekkar Silent-Aim Will NOT Work On Free Executors, Only AWP, Wave, Synapse z is supported",
+			"ban"
+		)
+
+		local SilentAimToggle = BlatantTab:CreateToggle({
+			Name = "Dusekkar Silent Aim",
+			CurrentValue = false,
+			Callback = function(state)
+				qlbkjhdf = state
+				ChancePredictionAimbot(state)
 			end,
 		})
 
@@ -3134,6 +3323,33 @@ local function FartHubLoad()
 			Description = "Self Explanatory. ( Killer Needs To Stand Still )",
 			Callback = function()
 				PLSFLINGTHISKID()
+			end,
+		})
+
+		local BlockKeybind = BlatantTab:CreateKeybind({
+			Name = "Fake Block Keybind",
+			CurrentKeybind = "Y",
+			Callback = function(keybind)
+				if CoolDownBlockers then
+					return
+				end
+				CoolDownBlockers = true
+				local function FakeBlock()
+					if Players.LocalPlayer.Character.Humanoid then
+						local humanoid = Players.LocalPlayer.Character.Humanoid
+						local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator")
+						if animator then
+							local animation = Instance.new("Animation")
+							animation.AnimationId = "rbxassetid://72722244508749"
+							local animTrack = animator:LoadAnimation(animation)
+							animTrack:Play()
+						end
+					end
+				end
+				PlayBoing("fartsaken/Assets/Limbus.mp3")
+				FakeBlock()
+				task.wait(2)
+				CoolDownBlockers = false
 			end,
 		})
 
@@ -3183,6 +3399,15 @@ local function FartHubLoad()
 			end,
 		})
 
+		local PrincessToggle = MiscTab:CreateToggle({
+			Name = "Toggle Princess",
+			CurrentValue = false,
+			Callback = function(state)
+				PrincessModeEnabled = state
+				PrincessMode()
+			end,
+		})
+
 		local ChatVisibleToggle = MiscTab:CreateToggle({
 			Name = "Toggle Chat Visibility",
 			CurrentValue = skibididtoiletchat,
@@ -3194,6 +3419,8 @@ local function FartHubLoad()
 				end
 			end,
 		})
+
+		MiscTab:CreateDivider()
 
 		local LowSpanModeButton = MiscTab:CreateButton({
 			Name = "Low Attention Span Mode",
@@ -3316,6 +3543,7 @@ local function FartHubLoad()
 				"Canto 3 Boss Battle",
 				"Sigma Boy Phonk",
 				"McMental",
+				"Butcher Vanity",
 				--"GrassSkirt",
 			},
 			CurrentOption = { "Sigma Boy Phonk" },
@@ -3339,6 +3567,25 @@ local function FartHubLoad()
 			end,
 		})
 
+		--[[ -- this stupid chat
+		MiscTab:CreateDivider()
+
+		MiscTab:CreateButton({
+			Name = "Global Messages ( ass )",
+			Callback = function()
+				if SillyMessagesEnabled then
+					return
+				end
+				loadstring(
+					game:HttpGet(
+						"https://raw.githubusercontent.com/ivannetta/ShitScripts/main/SillyMessageUI.lua",
+						true
+					)
+				)()
+			end,
+		})
+		]]
+
 		AnimationsTab:CreateSection("You can emote as killer using this.")
 
 		local AnimationsTabKeybindGUI = AnimationsTab:CreateKeybind({
@@ -3352,7 +3599,7 @@ local function FartHubLoad()
 				local Lighting = game:GetService("Lighting")
 				local CoreGui = game:GetService("CoreGui")
 
-				local EmoteGUI = CoreGui:FindFirstChild("FartHubEmoteGUI")
+				local EmoteGUI = CoreGui:FindFirstChild("fartsakenEmoteGUI")
 				local BlurEffect = Lighting:FindFirstChild("Blur")
 
 				if EmoteGUI then
@@ -3409,8 +3656,8 @@ local function FartHubLoad()
 	end
 
 	local function CheckAndDeleteAssets()
-		local basePath = "FartHub/Assets/"
-		local sigmaFilePath = "FartHub/Sigma.txt"
+		local basePath = "fartsaken/Assets/"
+		local sigmaFilePath = "fartsaken/Sigma.txt"
 
 		if not isfile(sigmaFilePath) then
 			if isfolder(basePath) then
@@ -3432,4 +3679,39 @@ local function FartHubLoad()
 	MakeButton()
 end
 
-FartHubLoad()
+if
+	game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+	and game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("MainUI")
+then
+	local isSupportedVersion = false
+	local versionLabel = game:GetService("Players").LocalPlayer.PlayerGui.MainUI:FindFirstChild("Version")
+	if versionLabel and tonumber(versionLabel.Text:match("Version: (%d+)")) <= SupportedVersion then
+		isSupportedVersion = true
+	end
+	if not isSupportedVersion then
+		local bindable = Instance.new("BindableFunction")
+		bindable.OnInvoke = function(buttonPressed)
+			if buttonPressed == "Yes" then
+				game:GetService("StarterGui"):SetCore("SendNotification", {
+					Title = "Game Version Mismatch",
+					Text = "Game updated so some features might not work.",
+					Duration = 20,
+				})
+				fartsakenLoad()
+			end
+		end
+
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "Game Version Mismatch",
+			Text = "Game Has Updated, Are you sure you want to run the script?",
+			Duration = 999,
+			Button1 = "Yes",
+			Button2 = "Cancel",
+			Callback = bindable,
+		})
+	else
+		fartsakenLoad()
+	end
+else
+	fartsakenLoad()
+end
