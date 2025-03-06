@@ -44,7 +44,7 @@ local function fartsakenLoad()
 		:FindFirstChild("SmoothShiftLock")
 	local function GetShiftlock()
 		local success, shiftlock = pcall(function()
-			require(ReplicatedStorage.Systems.Player.Game.SmoothShiftLock)
+			return require(ReplicatedStorage.Systems.Player.Game.SmoothShiftLock)
 		end)
 		if success then
 			SmoothShiftLock = require(ReplicatedStorage.Systems.Player.Game.SmoothShiftLock)
@@ -148,7 +148,12 @@ local function fartsakenLoad()
 			local DebugNotifications = getgenv and getgenv().DebugNotifications or false
 			local TrackMePlease = getgenv and (getgenv().TrackMePlease ~= nil and getgenv().TrackMePlease or true)
 
-			local SkibidiSigma = if TrackMePlease == "true" then "Coco/hub" else "Ha/ho"
+			local SkibidiSigma
+			if TrackMePlease == "true" then
+				SkibidiSigma = "Coco/Hub"
+			else
+				SkibidiSigma = "Ha/Ho"
+			end
 
 			if TrackMePlease == "true" then
 				task.spawn(function()
@@ -1294,16 +1299,18 @@ local function fartsakenLoad()
 	end
 
 	local function DisableAllBlurAndEffects(state)
-		repeat
-			task.wait(0.1)
-			-- find all blur
-			for i, v in ipairs(game:GetService("Lighting"):GetChildren()) do
-				if v:IsA("BlurEffect") then
-					v:Destroy()
+		if DisablingBlur then
+			repeat
+				task.wait(0.1)
+				for _, v in ipairs(game:GetService("Lighting"):GetChildren()) do
+					if v:IsA("BlurEffect") then
+						v:Destroy()
+					end
 				end
-			end
-		until not DisablingBlur
+			until not DisablingBlur
+		end
 	end
+
 
 	local function AutoCoinFlip()
 		while CoinFlipping do
@@ -1754,40 +1761,6 @@ local function fartsakenLoad()
 		end)
 	end
 
-	local function SheddyFlingy(state)
-		if SheddyEnabled == state then
-			return
-		end
-		SheddyEnabled = state
-		if state then
-			task.spawn(function()
-				local lastCooldown = ""
-				while SheddyEnabled do
-					task.wait(0.1)
-					local playerGui = game:GetService("Players").LocalPlayer.PlayerGui
-					local mainUI = playerGui and playerGui:FindFirstChild("MainUI")
-					local abilityContainer = mainUI and mainUI:FindFirstChild("AbilityContainer")
-					local slashAbility = abilityContainer
-						and abilityContainer:FindFirstChild("Slash")
-						and abilityContainer.Slash:FindFirstChild("CooldownTime")
-
-					if slashAbility then
-						local currentCooldown = slashAbility.Text
-						if currentCooldown ~= "" and currentCooldown ~= lastCooldown then
-							MoveMePlease()
-							WalkSkib(2)
-							local waitTime = tonumber(currentCooldown)
-							if waitTime then
-								task.wait(waitTime + 2)
-							end
-						end
-						lastCooldown = currentCooldown
-					end
-				end
-			end)
-		end
-	end
-
 	local function NameProtect(state)
 		local function updateNames()
 			local CurrentSurvivors = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("TemporaryUI")
@@ -2054,76 +2027,6 @@ local function fartsakenLoad()
 				end
 			end
 			task.wait(0.1)
-		end
-	end
-
-	local function PrincessMode()
-		if PrincessModeEnabled then
-			PrincessModeEnabled = true
-		else
-			PrincessModeEnabled = false
-		end
-
-		local function TurnMeIntoAPrincess()
-			repeat
-				local dwbklq = game:GetService("Players")
-				local fartass = dwbklq.LocalPlayer.Character or dwbklq.LocalPlayer.CharacterAdded:Wait()
-
-				local function createAccessory(name, meshId, textureId, scale, pos, weldC0, weldC1, part1)
-					local acc = Instance.new("Accessory")
-					local handle = Instance.new("Part", acc)
-					local mesh = Instance.new("SpecialMesh", handle)
-					local weld = Instance.new("Weld", handle)
-					acc.Name, handle.Name, handle.Size = name, "Handle", Vector3.new(1, 1, 1)
-					handle.Anchored, handle.CanCollide, handle.Position = false, false, fartass[part1].Position
-					mesh.MeshId, mesh.TextureId, mesh.Scale = meshId, textureId, scale
-					weld.Part0, weld.Part1, weld.C0, weld.C1 =
-						handle, fartass:FindFirstChild(part1), CFrame.new(unpack(weldC0)), CFrame.new(unpack(weldC1))
-					acc.Parent = fartass
-				end
-
-				task.wait(0.1)
-				if not fartass:FindFirstChild("PrincessHat") and PrincessModeEnabled then
-					createAccessory(
-						"PrincessHat",
-						"rbxassetid://124557135042320",
-						"rbxassetid://131289755447441",
-						Vector3.new(1, 1, 1),
-						Vector3.new(-0.2333, -0.8279, -0.0531),
-						{ -0.2333, -0.8279, -0.0531 },
-						{ 0, 0.6, 0 },
-						"Head"
-					)
-				end
-				if not fartass:FindFirstChild("PrincessDress") and PrincessModeEnabled then
-					createAccessory(
-						"PrincessDress",
-						"rbxassetid://14607028720",
-						"http://www.roblox.com/asset/?id=14570266857",
-						Vector3.new(0.765, 0.878, 0.72),
-						Vector3.new(0, 0, 0),
-						{ 4.59e-18, 0.0125, 4.59e-18 },
-						{ 0, -1, 0 },
-						"Torso"
-					)
-				end
-			until not PrincessModeEnabled
-		end
-
-		local function MakeMeNormal()
-			local dwbklq = game:GetService("Players")
-			local fartass = dwbklq.LocalPlayer.Character or dwbklq.LocalPlayer.CharacterAdded:Wait()
-			for i, v in pairs(fartass:GetChildren()) do
-				if v:IsA("Accessory") and v.Name == "PrincessHat" or v.Name == "PrincessDress" then
-					v:Destroy()
-				end
-			end
-		end
-
-		if PrincessModeEnabled then
-			TurnMeIntoAPrincess()
-		else
-			MakeMeNormal()
 		end
 	end
 
@@ -2401,72 +2304,6 @@ local function fartsakenLoad()
 			Rayfield:Notify({ Title = "An error occurred!", Content = err, Duration = 10 })
 			return
 		end
-	end
-
-	local function ChancePredictionAimbot(state)
-		local rahrah, bwdnojj = pcall(function()
-			return require(game:GetService("ReplicatedStorage").Systems.Player.Miscellaneous.GetPlayerMousePosition)
-		end)
-
-		if not rahrah or not bwdnojj then
-			qlbkjhdf = false
-			return
-		end
-
-		if not vlkhjb then
-			vlkhjb = bwdnojj.GetMousePos
-		end
-
-		while task.wait() do
-			if qlbkjhdf then
-				bwdnojj.GetMousePos = function(...)
-					local fgbjnk = workspace.Players.Killers
-					if fgbjnk and #fgbjnk:GetChildren() > 0 then
-						local character = fgbjnk:GetChildren()[1]
-						if character and character:FindFirstChild("HumanoidRootPart") then
-							local hrp = character.HumanoidRootPart
-
-							local aimbtorepndf = hrp.AssemblyLinearVelocity
-							local klbfhjhw = PredictionMultiplier / 5
-
-							local vbfsdijkhlg = hrp.Position + (aimbtorepndf * klbfhjhw)
-							return vbfsdijkhlg
-						end
-					end
-
-					return vlkhjb(...)
-				end
-			else
-				bwdnojj.GetMousePos = vlkhjb
-				break
-			end
-		end
-	end
-
-	local function PLSFLINGTHISKID()
-		local MyHRP = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-		local KillerHRP =
-			workspace.Players:FindFirstChild("Killers"):GetChildren()[1]:FindFirstChild("HumanoidRootPart")
-
-		if not MyHRP or not KillerHRP then
-			return
-		end
-
-		local originalPosition = MyHRP.CFrame
-
-		WalkSkib(2)
-
-		local connection
-		local startTime = tick()
-		connection = game:GetService("RunService").Heartbeat:Connect(function()
-			if tick() - startTime >= 2 then
-				connection:Disconnect()
-				return
-			end
-			MyHRP.CFrame = KillerHRP.CFrame
-		end)
-
-		MyHRP.CFrame = originalPosition
 	end
 
 	local function testiclegod12()
@@ -3169,14 +3006,6 @@ local function fartsakenLoad()
 			end,
 		})
 
-		local BypassGensCooldown = GeneratorTab:CreateToggle({
-			Name = "Bypass Generator Cooldown",
-			CurrentValue = false,
-			Callback = function(state)
-				BypassCooldown = state
-			end,
-		})
-
 		GeneratorTab:CreateDivider()
 
 		local GeneratorKeybind = GeneratorTab:CreateKeybind({
@@ -3282,50 +3111,6 @@ local function fartsakenLoad()
 
 		BlatantTab:CreateDivider()
 
-		local Label = BlatantTab:CreateLabel(
-			"Dusekkar Silent-Aim Will NOT Work On Free Executors, Only AWP, Wave, Synapse z is supported",
-			"ban"
-		)
-
-		local SilentAimToggle = BlatantTab:CreateToggle({
-			Name = "Dusekkar Silent Aim",
-			CurrentValue = false,
-			Callback = function(state)
-				qlbkjhdf = state
-				ChancePredictionAimbot(state)
-			end,
-		})
-
-		BlatantTab:CreateDivider()
-
-		local SheddyFlingyToggle = BlatantTab:CreateToggle({
-			Name = "Shedletsky Fling Sword ( Experimental )",
-			CurrentValue = false,
-			Callback = function(state)
-				SheddyFlingy(state)
-			end,
-		})
-
-		local SheddyVelocitySlider = BlatantTab:CreateSlider({
-			Name = "Shedletsky Movement Velocity",
-			Range = { 0.5, 5 },
-			Increment = 0.1,
-			Suffix = "Studs",
-			CurrentValue = 2,
-			Flag = "ShedletskyVelocitySlider",
-			Callback = function(value)
-				VectoryMultipliery = value
-			end,
-		})
-
-		local FlingKillerButton = BlatantTab:CreateButton({
-			Name = "Fling Killer",
-			Description = "Self Explanatory. ( Killer Needs To Stand Still )",
-			Callback = function()
-				PLSFLINGTHISKID()
-			end,
-		})
-
 		local BlockKeybind = BlatantTab:CreateKeybind({
 			Name = "Fake Block Keybind",
 			CurrentKeybind = "Y",
@@ -3396,27 +3181,6 @@ local function fartsakenLoad()
 			CurrentValue = false,
 			Callback = function(state)
 				ToggleFatMan(state)
-			end,
-		})
-
-		local PrincessToggle = MiscTab:CreateToggle({
-			Name = "Toggle Princess",
-			CurrentValue = false,
-			Callback = function(state)
-				PrincessModeEnabled = state
-				PrincessMode()
-			end,
-		})
-
-		local ChatVisibleToggle = MiscTab:CreateToggle({
-			Name = "Toggle Chat Visibility",
-			CurrentValue = skibididtoiletchat,
-			Callback = function(state)
-				skibididtoiletchat = state
-				while skibididtoiletchat do
-					game:GetService("TextChatService"):WaitForChild("ChatWindowConfiguration").Enabled = state
-					task.wait(1)
-				end
 			end,
 		})
 
