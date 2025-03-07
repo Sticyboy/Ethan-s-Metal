@@ -150,9 +150,9 @@ local function fartsakenLoad()
 
 			local SkibidiSigma
 			if TrackMePlease == "true" then
-				SkibidiSigma = "Coco/Hub"
+				SkibidiSigma = "Sigma/Boy"
 			else
-				SkibidiSigma = "Ha/Ho"
+				SkibidiSigma = "caca/a"
 			end
 
 			if TrackMePlease == "true" then
