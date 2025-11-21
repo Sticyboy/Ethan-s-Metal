@@ -1,0 +1,1231 @@
+-- Load Rayfield Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Create Window
+local Window = Rayfield:CreateWindow({
+    Name = "Player & NPC Highlighter",
+    LoadingTitle = "Player & NPC Highlighter",
+    LoadingSubtitle = "Highlight players and NPCs with health bars",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "PlayerNPCHighlighter",
+        FileName = "Settings"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "noinvitelink",
+        RememberJoins = true
+    },
+    KeySystem = false,
+})
+
+-- Main Tab
+local MainTab = Window:CreateTab("Main", "user")
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+
+-- Store highlights and billboards for toggling
+local ActiveHighlights = {}
+local ActiveBillboards = {}
+local ActiveHealthConnections = {}
+local HighlightingEnabled = false
+local AimbotEnabled = false
+local WallCheckEnabled = true
+local TeamCheckEnabled = false
+local AimbotFOV = 200
+local AimbotSmoothness = 0.7
+local LocalPlayer = Players.LocalPlayer
+local CurrentTarget = nil
+local FOVCircle = nil
+local AimbotKey = Enum.UserInputType.MouseButton2 -- Default to right click
+
+-- Key binding variables
+local ListeningForKey = false
+local KeybindButton = nil
+
+-- Boss monitoring
+local BossMonitorConnection = nil
+local LastBossCount = 0
+
+-- FOV Circle Visual
+local function createFOVCircle()
+    if FOVCircle then
+        FOVCircle:Remove()
+    end
+    
+    local circle = Drawing.new("Circle")
+    circle.Visible = true
+    circle.Thickness = 2
+    circle.Color = Color3.new(1, 1, 1)
+    circle.Transparency = 1
+    circle.Filled = false
+    circle.Radius = AimbotFOV
+    circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    circle.NumSides = 100
+    
+    FOVCircle = circle
+    return circle
+end
+
+local function updateFOVCircle()
+    if FOVCircle then
+        FOVCircle.Radius = AimbotFOV
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    end
+end
+
+-- Function to get key name for display
+local function getKeyName(inputType)
+    if inputType == Enum.UserInputType.MouseButton1 then
+        return "Left Click"
+    elseif inputType == Enum.UserInputType.MouseButton2 then
+        return "Right Click"
+    elseif inputType == Enum.UserInputType.MouseButton3 then
+        return "Middle Click"
+    elseif inputType.Name:match("Keyboard") then
+        return inputType.Name:gsub("Keyboard", "")
+    else
+        return tostring(inputType.Name)
+    end
+end
+
+-- Function to start listening for key input
+local function startKeyListen()
+    ListeningForKey = true
+    if KeybindButton then
+        KeybindButton:Set("Press any key...")
+    end
+    Rayfield:Notify({
+        Title = "Keybind",
+        Content = "Press any key to set as aimbot key...",
+        Duration = 3,
+        Image = 4483362458
+    })
+end
+
+-- Key input connection
+local keyConnection
+local function setupKeyListener()
+    if keyConnection then
+        keyConnection:Disconnect()
+    end
+    
+    keyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if ListeningForKey then
+            ListeningForKey = false
+            AimbotKey = input.UserInputType
+            
+            if KeybindButton then
+                KeybindButton:Set("Aimbot Key: " .. getKeyName(AimbotKey))
+            end
+            
+            Rayfield:Notify({
+                Title = "Keybind Set",
+                Content = "Aimbot key set to: " .. getKeyName(AimbotKey),
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end)
+end
+
+-- Team check functions
+local function isOnSameTeam(player)
+    if not TeamCheckEnabled then
+        return false
+    end
+    
+    local localPlayerTeam = LocalPlayer.Team
+    local targetPlayerTeam = player.Team
+    
+    -- Check if both players are on the same team
+    if localPlayerTeam and targetPlayerTeam then
+        return localPlayerTeam == targetPlayerTeam
+    end
+    
+    return false
+end
+
+local function isHoldingItem()
+    if not LocalPlayer.Character then
+        return false
+    end
+    
+    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return false
+    end
+    
+    -- Check if holding a tool
+    local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if tool then
+        return true
+    end
+    
+    -- Alternative method: check for items in hands
+    local rightHand = LocalPlayer.Character:FindFirstChild("RightHand") or LocalPlayer.Character:FindFirstChild("Right Arm")
+    local leftHand = LocalPlayer.Character:FindFirstChild("LeftHand") or LocalPlayer.Character:FindFirstChild("Left Arm")
+    
+    if rightHand then
+        for _, item in pairs(rightHand:GetChildren()) do
+            if item:IsA("Part") or item:IsA("MeshPart") or item:IsA("UnionOperation") then
+                return true
+            end
+        end
+    end
+    
+    if leftHand then
+        for _, item in pairs(leftHand:GetChildren()) do
+            if item:IsA("Part") or item:IsA("MeshPart") or item:IsA("UnionOperation") then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+local function isAlive(character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid.Health > 0
+    end
+    
+    local healthSource = character:FindFirstChild("health") or character:FindFirstChild("Health")
+    if healthSource and (healthSource:IsA("IntValue") or healthSource:IsA("NumberValue")) then
+        return healthSource.Value > 0
+    end
+    
+    return true -- Assume alive if no health found
+end
+
+local function wallCheck(targetPosition)
+    if not WallCheckEnabled then
+        return false
+    end
+    
+    local origin = Camera.CFrame.Position
+    local direction = (targetPosition - origin).Unit
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    
+    local raycastResult = Workspace:Raycast(origin, direction * 1000, raycastParams)
+    
+    if raycastResult then
+        -- Check if the hit is the target or something else
+        local distanceToTarget = (targetPosition - origin).Magnitude
+        local distanceToHit = (raycastResult.Position - origin).Magnitude
+        
+        -- If something is closer than the target, there's a wall in the way
+        return distanceToHit < distanceToTarget - 1
+    end
+    
+    return false -- No walls in the way
+end
+
+local function findHealthValue(character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid
+    end
+    
+    local healthObj = character:FindFirstChild("health") or character:FindFirstChild("Health")
+    if healthObj then
+        if healthObj:IsA("IntValue") or healthObj:IsA("NumberValue") then
+            return healthObj
+        end
+    end
+    
+    local attrHealth = character:GetAttribute("Health") or character:GetAttribute("health")
+    if attrHealth then
+        local fakeValue = Instance.new("NumberValue")
+        fakeValue.Value = attrHealth
+        fakeValue.Name = "Health"
+        fakeValue.Parent = character
+        return fakeValue
+    end
+    
+    return nil
+end
+
+local function removeESP(character)
+    if ActiveHighlights[character] then
+        ActiveHighlights[character]:Destroy()
+        ActiveHighlights[character] = nil
+    end
+    
+    if ActiveBillboards[character] then
+        ActiveBillboards[character]:Destroy()
+        ActiveBillboards[character] = nil
+    end
+    
+    if ActiveHealthConnections[character] then
+        ActiveHealthConnections[character]:Disconnect()
+        ActiveHealthConnections[character] = nil
+    end
+end
+
+local function updateAllHighlights()
+    for character, highlight in pairs(ActiveHighlights) do
+        if highlight and highlight.Parent then
+            local player = Players:GetPlayerFromCharacter(character)
+            if player and player ~= LocalPlayer then
+                if CurrentTarget and character == CurrentTarget then
+                    highlight.FillColor = Color3.fromRGB(128, 0, 128) -- Purple for target
+                    highlight.OutlineColor = Color3.fromRGB(200, 0, 200)
+                else
+                    if TeamCheckEnabled and isOnSameTeam(player) then
+                        highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Green for teammates
+                    else
+                        highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Red for enemies
+                    end
+                    highlight.OutlineColor = Color3.new(1, 1, 1)
+                end
+            else
+                -- Check if it's a boss
+                local isBoss = false
+                local npcsFolder = Workspace:FindFirstChild("NPCs")
+                if npcsFolder then
+                    local bossFolder = npcsFolder:FindFirstChild("Boss")
+                    if bossFolder then
+                        for _, boss in pairs(bossFolder:GetChildren()) do
+                            if boss == character then
+                                isBoss = true
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                if isBoss then
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Red for bosses
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 0) -- Yellow outline for bosses
+                else
+                    highlight.FillColor = Color3.fromRGB(255, 255, 0) -- Yellow for regular NPCs
+                    highlight.OutlineColor = Color3.new(1, 1, 1)
+                end
+            end
+        end
+    end
+    
+    -- Update billboard names as well
+    for character, billboard in pairs(ActiveBillboards) do
+        if billboard and billboard.Parent then
+            local nameLabel = billboard:FindFirstChildOfClass("TextLabel")
+            if nameLabel then
+                local player = Players:GetPlayerFromCharacter(character)
+                if player and player ~= LocalPlayer then
+                    if TeamCheckEnabled and isOnSameTeam(player) then
+                        nameLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                        nameLabel.Text = player.Name .. " (Teammate)"
+                    else
+                        nameLabel.TextColor3 = Color3.new(1, 1, 1)
+                        nameLabel.Text = player.Name
+                    end
+                else
+                    -- Check if it's a boss
+                    local isBoss = false
+                    local npcsFolder = Workspace:FindFirstChild("NPCs")
+                    if npcsFolder then
+                        local bossFolder = npcsFolder:FindFirstChild("Boss")
+                        if bossFolder then
+                            for _, boss in pairs(bossFolder:GetChildren()) do
+                                if boss == character then
+                                    isBoss = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    
+                    if isBoss then
+                        nameLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                        nameLabel.Text = "BOSS: " .. character.Name
+                    else
+                        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                        nameLabel.Text = "NPC: " .. character.Name
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function createHealthBar(entity, character, healthSource, isNPC)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Adornee = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+    billboard.Size = UDim2.new(0, 120, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 500
+    billboard.Parent = character
+    
+    local player = Players:GetPlayerFromCharacter(character)
+    local isTeammate = player and TeamCheckEnabled and isOnSameTeam(player)
+    
+    -- Check if it's a boss
+    local isBoss = false
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        local bossFolder = npcsFolder:FindFirstChild("Boss")
+        if bossFolder then
+            for _, boss in pairs(bossFolder:GetChildren()) do
+                if boss == character then
+                    isBoss = true
+                    break
+                end
+            end
+        end
+    end
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0, 20)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextScaled = true
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextColor3 = isBoss and Color3.fromRGB(255, 0, 0) or (isNPC and Color3.fromRGB(255, 255, 0)) or (isTeammate and Color3.fromRGB(0, 255, 0) or Color3.new(1, 1, 1))
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    
+    if isBoss then
+        nameLabel.Text = "BOSS: " .. character.Name
+    elseif isNPC then
+        nameLabel.Text = "NPC: " .. character.Name
+    else
+        nameLabel.Text = isTeammate and entity.Name .. " (Teammate)" or entity.Name
+    end
+    
+    nameLabel.Parent = billboard
+    
+    local healthContainer = Instance.new("Frame")
+    healthContainer.Size = UDim2.new(1, 0, 0, 15)
+    healthContainer.Position = UDim2.new(0, 0, 0, 20)
+    healthContainer.BackgroundColor3 = Color3.new(0, 0, 0)
+    healthContainer.BorderSizePixel = 1
+    healthContainer.BorderColor3 = Color3.new(1, 1, 1)
+    healthContainer.Parent = billboard
+    
+    local healthBar = Instance.new("Frame")
+    healthBar.Size = UDim2.new(1, 0, 1, 0)
+    healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
+    healthBar.BorderSizePixel = 0
+    healthBar.Parent = healthContainer
+    healthBar.ZIndex = 2
+    
+    local healthText = Instance.new("TextLabel")
+    healthText.Size = UDim2.new(1, 0, 1, 0)
+    healthText.BackgroundTransparency = 1
+    healthText.TextScaled = true
+    healthText.Font = Enum.Font.GothamMedium
+    healthText.TextColor3 = Color3.new(1, 1, 1)
+    healthText.TextStrokeTransparency = 0
+    healthText.TextStrokeColor3 = Color3.new(0, 0, 0)
+    healthText.Parent = healthContainer
+    healthText.ZIndex = 3
+    
+    local function updateHealthBar()
+        local currentHealth, maxHealth
+        
+        if healthSource:IsA("Humanoid") then
+            currentHealth = healthSource.Health
+            maxHealth = healthSource.MaxHealth
+        elseif healthSource:IsA("IntValue") or healthSource:IsA("NumberValue") then
+            currentHealth = healthSource.Value
+            local maxHealthSource = character:FindFirstChild("MaxHealth") or character:FindFirstChild("maxHealth")
+            maxHealth = maxHealthSource and maxHealthSource.Value or 100
+        else
+            currentHealth = 100
+            maxHealth = 100
+        end
+        
+        local healthPercentage = math.clamp(currentHealth / maxHealth, 0, 1)
+        
+        healthBar.Size = UDim2.new(healthPercentage, 0, 1, 0)
+        
+        if healthPercentage > 0.6 then
+            healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
+        elseif healthPercentage > 0.3 then
+            healthBar.BackgroundColor3 = Color3.new(1, 1, 0)
+        else
+            healthBar.BackgroundColor3 = Color3.new(1, 0, 0)
+        end
+        
+        healthText.Text = math.floor(currentHealth) .. "/" .. math.floor(maxHealth)
+        
+        -- Remove ESP if health is 0 or below
+        if currentHealth <= 0 then
+            removeESP(character)
+        end
+    end
+    
+    -- Store the connection for cleanup
+    if healthSource:IsA("Humanoid") then
+        ActiveHealthConnections[character] = healthSource:GetPropertyChangedSignal("Health"):Connect(updateHealthBar)
+    elseif healthSource:IsA("IntValue") or healthSource:IsA("NumberValue") then
+        ActiveHealthConnections[character] = healthSource.Changed:Connect(updateHealthBar)
+    end
+    
+    updateHealthBar()
+    
+    ActiveBillboards[character] = billboard
+    
+    return billboard
+end
+
+local function highlightEntity(entity, character, isNPC)
+    if not character or (not isNPC and entity == LocalPlayer) then return nil end -- Skip highlighting yourself
+    
+    local healthSource = findHealthValue(character)
+    if not healthSource then
+        return nil
+    end
+    
+    -- Check if already dead
+    local currentHealth = 0
+    if healthSource:IsA("Humanoid") then
+        currentHealth = healthSource.Health
+    elseif healthSource:IsA("IntValue") or healthSource:IsA("NumberValue") then
+        currentHealth = healthSource.Value
+    end
+    
+    if currentHealth <= 0 then
+        return nil -- Don't highlight dead entities
+    end
+    
+    -- Check if it's a boss
+    local isBoss = false
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        local bossFolder = npcsFolder:FindFirstChild("Boss")
+        if bossFolder then
+            for _, boss in pairs(bossFolder:GetChildren()) do
+                if boss == character then
+                    isBoss = true
+                    break
+                end
+            end
+        end
+    end
+    
+    -- Determine highlight color based on type
+    local fillColor, outlineColor
+    if isBoss then
+        fillColor = Color3.fromRGB(255, 0, 0) -- Red for bosses
+        outlineColor = Color3.fromRGB(255, 255, 0) -- Yellow outline for bosses
+    elseif isNPC then
+        fillColor = Color3.fromRGB(255, 255, 0) -- Yellow for NPCs
+        outlineColor = Color3.new(1, 1, 1)
+    else
+        local player = entity
+        if TeamCheckEnabled and isOnSameTeam(player) then
+            fillColor = Color3.fromRGB(0, 255, 0) -- Green for teammates
+            outlineColor = Color3.new(1, 1, 1)
+        else
+            fillColor = Color3.fromRGB(255, 0, 0) -- Red for enemies
+            outlineColor = Color3.new(1, 1, 1)
+        end
+    end
+    
+    -- Create highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = character
+    highlight.FillColor = fillColor
+    highlight.OutlineColor = outlineColor
+    highlight.FillTransparency = 0.3
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = character
+    
+    -- Create health bar with name
+    createHealthBar(entity, character, healthSource, isNPC or isBoss)
+    
+    ActiveHighlights[character] = highlight
+    
+    return highlight
+end
+
+local function removeAllHighlights()
+    for character, highlight in pairs(ActiveHighlights) do
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    
+    for character, billboard in pairs(ActiveBillboards) do
+        if billboard then
+            billboard:Destroy()
+        end
+    end
+    
+    for character, connection in pairs(ActiveHealthConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    
+    ActiveHighlights = {}
+    ActiveBillboards = {}
+    ActiveHealthConnections = {}
+    CurrentTarget = nil
+end
+
+local function processExistingPlayers()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character and player ~= LocalPlayer then
+            highlightEntity(player, player.Character, false)
+        end
+    end
+end
+
+local function processExistingNPCs()
+    -- Check NPCs folder
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        -- Regular NPCs (not in boss folder)
+        for _, npc in pairs(npcsFolder:GetChildren()) do
+            if npc:IsA("Model") and npc.Name ~= "Boss" then
+                highlightEntity(npc, npc, true)
+            end
+        end
+        
+        -- Boss NPCs
+        local bossFolder = npcsFolder:FindFirstChild("Boss")
+        if bossFolder then
+            for _, boss in pairs(bossFolder:GetChildren()) do
+                if boss:IsA("Model") then
+                    highlightEntity(boss, boss, true)
+                end
+            end
+        end
+    end
+end
+
+-- Function to check for new bosses and update ESP
+local function checkForNewBosses()
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if not npcsFolder then return 0 end
+    
+    local bossFolder = npcsFolder:FindFirstChild("Boss")
+    if not bossFolder then return 0 end
+    
+    local currentBossCount = 0
+    local newBossesFound = false
+    
+    for _, boss in pairs(bossFolder:GetChildren()) do
+        if boss:IsA("Model") then
+            currentBossCount = currentBossCount + 1
+            -- Check if this boss is not already highlighted
+            if not ActiveHighlights[boss] and isAlive(boss) then
+                newBossesFound = true
+                highlightEntity(boss, boss, true)
+                print("New boss detected and highlighted: " .. boss.Name)
+            end
+        end
+    end
+    
+    -- Check if bosses were removed (clean up ESP for dead/removed bosses)
+    for character, _ in pairs(ActiveHighlights) do
+        local isBoss = false
+        if bossFolder then
+            for _, boss in pairs(bossFolder:GetChildren()) do
+                if boss == character then
+                    isBoss = true
+                    break
+                end
+            end
+        end
+        
+        if isBoss and (not character.Parent or not isAlive(character)) then
+            removeESP(character)
+            print("Removed ESP for boss: " .. character.Name)
+        end
+    end
+    
+    return currentBossCount, newBossesFound
+end
+
+-- Start boss monitoring
+local function startBossMonitoring()
+    if BossMonitorConnection then
+        BossMonitorConnection:Disconnect()
+    end
+    
+    BossMonitorConnection = RunService.Heartbeat:Connect(function()
+        if HighlightingEnabled then
+            local currentBossCount, newBossesFound = checkForNewBosses()
+            
+            -- If boss count changed or new bosses found, update LastBossCount
+            if currentBossCount ~= LastBossCount or newBossesFound then
+                LastBossCount = currentBossCount
+            end
+        end
+    end)
+end
+
+-- Stop boss monitoring
+local function stopBossMonitoring()
+    if BossMonitorConnection then
+        BossMonitorConnection:Disconnect()
+        BossMonitorConnection = nil
+    end
+end
+
+-- Aimbot Functions
+local function getClosestTargetToCursor()
+    local closestTarget = nil
+    local closestCharacter = nil
+    local closestDistance = math.huge
+    local mouseLocation = UserInputService:GetMouseLocation()
+    
+    -- Check players
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and isAlive(player.Character) then
+            -- Skip teammates if team check is enabled
+            if TeamCheckEnabled and isOnSameTeam(player) then
+                continue
+            end
+            
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                -- Convert 3D position to 2D screen position
+                local headPosition, onScreen = Camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen then
+                    -- Calculate distance from cursor to head on screen
+                    local distance = (Vector2.new(headPosition.X, headPosition.Y) - mouseLocation).Magnitude
+                    
+                    if distance < closestDistance and distance < AimbotFOV then
+                        -- Wall check
+                        if not wallCheck(head.Position) then
+                            closestDistance = distance
+                            closestTarget = head
+                            closestCharacter = player.Character
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Check NPCs if no player found
+    if not closestTarget then
+        -- Check NPCs folder
+        local npcsFolder = Workspace:FindFirstChild("NPCs")
+        if npcsFolder then
+            -- Regular NPCs (target head)
+            for _, npc in pairs(npcsFolder:GetChildren()) do
+                if npc:IsA("Model") and npc.Name ~= "Boss" and isAlive(npc) then
+                    local head = npc:FindFirstChild("Head")
+                    if head then
+                        local headPosition, onScreen = Camera:WorldToViewportPoint(head.Position)
+                        
+                        if onScreen then
+                            local distance = (Vector2.new(headPosition.X, headPosition.Y) - mouseLocation).Magnitude
+                            
+                            if distance < closestDistance and distance < AimbotFOV then
+                                if not wallCheck(head.Position) then
+                                    closestDistance = distance
+                                    closestTarget = head
+                                    closestCharacter = npc
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            -- Boss NPCs (target HumanoidRootPart)
+            local bossFolder = npcsFolder:FindFirstChild("Boss")
+            if bossFolder then
+                for _, boss in pairs(bossFolder:GetChildren()) do
+                    if boss:IsA("Model") and isAlive(boss) then
+                        -- For bosses, prioritize HumanoidRootPart over Head
+                        local targetPart = boss:FindFirstChild("HumanoidRootPart") or boss:FindFirstChild("Head")
+                        if targetPart then
+                            local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                            
+                            if onScreen then
+                                local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - mouseLocation).Magnitude
+                                
+                                if distance < closestDistance and distance < AimbotFOV then
+                                    if not wallCheck(targetPart.Position) then
+                                        closestDistance = distance
+                                        closestTarget = targetPart
+                                        closestCharacter = boss
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestTarget, closestDistance, closestCharacter
+end
+
+local function aimAtTarget(targetPart)
+    if not targetPart then return end
+    
+    -- Calculate the direction to the target part
+    local camera = Workspace.CurrentCamera
+    local targetPosition = targetPart.Position
+    
+    -- Create a CFrame that looks at the target
+    local lookAt = CFrame.lookAt(camera.CFrame.Position, targetPosition)
+    
+    -- Smoothly interpolate the camera
+    camera.CFrame = camera.CFrame:Lerp(lookAt, AimbotSmoothness)
+end
+
+-- Aimbot loop
+local aimbotConnection
+local function startAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+    end
+    
+    aimbotConnection = RunService.RenderStepped:Connect(function()
+        if AimbotEnabled and UserInputService:GetFocusedTextBox() == nil then
+            local isAimbotKeyPressed = false
+            
+            -- Check if the current aimbot key is pressed
+            if AimbotKey == Enum.UserInputType.MouseButton1 or AimbotKey == Enum.UserInputType.MouseButton2 or AimbotKey == Enum.UserInputType.MouseButton3 then
+                isAimbotKeyPressed = UserInputService:IsMouseButtonPressed(AimbotKey)
+            else
+                -- For keyboard keys, we need to check differently
+                isAimbotKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
+            end
+            
+            if isAimbotKeyPressed and isHoldingItem() then
+                local closestTarget, distance, closestCharacter = getClosestTargetToCursor()
+                if closestTarget then
+                    aimAtTarget(closestTarget)
+                    -- Update target for highlighting
+                    if CurrentTarget ~= closestCharacter then
+                        CurrentTarget = closestCharacter
+                        updateAllHighlights()
+                    end
+                else
+                    -- No target found, clear current target
+                    if CurrentTarget then
+                        CurrentTarget = nil
+                        updateAllHighlights()
+                    end
+                end
+            else
+                -- Aimbot key not pressed or not holding item, clear target
+                if CurrentTarget then
+                    CurrentTarget = nil
+                    updateAllHighlights()
+                end
+            end
+        else
+            -- Aimbot disabled or text box focused, clear target
+            if CurrentTarget then
+                CurrentTarget = nil
+                updateAllHighlights()
+            end
+        end
+    end)
+end
+
+local function stopAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+    if CurrentTarget then
+        CurrentTarget = nil
+        updateAllHighlights()
+    end
+end
+
+-- Section for Player & NPC Highlighter
+MainTab:CreateSection("Player & NPC Highlighter")
+
+-- Main Toggle
+local HighlightToggle = MainTab:CreateToggle({
+    Name = "Enable Player & NPC Highlighting",
+    CurrentValue = false,
+    Flag = "HighlightToggle",
+    Callback = function(Value)
+        HighlightingEnabled = Value
+        if Value then
+            processExistingPlayers()
+            processExistingNPCs()
+            startBossMonitoring() -- Start monitoring for new bosses
+            
+            -- Connect to player added event
+            Players.PlayerAdded:Connect(function(player)
+                player.CharacterAdded:Connect(function(character)
+                    wait(1)
+                    if player ~= LocalPlayer then
+                        highlightEntity(player, character, false)
+                    end
+                end)
+            end)
+            
+            -- Connect to character added events for existing players
+            for _, player in pairs(Players:GetPlayers()) do
+                player.CharacterAdded:Connect(function(character)
+                    wait(1)
+                    if player ~= LocalPlayer then
+                        highlightEntity(player, character, false)
+                    end
+                end)
+            end
+            
+            -- Connect to NPCs folder changes
+            local npcsFolder = Workspace:FindFirstChild("NPCs")
+            if npcsFolder then
+                -- Regular NPCs
+                npcsFolder.ChildAdded:Connect(function(npc)
+                    wait(1)
+                    if npc:IsA("Model") and npc.Name ~= "Boss" then
+                        highlightEntity(npc, npc, true)
+                    end
+                end)
+                
+                -- Boss folder changes
+                local bossFolder = npcsFolder:FindFirstChild("Boss")
+                if bossFolder then
+                    bossFolder.ChildAdded:Connect(function(boss)
+                        wait(1)
+                        if boss:IsA("Model") then
+                            highlightEntity(boss, boss, true)
+                        end
+                    end)
+                end
+            end
+            
+            Rayfield:Notify({
+                Title = "Player & NPC Highlighting",
+                Content = "Highlighting has been enabled (Yourself is not highlighted)",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            removeAllHighlights()
+            stopBossMonitoring() -- Stop monitoring when highlighting is disabled
+            Rayfield:Notify({
+                Title = "Player & NPC Highlighting",
+                Content = "Highlighting has been disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Team Check Toggle
+local TeamCheckToggle = MainTab:CreateToggle({
+    Name = "Team Check (Green = Teammates)",
+    CurrentValue = false,
+    Flag = "TeamCheckToggle",
+    Callback = function(Value)
+        TeamCheckEnabled = Value
+        if HighlightingEnabled then
+            updateAllHighlights() -- Update existing highlights instead of recreating them
+        end
+        local message = Value and "Team check enabled - Teammates will be green" or "Team check disabled - All players are enemies"
+        Rayfield:Notify({
+            Title = "Team Settings",
+            Content = message,
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Aimbot Section
+MainTab:CreateSection("Aimbot")
+
+-- Aimbot Toggle
+local AimbotToggle = MainTab:CreateToggle({
+    Name = "Enable Aimbot",
+    CurrentValue = false,
+    Flag = "AimbotToggle",
+    Callback = function(Value)
+        AimbotEnabled = Value
+        if Value then
+            startAimbot()
+            createFOVCircle()
+            FOVCircle.Visible = true
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "Aimbot enabled - Hold " .. getKeyName(AimbotKey) .. " while holding an item to aim",
+                Duration = 4,
+                Image = 4483362458
+            })
+        else
+            stopAimbot()
+            if FOVCircle then
+                FOVCircle.Visible = false
+            end
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "Aimbot disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Aimbot Keybind Button
+KeybindButton = MainTab:CreateButton({
+    Name = "Aimbot Key: " .. getKeyName(AimbotKey),
+    Callback = function()
+        startKeyListen()
+    end,
+})
+
+-- Aimbot Settings
+local AimbotFOVSlider = MainTab:CreateSlider({
+    Name = "Aimbot FOV (Pixels)",
+    Range = {50, 500},
+    Increment = 10,
+    Suffix = "px",
+    CurrentValue = 200,
+    Flag = "AimbotFOV",
+    Callback = function(Value)
+        AimbotFOV = Value
+        updateFOVCircle()
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = "Aimbot FOV set to " .. Value .. " pixels",
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+local AimbotSmoothnessSlider = MainTab:CreateSlider({
+    Name = "Aimbot Smoothness",
+    Range = {10, 90},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 70,
+    Flag = "AimbotSmoothness",
+    Callback = function(Value)
+        AimbotSmoothness = Value / 100
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = "Aimbot smoothness set to " .. Value .. "%",
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Wall Check Toggle
+local WallCheckToggle = MainTab:CreateToggle({
+    Name = "Wall Check (Recommended)",
+    CurrentValue = true,
+    Flag = "WallCheckToggle",
+    Callback = function(Value)
+        WallCheckEnabled = Value
+        local message = Value and "Wall check enabled" or "Wall check disabled"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = message,
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- FOV Circle Toggle
+local FOVCircleToggle = MainTab:CreateToggle({
+    Name = "Show FOV Circle",
+    CurrentValue = true,
+    Flag = "FOVCircleToggle",
+    Callback = function(Value)
+        if FOVCircle then
+            FOVCircle.Visible = Value
+        end
+        local message = Value and "FOV circle shown" or "FOV circle hidden"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = message,
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Refresh Button
+MainTab:CreateButton({
+    Name = "Refresh Players & NPCs",
+    Callback = function()
+        if HighlightingEnabled then
+            removeAllHighlights()
+            processExistingPlayers()
+            processExistingNPCs()
+            Rayfield:Notify({
+                Title = "Player & NPC Highlighter",
+                Content = "Highlights refreshed",
+                Duration = 2,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Player & NPC Highlighter",
+                Content = "Enable highlighting first!",
+                Duration = 2,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Settings Section
+MainTab:CreateSection("Settings")
+
+-- Highlight Color Picker
+local HighlightColor = MainTab:CreateColorPicker({
+    Name = "Enemy Highlight Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Flag = "HighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local player = Players:GetPlayerFromCharacter(character)
+                if player and player ~= LocalPlayer and character ~= CurrentTarget and not (TeamCheckEnabled and isOnSameTeam(player)) then
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- Target Highlight Color Picker
+local TargetHighlightColor = MainTab:CreateColorPicker({
+    Name = "Target Highlight Color",
+    Color = Color3.fromRGB(128, 0, 128),
+    Flag = "TargetHighlightColor",
+    Callback = function(Value)
+        if CurrentTarget and ActiveHighlights[CurrentTarget] then
+            ActiveHighlights[CurrentTarget].FillColor = Value
+            ActiveHighlights[CurrentTarget].OutlineColor = Color3.fromRGB(200, 0, 200)
+        end
+    end
+})
+
+-- Teammate Highlight Color Picker
+local TeammateHighlightColor = MainTab:CreateColorPicker({
+    Name = "Teammate Highlight Color",
+    Color = Color3.fromRGB(0, 255, 0),
+    Flag = "TeammateHighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local player = Players:GetPlayerFromCharacter(character)
+                if player and TeamCheckEnabled and isOnSameTeam(player) then
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- NPC Highlight Color Picker
+local NPCHighlightColor = MainTab:CreateColorPicker({
+    Name = "NPC Highlight Color",
+    Color = Color3.fromRGB(255, 255, 0),
+    Flag = "NPCHighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local player = Players:GetPlayerFromCharacter(character)
+                if not player then -- This is an NPC
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- Boss Highlight Color Picker
+local BossHighlightColor = MainTab:CreateColorPicker({
+    Name = "Boss Highlight Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Flag = "BossHighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local isBoss = false
+                local npcsFolder = Workspace:FindFirstChild("NPCs")
+                if npcsFolder then
+                    local bossFolder = npcsFolder:FindFirstChild("Boss")
+                    if bossFolder then
+                        for _, boss in pairs(bossFolder:GetChildren()) do
+                            if boss == character then
+                                isBoss = true
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                if isBoss then
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- Highlight Transparency Slider
+local TransparencySlider = MainTab:CreateSlider({
+    Name = "Highlight Transparency",
+    Range = {0, 100},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 30,
+    Flag = "HighlightTransparency",
+    Callback = function(Value)
+        local transparency = Value / 100
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                highlight.FillTransparency = transparency
+            end
+        end
+    end,
+})
+
+-- Info Section
+MainTab:CreateSection("Info")
+
+MainTab:CreateParagraph({
+    Title = "Player & NPC Highlighter Info",
+    Content = "This script highlights all enemy players (red), teammates (green), regular NPCs (yellow), and bosses (red with yellow outline) with colored outlines and displays their health bars above them. Your own character is NOT highlighted. Targeted players (when aiming) turn purple. ESP automatically removes when health reaches 0. Boss ESP automatically refreshes when new bosses spawn."
+})
+
+MainTab:CreateParagraph({
+    Title = "Aimbot Info", 
+    Content = "When enabled, hold your chosen key while holding an item to automatically aim at the closest enemy. Aimbot targets heads for players and regular NPCs, but targets HumanoidRootPart for bosses (more reliable hitbox). Features wall checking and only targets alive entities. Teammates are ignored when Team Check is enabled."
+})
+
+-- Load configuration
+Rayfield:LoadConfiguration()
+
+-- Create FOV circle on startup
+createFOVCircle()
+FOVCircle.Visible = false
+
+-- Setup key listener
+setupKeyListener()
+
+print("Player & NPC Highlighter with Aimbot Loaded!")
