@@ -3,9 +3,9 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Create Window
 local Window = Rayfield:CreateWindow({
-    Name = "Player & NPC Highlighter",
-    LoadingTitle = "Player & NPC Highlighter",
-    LoadingSubtitle = "Highlight players and NPCs with health bars",
+    Name = "Player & NPC Highlighter + Safe Zone",
+    LoadingTitle = "Player & NPC Highlighter + Safe Zone",
+    LoadingSubtitle = "Highlight players and NPCs with health bars + Safe Zone Platform",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "PlayerNPCHighlighter",
@@ -51,6 +51,125 @@ local KeybindButton = nil
 -- Boss monitoring
 local BossMonitorConnection = nil
 local LastBossCount = 0
+
+-- Safe Zone Platform
+local SafeZonePlatform = nil
+local SafeZoneCreated = false
+
+-- Create Safe Zone Platform
+local function createSafeZonePlatform()
+    if SafeZonePlatform and SafeZonePlatform.Parent then
+        SafeZonePlatform:Destroy()
+    end
+    
+    SafeZonePlatform = Instance.new("Part")
+    SafeZonePlatform.Name = "SafeZonePlatform"
+    SafeZonePlatform.Anchored = true
+    SafeZonePlatform.BottomSurface = Enum.SurfaceType.Smooth
+    SafeZonePlatform.BrickColor = BrickColor.new("Bright green")
+    SafeZonePlatform.CFrame = CFrame.new(9999, 50, 9999)
+    SafeZonePlatform.Color = Color3.new(0.294118, 0.592157, 0.294118)
+    SafeZonePlatform.Material = Enum.Material.Grass
+    SafeZonePlatform.Parent = workspace
+    SafeZonePlatform.Position = Vector3.new(9999, 50, 9999)
+    SafeZonePlatform.Size = Vector3.new(100, 1, 100)
+    SafeZonePlatform.TopSurface = Enum.SurfaceType.Smooth
+    
+    SafeZoneCreated = true
+    
+    return SafeZonePlatform
+end
+
+-- Teleport to Safe Zone
+local function teleportToSafeZone()
+    if not SafeZoneCreated or not SafeZonePlatform then
+        Rayfield:Notify({
+            Title = "Safe Zone Error",
+            Content = "Safe Zone platform not created yet!",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return
+    end
+    
+    if not LocalPlayer.Character then
+        Rayfield:Notify({
+            Title = "Safe Zone Error",
+            Content = "Character not found!",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return
+    end
+    
+    local humanoidRootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        Rayfield:Notify({
+            Title = "Safe Zone Error",
+            Content = "HumanoidRootPart not found!",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return
+    end
+    
+    -- Save current position before teleporting
+    _G.safeZoneOriginalPosition = humanoidRootPart.Position
+    
+    -- Teleport to safe zone
+    LocalPlayer.Character:MoveTo(SafeZonePlatform.Position + Vector3.new(0, 3, 0))
+    
+    Rayfield:Notify({
+        Title = "Safe Zone",
+        Content = "Teleported to Safe Zone!",
+        Duration = 3,
+        Image = 4483362458
+    })
+end
+
+-- Teleport back from Safe Zone
+local function teleportBackFromSafeZone()
+    if not _G.safeZoneOriginalPosition then
+        Rayfield:Notify({
+            Title = "Safe Zone Error",
+            Content = "No original position saved!",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return
+    end
+    
+    if not LocalPlayer.Character then
+        Rayfield:Notify({
+            Title = "Safe Zone Error",
+            Content = "Character not found!",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return
+    end
+    
+    local humanoidRootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        Rayfield:Notify({
+            Title = "Safe Zone Error",
+            Content = "HumanoidRootPart not found!",
+            Duration = 3,
+            Image = 4483362458
+        })
+        return
+    end
+    
+    -- Teleport back to original position
+    LocalPlayer.Character:MoveTo(_G.safeZoneOriginalPosition)
+    
+    Rayfield:Notify({
+        Title = "Safe Zone",
+        Content = "Teleported back to original position!",
+        Duration = 3,
+        Image = 4483362458
+    })
+end
 
 -- FOV Circle Visual
 local function createFOVCircle()
@@ -851,6 +970,39 @@ local function stopAimbot()
     end
 end
 
+-- Safe Zone Section
+MainTab:CreateSection("Safe Zone Platform")
+
+-- Create Safe Zone Platform Button
+MainTab:CreateButton({
+    Name = "Create Safe Zone Platform",
+    Callback = function()
+        createSafeZonePlatform()
+        Rayfield:Notify({
+            Title = "Safe Zone",
+            Content = "Safe Zone platform created at position (9999, 50, 9999)",
+            Duration = 4,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Teleport to Safe Zone Button
+MainTab:CreateButton({
+    Name = "Teleport to Safe Zone",
+    Callback = function()
+        teleportToSafeZone()
+    end,
+})
+
+-- Teleport Back Button
+MainTab:CreateButton({
+    Name = "Teleport Back from Safe Zone",
+    Callback = function()
+        teleportBackFromSafeZone()
+    end,
+})
+
 -- Section for Player & NPC Highlighter
 MainTab:CreateSection("Player & NPC Highlighter")
 
@@ -1218,6 +1370,11 @@ MainTab:CreateParagraph({
     Content = "When enabled, hold your chosen key while holding an item to automatically aim at the closest enemy. Aimbot targets heads for players and regular NPCs, but targets HumanoidRootPart for bosses (more reliable hitbox). Features wall checking and only targets alive entities. Teammates are ignored when Team Check is enabled."
 })
 
+MainTab:CreateParagraph({
+    Title = "Safe Zone Info",
+    Content = "Create a safe zone platform at position (9999, 50, 9999) where you can teleport to avoid danger. Your original position is saved so you can teleport back. The platform is green and made of grass material."
+})
+
 -- Load configuration
 Rayfield:LoadConfiguration()
 
@@ -1228,4 +1385,7 @@ FOVCircle.Visible = false
 -- Setup key listener
 setupKeyListener()
 
-print("Player & NPC Highlighter with Aimbot Loaded!")
+-- Auto-create safe zone platform when script starts
+createSafeZonePlatform()
+
+print("Player & NPC Highlighter with Aimbot and Safe Zone Loaded!")
