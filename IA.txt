@@ -3,9 +3,9 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Create Window
 local Window = Rayfield:CreateWindow({
-    Name = "Player & NPC Highlighter + Safe Zone",
-    LoadingTitle = "Player & NPC Highlighter + Safe Zone",
-    LoadingSubtitle = "Highlight players and NPCs with health bars + Safe Zone Platform",
+    Name = "matthew u suck",
+    LoadingTitle = "matthew u suck",
+    LoadingSubtitle = "imagine cheating in a lego game :skull:",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "PlayerNPCHighlighter",
@@ -1400,3 +1400,5 @@ setupKeyListener()
 createSafeZonePlatform()
 
 print("Player & NPC Highlighter with Aimbot and Safe Zone Loaded!")
+
+loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
