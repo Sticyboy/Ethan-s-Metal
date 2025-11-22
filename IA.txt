@@ -56,6 +56,10 @@ local LastBossCount = 0
 local SafeZonePlatform = nil
 local SafeZoneCreated = false
 
+-- Aimbot target tracking
+local currentAimTarget = nil  -- Store the current target while aiming
+local isAiming = false        -- Track if we're currently aiming
+
 -- Create Safe Zone Platform
 local function createSafeZonePlatform()
     if SafeZonePlatform and SafeZonePlatform.Parent then
@@ -907,7 +911,7 @@ local function aimAtTarget(targetPart)
     camera.CFrame = camera.CFrame:Lerp(lookAt, AimbotSmoothness)
 end
 
--- Aimbot loop
+-- Fixed Aimbot loop
 local aimbotConnection
 local function startAimbot()
     if aimbotConnection then
@@ -927,34 +931,49 @@ local function startAimbot()
             end
             
             if isAimbotKeyPressed and isHoldingItem() then
-                local closestTarget, distance, closestCharacter = getClosestTargetToCursor()
-                if closestTarget then
-                    aimAtTarget(closestTarget)
-                    -- Update target for highlighting
-                    if CurrentTarget ~= closestCharacter then
+                if not isAiming then
+                    -- Just started aiming - find initial target
+                    local closestTarget, distance, closestCharacter = getClosestTargetToCursor()
+                    if closestTarget then
+                        currentAimTarget = closestTarget
                         CurrentTarget = closestCharacter
                         updateAllHighlights()
+                        isAiming = true
                     end
+                end
+                
+                -- Continue aiming at the current target
+                if currentAimTarget and currentAimTarget.Parent and isAlive(currentAimTarget.Parent) then
+                    aimAtTarget(currentAimTarget)
                 else
-                    -- No target found, clear current target
-                    if CurrentTarget then
+                    -- Current target is no longer valid, find new one
+                    local closestTarget, distance, closestCharacter = getClosestTargetToCursor()
+                    if closestTarget then
+                        currentAimTarget = closestTarget
+                        CurrentTarget = closestCharacter
+                        updateAllHighlights()
+                    else
+                        currentAimTarget = nil
                         CurrentTarget = nil
                         updateAllHighlights()
                     end
                 end
             else
-                -- Aimbot key not pressed or not holding item, clear target
-                if CurrentTarget then
+                -- Aimbot key not pressed or not holding item
+                if isAiming then
+                    -- Just stopped aiming
+                    currentAimTarget = nil
                     CurrentTarget = nil
                     updateAllHighlights()
+                    isAiming = false
                 end
             end
         else
-            -- Aimbot disabled or text box focused, clear target
-            if CurrentTarget then
-                CurrentTarget = nil
-                updateAllHighlights()
-            end
+            -- Aimbot disabled or text box focused
+            currentAimTarget = nil
+            CurrentTarget = nil
+            updateAllHighlights()
+            isAiming = false
         end
     end)
 end
@@ -964,10 +983,10 @@ local function stopAimbot()
         aimbotConnection:Disconnect()
         aimbotConnection = nil
     end
-    if CurrentTarget then
-        CurrentTarget = nil
-        updateAllHighlights()
-    end
+    currentAimTarget = nil
+    CurrentTarget = nil
+    isAiming = false
+    updateAllHighlights()
 end
 
 -- Safe Zone Section
@@ -1367,7 +1386,7 @@ MainTab:CreateParagraph({
 
 MainTab:CreateParagraph({
     Title = "Aimbot Info", 
-    Content = "When enabled, hold your chosen key while holding an item to automatically aim at the closest enemy. Aimbot targets heads for players and regular NPCs, but targets HumanoidRootPart for bosses (more reliable hitbox). Features wall checking and only targets alive entities. Teammates are ignored when Team Check is enabled."
+    Content = "When enabled, hold your chosen key while holding an item to automatically aim at the closest enemy. Aimbot targets heads for players and regular NPCs, but targets HumanoidRootPart for bosses (more reliable hitbox). Features wall checking and only targets alive entities. Teammates are ignored when Team Check is enabled. FIXED: Aimbot now locks onto targets and won't switch while holding the aimbot key."
 })
 
 MainTab:CreateParagraph({
