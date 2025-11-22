@@ -19,9 +19,6 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
--- Main Tab
-local MainTab = Window:CreateTab("Main", "user")
-
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -989,44 +986,16 @@ local function stopAimbot()
     updateAllHighlights()
 end
 
--- Safe Zone Section
-MainTab:CreateSection("Safe Zone Platform")
+-- Create Tabs
+local ESPTab = Window:CreateTab("ESP", "user")
+local AimbotTab = Window:CreateTab("Aimbot", "target")
+local SafeZoneTab = Window:CreateTab("Safe Zone", "shield-check")
 
--- Create Safe Zone Platform Button
-MainTab:CreateButton({
-    Name = "Create Safe Zone Platform",
-    Callback = function()
-        createSafeZonePlatform()
-        Rayfield:Notify({
-            Title = "Safe Zone",
-            Content = "Safe Zone platform created at position (9999, 50, 9999)",
-            Duration = 4,
-            Image = 4483362458
-        })
-    end,
-})
-
--- Teleport to Safe Zone Button
-MainTab:CreateButton({
-    Name = "Teleport to Safe Zone",
-    Callback = function()
-        teleportToSafeZone()
-    end,
-})
-
--- Teleport Back Button
-MainTab:CreateButton({
-    Name = "Teleport Back from Safe Zone",
-    Callback = function()
-        teleportBackFromSafeZone()
-    end,
-})
-
--- Section for Player & NPC Highlighter
-MainTab:CreateSection("Player & NPC Highlighter")
+-- ESP Tab
+ESPTab:CreateSection("Player & NPC Highlighter")
 
 -- Main Toggle
-local HighlightToggle = MainTab:CreateToggle({
+local HighlightToggle = ESPTab:CreateToggle({
     Name = "Enable Player & NPC Highlighting",
     CurrentValue = false,
     Flag = "HighlightToggle",
@@ -1100,7 +1069,7 @@ local HighlightToggle = MainTab:CreateToggle({
 })
 
 -- Team Check Toggle
-local TeamCheckToggle = MainTab:CreateToggle({
+local TeamCheckToggle = ESPTab:CreateToggle({
     Name = "Team Check (Green = Teammates)",
     CurrentValue = false,
     Flag = "TeamCheckToggle",
@@ -1119,11 +1088,151 @@ local TeamCheckToggle = MainTab:CreateToggle({
     end,
 })
 
--- Aimbot Section
-MainTab:CreateSection("Aimbot")
+-- Refresh Button
+ESPTab:CreateButton({
+    Name = "Refresh Players & NPCs",
+    Callback = function()
+        if HighlightingEnabled then
+            removeAllHighlights()
+            processExistingPlayers()
+            processExistingNPCs()
+            Rayfield:Notify({
+                Title = "Player & NPC Highlighter",
+                Content = "Highlights refreshed",
+                Duration = 2,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Player & NPC Highlighter",
+                Content = "Enable highlighting first!",
+                Duration = 2,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- ESP Settings Section
+ESPTab:CreateSection("ESP Settings")
+
+-- Highlight Color Picker
+local HighlightColor = ESPTab:CreateColorPicker({
+    Name = "Enemy Highlight Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Flag = "HighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local player = Players:GetPlayerFromCharacter(character)
+                if player and player ~= LocalPlayer and character ~= CurrentTarget and not (TeamCheckEnabled and isOnSameTeam(player)) then
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- Target Highlight Color Picker
+local TargetHighlightColor = ESPTab:CreateColorPicker({
+    Name = "Target Highlight Color",
+    Color = Color3.fromRGB(128, 0, 128),
+    Flag = "TargetHighlightColor",
+    Callback = function(Value)
+        if CurrentTarget and ActiveHighlights[CurrentTarget] then
+            ActiveHighlights[CurrentTarget].FillColor = Value
+            ActiveHighlights[CurrentTarget].OutlineColor = Color3.fromRGB(200, 0, 200)
+        end
+    end
+})
+
+-- Teammate Highlight Color Picker
+local TeammateHighlightColor = ESPTab:CreateColorPicker({
+    Name = "Teammate Highlight Color",
+    Color = Color3.fromRGB(0, 255, 0),
+    Flag = "TeammateHighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local player = Players:GetPlayerFromCharacter(character)
+                if player and TeamCheckEnabled and isOnSameTeam(player) then
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- NPC Highlight Color Picker
+local NPCHighlightColor = ESPTab:CreateColorPicker({
+    Name = "NPC Highlight Color",
+    Color = Color3.fromRGB(255, 255, 0),
+    Flag = "NPCHighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local player = Players:GetPlayerFromCharacter(character)
+                if not player then -- This is an NPC
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- Boss Highlight Color Picker
+local BossHighlightColor = ESPTab:CreateColorPicker({
+    Name = "Boss Highlight Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Flag = "BossHighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local isBoss = false
+                local npcsFolder = Workspace:FindFirstChild("NPCs")
+                if npcsFolder then
+                    local bossFolder = npcsFolder:FindFirstChild("Boss")
+                    if bossFolder then
+                        for _, boss in pairs(bossFolder:GetChildren()) do
+                            if boss == character then
+                                isBoss = true
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                if isBoss then
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- Highlight Transparency Slider
+local TransparencySlider = ESPTab:CreateSlider({
+    Name = "Highlight Transparency",
+    Range = {0, 100},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 30,
+    Flag = "HighlightTransparency",
+    Callback = function(Value)
+        local transparency = Value / 100
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                highlight.FillTransparency = transparency
+            end
+        end
+    end,
+})
+
+-- Aimbot Tab
+AimbotTab:CreateSection("Aimbot")
 
 -- Aimbot Toggle
-local AimbotToggle = MainTab:CreateToggle({
+local AimbotToggle = AimbotTab:CreateToggle({
     Name = "Enable Aimbot",
     CurrentValue = false,
     Flag = "AimbotToggle",
@@ -1155,7 +1264,7 @@ local AimbotToggle = MainTab:CreateToggle({
 })
 
 -- Aimbot Keybind Button
-KeybindButton = MainTab:CreateButton({
+KeybindButton = AimbotTab:CreateButton({
     Name = "Aimbot Key: " .. getKeyName(AimbotKey),
     Callback = function()
         startKeyListen()
@@ -1163,7 +1272,7 @@ KeybindButton = MainTab:CreateButton({
 })
 
 -- Aimbot Settings
-local AimbotFOVSlider = MainTab:CreateSlider({
+local AimbotFOVSlider = AimbotTab:CreateSlider({
     Name = "Aimbot FOV (Pixels)",
     Range = {50, 500},
     Increment = 10,
@@ -1182,7 +1291,7 @@ local AimbotFOVSlider = MainTab:CreateSlider({
     end,
 })
 
-local AimbotSmoothnessSlider = MainTab:CreateSlider({
+local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
     Name = "Aimbot Smoothness",
     Range = {10, 90},
     Increment = 5,
@@ -1201,7 +1310,7 @@ local AimbotSmoothnessSlider = MainTab:CreateSlider({
 })
 
 -- Wall Check Toggle
-local WallCheckToggle = MainTab:CreateToggle({
+local WallCheckToggle = AimbotTab:CreateToggle({
     Name = "Wall Check (Recommended)",
     CurrentValue = true,
     Flag = "WallCheckToggle",
@@ -1218,7 +1327,7 @@ local WallCheckToggle = MainTab:CreateToggle({
 })
 
 -- FOV Circle Toggle
-local FOVCircleToggle = MainTab:CreateToggle({
+local FOVCircleToggle = AimbotTab:CreateToggle({
     Name = "Show FOV Circle",
     CurrentValue = true,
     Flag = "FOVCircleToggle",
@@ -1236,160 +1345,43 @@ local FOVCircleToggle = MainTab:CreateToggle({
     end,
 })
 
--- Refresh Button
-MainTab:CreateButton({
-    Name = "Refresh Players & NPCs",
+-- Safe Zone Tab
+SafeZoneTab:CreateSection("Safe Zone Platform")
+
+-- Create Safe Zone Platform Button
+SafeZoneTab:CreateButton({
+    Name = "Create Safe Zone Platform",
     Callback = function()
-        if HighlightingEnabled then
-            removeAllHighlights()
-            processExistingPlayers()
-            processExistingNPCs()
-            Rayfield:Notify({
-                Title = "Player & NPC Highlighter",
-                Content = "Highlights refreshed",
-                Duration = 2,
-                Image = 4483362458
-            })
-        else
-            Rayfield:Notify({
-                Title = "Player & NPC Highlighter",
-                Content = "Enable highlighting first!",
-                Duration = 2,
-                Image = 4483362458
-            })
-        end
+        createSafeZonePlatform()
+        Rayfield:Notify({
+            Title = "Safe Zone",
+            Content = "Safe Zone platform created at position (9999, 50, 9999)",
+            Duration = 4,
+            Image = 4483362458
+        })
     end,
 })
 
--- Settings Section
-MainTab:CreateSection("Settings")
-
--- Highlight Color Picker
-local HighlightColor = MainTab:CreateColorPicker({
-    Name = "Enemy Highlight Color",
-    Color = Color3.fromRGB(255, 0, 0),
-    Flag = "HighlightColor",
-    Callback = function(Value)
-        for character, highlight in pairs(ActiveHighlights) do
-            if highlight and highlight.Parent then
-                local player = Players:GetPlayerFromCharacter(character)
-                if player and player ~= LocalPlayer and character ~= CurrentTarget and not (TeamCheckEnabled and isOnSameTeam(player)) then
-                    highlight.FillColor = Value
-                end
-            end
-        end
-    end
+-- Teleport to Safe Zone Button
+SafeZoneTab:CreateButton({
+    Name = "Teleport to Safe Zone",
+    Callback = function()
+        teleportToSafeZone()
+    end,
 })
 
--- Target Highlight Color Picker
-local TargetHighlightColor = MainTab:CreateColorPicker({
-    Name = "Target Highlight Color",
-    Color = Color3.fromRGB(128, 0, 128),
-    Flag = "TargetHighlightColor",
-    Callback = function(Value)
-        if CurrentTarget and ActiveHighlights[CurrentTarget] then
-            ActiveHighlights[CurrentTarget].FillColor = Value
-            ActiveHighlights[CurrentTarget].OutlineColor = Color3.fromRGB(200, 0, 200)
-        end
-    end
-})
-
--- Teammate Highlight Color Picker
-local TeammateHighlightColor = MainTab:CreateColorPicker({
-    Name = "Teammate Highlight Color",
-    Color = Color3.fromRGB(0, 255, 0),
-    Flag = "TeammateHighlightColor",
-    Callback = function(Value)
-        for character, highlight in pairs(ActiveHighlights) do
-            if highlight and highlight.Parent then
-                local player = Players:GetPlayerFromCharacter(character)
-                if player and TeamCheckEnabled and isOnSameTeam(player) then
-                    highlight.FillColor = Value
-                end
-            end
-        end
-    end
-})
-
--- NPC Highlight Color Picker
-local NPCHighlightColor = MainTab:CreateColorPicker({
-    Name = "NPC Highlight Color",
-    Color = Color3.fromRGB(255, 255, 0),
-    Flag = "NPCHighlightColor",
-    Callback = function(Value)
-        for character, highlight in pairs(ActiveHighlights) do
-            if highlight and highlight.Parent then
-                local player = Players:GetPlayerFromCharacter(character)
-                if not player then -- This is an NPC
-                    highlight.FillColor = Value
-                end
-            end
-        end
-    end
-})
-
--- Boss Highlight Color Picker
-local BossHighlightColor = MainTab:CreateColorPicker({
-    Name = "Boss Highlight Color",
-    Color = Color3.fromRGB(255, 0, 0),
-    Flag = "BossHighlightColor",
-    Callback = function(Value)
-        for character, highlight in pairs(ActiveHighlights) do
-            if highlight and highlight.Parent then
-                local isBoss = false
-                local npcsFolder = Workspace:FindFirstChild("NPCs")
-                if npcsFolder then
-                    local bossFolder = npcsFolder:FindFirstChild("Boss")
-                    if bossFolder then
-                        for _, boss in pairs(bossFolder:GetChildren()) do
-                            if boss == character then
-                                isBoss = true
-                                break
-                            end
-                        end
-                    end
-                end
-                
-                if isBoss then
-                    highlight.FillColor = Value
-                end
-            end
-        end
-    end
-})
-
--- Highlight Transparency Slider
-local TransparencySlider = MainTab:CreateSlider({
-    Name = "Highlight Transparency",
-    Range = {0, 100},
-    Increment = 5,
-    Suffix = "%",
-    CurrentValue = 30,
-    Flag = "HighlightTransparency",
-    Callback = function(Value)
-        local transparency = Value / 100
-        for character, highlight in pairs(ActiveHighlights) do
-            if highlight and highlight.Parent then
-                highlight.FillTransparency = transparency
-            end
-        end
+-- Teleport Back Button
+SafeZoneTab:CreateButton({
+    Name = "Teleport Back from Safe Zone",
+    Callback = function()
+        teleportBackFromSafeZone()
     end,
 })
 
 -- Info Section
-MainTab:CreateSection("Info")
+SafeZoneTab:CreateSection("Safe Zone Info")
 
-MainTab:CreateParagraph({
-    Title = "Player & NPC Highlighter Info",
-    Content = "This script highlights all enemy players (red), teammates (green), regular NPCs (yellow), and bosses (red with yellow outline) with colored outlines and displays their health bars above them. Your own character is NOT highlighted. Targeted players (when aiming) turn purple. ESP automatically removes when health reaches 0. Boss ESP automatically refreshes when new bosses spawn."
-})
-
-MainTab:CreateParagraph({
-    Title = "Aimbot Info", 
-    Content = "When enabled, hold your chosen key while holding an item to automatically aim at the closest enemy. Aimbot targets heads for players and regular NPCs, but targets HumanoidRootPart for bosses (more reliable hitbox). Features wall checking and only targets alive entities. Teammates are ignored when Team Check is enabled. FIXED: Aimbot now locks onto targets and won't switch while holding the aimbot key."
-})
-
-MainTab:CreateParagraph({
+SafeZoneTab:CreateParagraph({
     Title = "Safe Zone Info",
     Content = "Create a safe zone platform at position (9999, 50, 9999) where you can teleport to avoid danger. Your original position is saved so you can teleport back. The platform is green and made of grass material."
 })
