@@ -5,7 +5,7 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
     Name = "matthew u suck",
     LoadingTitle = "matthew u suck",
-    LoadingSubtitle = "imagine cheating in a lego game :skull:",
+    LoadingSubtitle = "imagine cheating",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "PlayerNPCHighlighter",
@@ -52,6 +52,10 @@ local LastBossCount = 0
 -- Safe Zone Platform
 local SafeZonePlatform = nil
 local SafeZoneCreated = false
+
+-- Whitelist System
+local WhitelistedPlayers = {}
+local WhitelistEnabled = false
 
 -- Aimbot target tracking
 local currentAimTarget = nil  -- Store the current target while aiming
@@ -273,6 +277,15 @@ local function isOnSameTeam(player)
     return false
 end
 
+-- Whitelist check function
+local function isPlayerWhitelisted(player)
+    if not WhitelistEnabled then
+        return false
+    end
+    
+    return WhitelistedPlayers[player.Name] == true
+end
+
 local function isHoldingItem()
     if not LocalPlayer.Character then
         return false
@@ -402,7 +415,9 @@ local function updateAllHighlights()
                     highlight.FillColor = Color3.fromRGB(128, 0, 128) -- Purple for target
                     highlight.OutlineColor = Color3.fromRGB(200, 0, 200)
                 else
-                    if TeamCheckEnabled and isOnSameTeam(player) then
+                    if isPlayerWhitelisted(player) then
+                        highlight.FillColor = Color3.fromRGB(0, 100, 255) -- Blue for whitelisted
+                    elseif TeamCheckEnabled and isOnSameTeam(player) then
                         highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Green for teammates
                     else
                         highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Red for enemies
@@ -443,7 +458,10 @@ local function updateAllHighlights()
             if nameLabel then
                 local player = Players:GetPlayerFromCharacter(character)
                 if player and player ~= LocalPlayer then
-                    if TeamCheckEnabled and isOnSameTeam(player) then
+                    if isPlayerWhitelisted(player) then
+                        nameLabel.TextColor3 = Color3.fromRGB(0, 100, 255)
+                        nameLabel.Text = player.Name .. " (Whitelisted)"
+                    elseif TeamCheckEnabled and isOnSameTeam(player) then
                         nameLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
                         nameLabel.Text = player.Name .. " (Teammate)"
                     else
@@ -490,6 +508,7 @@ local function createHealthBar(entity, character, healthSource, isNPC)
     
     local player = Players:GetPlayerFromCharacter(character)
     local isTeammate = player and TeamCheckEnabled and isOnSameTeam(player)
+    local isWhitelisted = player and isPlayerWhitelisted(player)
     
     -- Check if it's a boss
     local isBoss = false
@@ -512,7 +531,7 @@ local function createHealthBar(entity, character, healthSource, isNPC)
     nameLabel.BackgroundTransparency = 1
     nameLabel.TextScaled = true
     nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextColor3 = isBoss and Color3.fromRGB(255, 0, 0) or (isNPC and Color3.fromRGB(255, 255, 0)) or (isTeammate and Color3.fromRGB(0, 255, 0) or Color3.new(1, 1, 1))
+    nameLabel.TextColor3 = isBoss and Color3.fromRGB(255, 0, 0) or (isNPC and Color3.fromRGB(255, 255, 0)) or (isWhitelisted and Color3.fromRGB(0, 100, 255)) or (isTeammate and Color3.fromRGB(0, 255, 0) or Color3.new(1, 1, 1))
     nameLabel.TextStrokeTransparency = 0
     nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
     
@@ -521,7 +540,13 @@ local function createHealthBar(entity, character, healthSource, isNPC)
     elseif isNPC then
         nameLabel.Text = "NPC: " .. character.Name
     else
-        nameLabel.Text = isTeammate and entity.Name .. " (Teammate)" or entity.Name
+        if isWhitelisted then
+            nameLabel.Text = entity.Name .. " (Whitelisted)"
+        elseif isTeammate then
+            nameLabel.Text = entity.Name .. " (Teammate)"
+        else
+            nameLabel.Text = entity.Name
+        end
     end
     
     nameLabel.Parent = billboard
@@ -646,7 +671,12 @@ local function highlightEntity(entity, character, isNPC)
         outlineColor = Color3.new(1, 1, 1)
     else
         local player = entity
-        if TeamCheckEnabled and isOnSameTeam(player) then
+        
+        -- Check if player is whitelisted
+        if isPlayerWhitelisted(player) then
+            fillColor = Color3.fromRGB(0, 100, 255) -- Blue for whitelisted players
+            outlineColor = Color3.new(1, 1, 1)
+        elseif TeamCheckEnabled and isOnSameTeam(player) then
             fillColor = Color3.fromRGB(0, 255, 0) -- Green for teammates
             outlineColor = Color3.new(1, 1, 1)
         else
@@ -814,20 +844,30 @@ local function getClosestTargetToCursor()
                 continue
             end
             
+            -- Skip whitelisted players
+            if isPlayerWhitelisted(player) then
+                continue
+            end
+            
+            -- Try to find head first, then torso, then humanoid root part
             local head = player.Character:FindFirstChild("Head")
-            if head then
+            local torso = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
+            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            
+            local targetPart = head or torso or humanoidRootPart
+            if targetPart then
                 -- Convert 3D position to 2D screen position
-                local headPosition, onScreen = Camera:WorldToViewportPoint(head.Position)
+                local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                 
                 if onScreen then
-                    -- Calculate distance from cursor to head on screen
-                    local distance = (Vector2.new(headPosition.X, headPosition.Y) - mouseLocation).Magnitude
+                    -- Calculate distance from cursor to target on screen
+                    local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - mouseLocation).Magnitude
                     
                     if distance < closestDistance and distance < AimbotFOV then
                         -- Wall check
-                        if not wallCheck(head.Position) then
+                        if not wallCheck(targetPart.Position) then
                             closestDistance = distance
-                            closestTarget = head
+                            closestTarget = targetPart
                             closestCharacter = player.Character
                         end
                     end
@@ -841,20 +881,29 @@ local function getClosestTargetToCursor()
         -- Check NPCs folder
         local npcsFolder = Workspace:FindFirstChild("NPCs")
         if npcsFolder then
-            -- Regular NPCs (target head)
+            -- Regular NPCs (target head/torso)
             for _, npc in pairs(npcsFolder:GetChildren()) do
                 if npc:IsA("Model") and npc.Name ~= "Boss" and isAlive(npc) then
+                    -- Skip if this NPC is actually yourself (when you're a boss)
+                    if npc == LocalPlayer.Character then
+                        continue
+                    end
+                    
                     local head = npc:FindFirstChild("Head")
-                    if head then
-                        local headPosition, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    local torso = npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+                    local humanoidRootPart = npc:FindFirstChild("HumanoidRootPart")
+                    
+                    local targetPart = head or torso or humanoidRootPart
+                    if targetPart then
+                        local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                         
                         if onScreen then
-                            local distance = (Vector2.new(headPosition.X, headPosition.Y) - mouseLocation).Magnitude
+                            local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - mouseLocation).Magnitude
                             
                             if distance < closestDistance and distance < AimbotFOV then
-                                if not wallCheck(head.Position) then
+                                if not wallCheck(targetPart.Position) then
                                     closestDistance = distance
-                                    closestTarget = head
+                                    closestTarget = targetPart
                                     closestCharacter = npc
                                 end
                             end
@@ -868,8 +917,22 @@ local function getClosestTargetToCursor()
             if bossFolder then
                 for _, boss in pairs(bossFolder:GetChildren()) do
                     if boss:IsA("Model") and isAlive(boss) then
+                        -- CRITICAL FIX: Skip targeting yourself when you're the boss
+                        if boss == LocalPlayer.Character then
+                            continue
+                        end
+                        
+                        -- NEW FIX: Skip targeting the SILLYSTATUE boss
+                        if string.lower(boss.Name) == "sillystatue" then
+                            continue
+                        end
+                        
                         -- For bosses, prioritize HumanoidRootPart over Head
-                        local targetPart = boss:FindFirstChild("HumanoidRootPart") or boss:FindFirstChild("Head")
+                        local head = boss:FindFirstChild("Head")
+                        local torso = boss:FindFirstChild("Torso") or boss:FindFirstChild("UpperTorso")
+                        local humanoidRootPart = boss:FindFirstChild("HumanoidRootPart")
+                        
+                        local targetPart = humanoidRootPart or head or torso
                         if targetPart then
                             local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                             
@@ -990,6 +1053,7 @@ end
 local ESPTab = Window:CreateTab("ESP", "user")
 local AimbotTab = Window:CreateTab("Aimbot", "target")
 local SafeZoneTab = Window:CreateTab("Safe Zone", "shield-check")
+local WhitelistTab = Window:CreateTab("Whitelist", "shield")
 
 -- ESP Tab
 ESPTab:CreateSection("Player & NPC Highlighter")
@@ -1125,7 +1189,7 @@ local HighlightColor = ESPTab:CreateColorPicker({
         for character, highlight in pairs(ActiveHighlights) do
             if highlight and highlight.Parent then
                 local player = Players:GetPlayerFromCharacter(character)
-                if player and player ~= LocalPlayer and character ~= CurrentTarget and not (TeamCheckEnabled and isOnSameTeam(player)) then
+                if player and player ~= LocalPlayer and character ~= CurrentTarget and not (TeamCheckEnabled and isOnSameTeam(player)) and not isPlayerWhitelisted(player) then
                     highlight.FillColor = Value
                 end
             end
@@ -1156,6 +1220,23 @@ local TeammateHighlightColor = ESPTab:CreateColorPicker({
             if highlight and highlight.Parent then
                 local player = Players:GetPlayerFromCharacter(character)
                 if player and TeamCheckEnabled and isOnSameTeam(player) then
+                    highlight.FillColor = Value
+                end
+            end
+        end
+    end
+})
+
+-- Whitelist Highlight Color Picker
+local WhitelistHighlightColor = ESPTab:CreateColorPicker({
+    Name = "Whitelist Highlight Color",
+    Color = Color3.fromRGB(0, 100, 255),
+    Flag = "WhitelistHighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                local player = Players:GetPlayerFromCharacter(character)
+                if player and isPlayerWhitelisted(player) then
                     highlight.FillColor = Value
                 end
             end
@@ -1385,6 +1466,182 @@ SafeZoneTab:CreateParagraph({
     Title = "Safe Zone Info",
     Content = "Create a safe zone platform at position (9999, 50, 9999) where you can teleport to avoid danger. Your original position is saved so you can teleport back. The platform is green and made of grass material."
 })
+
+-- Whitelist Tab
+WhitelistTab:CreateSection("Whitelist Settings")
+
+-- Whitelist Toggle
+local WhitelistToggle = WhitelistTab:CreateToggle({
+    Name = "Enable Player Whitelist",
+    CurrentValue = false,
+    Flag = "WhitelistToggle",
+    Callback = function(Value)
+        WhitelistEnabled = Value
+        if HighlightingEnabled then
+            updateAllHighlights()
+        end
+        local message = Value and "Whitelist enabled - Whitelisted players will be blue and ignored by aimbot" or "Whitelist disabled"
+        Rayfield:Notify({
+            Title = "Whitelist Settings",
+            Content = message,
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Player List Section
+WhitelistTab:CreateSection("Player List")
+
+-- Get all current players
+local function getPlayerNames()
+    local playerNames = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(playerNames, player.Name)
+        end
+    end
+    table.sort(playerNames)
+    return playerNames
+end
+
+-- Create player dropdown
+local PlayerDropdown = WhitelistTab:CreateDropdown({
+    Name = "Select Player",
+    Options = getPlayerNames(),
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "PlayerDropdown",
+    Callback = function(Option)
+        -- This will be used when adding players
+    end,
+})
+
+-- Refresh player list button
+WhitelistTab:CreateButton({
+    Name = "Refresh Player List",
+    Callback = function()
+        PlayerDropdown:Refresh(getPlayerNames())
+        Rayfield:Notify({
+            Title = "Whitelist",
+            Content = "Player list refreshed",
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Whitelist Management Section
+WhitelistTab:CreateSection("Whitelist Management")
+
+-- Add player to whitelist
+WhitelistTab:CreateButton({
+    Name = "Add Selected Player to Whitelist",
+    Callback = function()
+        local selectedPlayer = PlayerDropdown.CurrentOption[1]
+        if selectedPlayer then
+            WhitelistedPlayers[selectedPlayer] = true
+            if HighlightingEnabled then
+                updateAllHighlights()
+            end
+            Rayfield:Notify({
+                Title = "Whitelist",
+                Content = "Added " .. selectedPlayer .. " to whitelist",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Whitelist Error",
+                Content = "Please select a player first",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Remove player from whitelist
+WhitelistTab:CreateButton({
+    Name = "Remove Selected Player from Whitelist",
+    Callback = function()
+        local selectedPlayer = PlayerDropdown.CurrentOption[1]
+        if selectedPlayer and WhitelistedPlayers[selectedPlayer] then
+            WhitelistedPlayers[selectedPlayer] = nil
+            if HighlightingEnabled then
+                updateAllHighlights()
+            end
+            Rayfield:Notify({
+                Title = "Whitelist",
+                Content = "Removed " .. selectedPlayer .. " from whitelist",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Whitelist Error",
+                Content = "Player not in whitelist or no player selected",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Clear all whitelist
+WhitelistTab:CreateButton({
+    Name = "Clear All Whitelisted Players",
+    Callback = function()
+        WhitelistedPlayers = {}
+        if HighlightingEnabled then
+            updateAllHighlights()
+        end
+        Rayfield:Notify({
+            Title = "Whitelist",
+            Content = "Cleared all whitelisted players",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Show current whitelist
+WhitelistTab:CreateButton({
+    Name = "Show Whitelisted Players",
+    Callback = function()
+        local whitelistedNames = {}
+        for name, _ in pairs(WhitelistedPlayers) do
+            table.insert(whitelistedNames, name)
+        end
+        
+        if #whitelistedNames > 0 then
+            table.sort(whitelistedNames)
+            Rayfield:Notify({
+                Title = "Whitelisted Players (" .. #whitelistedNames .. ")",
+                Content = table.concat(whitelistedNames, ", "),
+                Duration = 6,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Whitelisted Players",
+                Content = "No players are whitelisted",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Auto-refresh player list when players join/leave
+Players.PlayerAdded:Connect(function(player)
+    task.wait(1) -- Wait a bit for player to fully load
+    PlayerDropdown:Refresh(getPlayerNames())
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    PlayerDropdown:Refresh(getPlayerNames())
+end)
 
 -- Load configuration
 Rayfield:LoadConfiguration()
