@@ -1643,6 +1643,249 @@ Players.PlayerRemoving:Connect(function(player)
     PlayerDropdown:Refresh(getPlayerNames())
 end)
 
+-- Removals Tab
+local RemovalsTab = Window:CreateTab("Removals", "trash")
+
+-- Variables for automatic removal
+local AutoRemoveEyepatchUI = false
+local AutoRemoveWakeUpBlur = false
+
+-- Function to delete EyepatchUI
+local function deleteEyepatchUI()
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    
+    if player then
+        local playerGui = player:WaitForChild("PlayerGui")
+        local ui = playerGui:FindFirstChild("EyepatchUI")
+        if ui then
+            ui:Destroy()
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to delete WakeUpBlur
+local function deleteWakeUpBlur()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local clientEffects = ReplicatedStorage:FindFirstChild("ClientEffects")
+    if clientEffects then
+        local wakeUpBlur = clientEffects:FindFirstChild("WakeUpBlur")
+        if wakeUpBlur then
+            wakeUpBlur:Destroy()
+            return true
+        end
+    end
+    return false
+end
+
+-- Auto-removal loop
+local removalConnection
+local function startAutoRemoval()
+    if removalConnection then
+        removalConnection:Disconnect()
+    end
+    
+    removalConnection = RunService.Heartbeat:Connect(function()
+        if AutoRemoveEyepatchUI then
+            deleteEyepatchUI()
+        end
+        
+        if AutoRemoveWakeUpBlur then
+            deleteWakeUpBlur()
+        end
+    end)
+end
+
+local function stopAutoRemoval()
+    if removalConnection then
+        removalConnection:Disconnect()
+        removalConnection = nil
+    end
+end
+
+-- Removals Tab Content
+RemovalsTab:CreateSection("Automatic UI Removal")
+
+-- EyepatchUI Toggle
+local EyepatchUIToggle = RemovalsTab:CreateToggle({
+    Name = "Auto Remove EyepatchUI",
+    CurrentValue = false,
+    Flag = "EyepatchUIToggle",
+    Callback = function(Value)
+        AutoRemoveEyepatchUI = Value
+        if Value then
+            -- Try to delete immediately
+            if deleteEyepatchUI() then
+                Rayfield:Notify({
+                    Title = "Removals",
+                    Content = "EyepatchUI deleted and auto-removal enabled",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Removals",
+                    Content = "EyepatchUI auto-removal enabled (not currently found)",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "EyepatchUI auto-removal disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+        
+        -- Update auto-removal system
+        if AutoRemoveEyepatchUI or AutoRemoveWakeUpBlur then
+            startAutoRemoval()
+        else
+            stopAutoRemoval()
+        end
+    end,
+})
+
+-- WakeUpBlur Toggle
+local WakeUpBlurToggle = RemovalsTab:CreateToggle({
+    Name = "Auto Remove WakeUpBlur",
+    CurrentValue = false,
+    Flag = "WakeUpBlurToggle",
+    Callback = function(Value)
+        AutoRemoveWakeUpBlur = Value
+        if Value then
+            -- Try to delete immediately
+            if deleteWakeUpBlur() then
+                Rayfield:Notify({
+                    Title = "Removals",
+                    Content = "WakeUpBlur deleted and auto-removal enabled",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Removals",
+                    Content = "WakeUpBlur auto-removal enabled (not currently found)",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "WakeUpBlur auto-removal disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+        
+        -- Update auto-removal system
+        if AutoRemoveEyepatchUI or AutoRemoveWakeUpBlur then
+            startAutoRemoval()
+        else
+            stopAutoRemoval()
+        end
+    end,
+})
+
+-- Manual Removal Section
+RemovalsTab:CreateSection("Manual Removal")
+
+-- Manual EyepatchUI Removal Button
+RemovalsTab:CreateButton({
+    Name = "Delete EyepatchUI Now",
+    Callback = function()
+        if deleteEyepatchUI() then
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "EyepatchUI deleted successfully!",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "EyepatchUI not found",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Manual WakeUpBlur Removal Button
+RemovalsTab:CreateButton({
+    Name = "Delete WakeUpBlur Now",
+    Callback = function()
+        if deleteWakeUpBlur() then
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "WakeUpBlur deleted successfully!",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "WakeUpBlur not found",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Delete Both Button
+RemovalsTab:CreateButton({
+    Name = "Delete Both Now",
+    Callback = function()
+        local deletedEyepatch = deleteEyepatchUI()
+        local deletedWakeUp = deleteWakeUpBlur()
+        
+        if deletedEyepatch and deletedWakeUp then
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "Both EyepatchUI and WakeUpBlur deleted!",
+                Duration = 3,
+                Image = 4483362458
+            })
+        elseif deletedEyepatch then
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "EyepatchUI deleted (WakeUpBlur not found)",
+                Duration = 3,
+                Image = 4483362458
+            })
+        elseif deletedWakeUp then
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "WakeUpBlur deleted (EyepatchUI not found)",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Removals",
+                Content = "Neither EyepatchUI nor WakeUpBlur found",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Info Section
+RemovalsTab:CreateSection("Removal Info")
+
+RemovalsTab:CreateParagraph({
+    Title = "Automatic Removal Features",
+    Content = "Enable the toggles above to automatically delete EyepatchUI and WakeUpBlur. The system will continuously check and remove these elements as soon as they appear. Use the manual buttons for immediate removal."
+})
+
 -- Load configuration
 Rayfield:LoadConfiguration()
 
