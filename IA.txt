@@ -3,9 +3,9 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Create Window
 local Window = Rayfield:CreateWindow({
-    Name = "matthew u suck",
-    LoadingTitle = "matthew u suck",
-    LoadingSubtitle = "imagine cheating",
+    Name = "super sigma gaming chair",
+    LoadingTitle = "erm what the sigma",
+    LoadingSubtitle = "me when the when the what",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "PlayerNPCHighlighter",
@@ -176,7 +176,7 @@ local function teleportBackFromSafeZone()
     })
 end
 
--- FOV Circle Visual
+-- FOV Circle Visual - Stays centered on screen
 local function createFOVCircle()
     if FOVCircle then
         FOVCircle:Remove()
@@ -189,7 +189,7 @@ local function createFOVCircle()
     circle.Transparency = 1
     circle.Filled = false
     circle.Radius = AimbotFOV
-    circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2) -- Always center of screen
     circle.NumSides = 100
     
     FOVCircle = circle
@@ -199,7 +199,7 @@ end
 local function updateFOVCircle()
     if FOVCircle then
         FOVCircle.Radius = AimbotFOV
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2) -- Always center of screen
     end
 end
 
@@ -829,12 +829,61 @@ local function stopBossMonitoring()
     end
 end
 
--- Aimbot Functions
-local function getClosestTargetToCursor()
-    local closestTarget = nil
-    local closestCharacter = nil
-    local closestDistance = math.huge
+-- FIXED: Improved boss targeting function
+local function getBossTargetPart(boss)
+    if not boss or not boss:IsA("Model") then
+        return nil
+    end
+    
+    -- For bosses, prioritize HEAD first, then fall back to HumanoidRootPart
+    local head = boss:FindFirstChild("Head")
+    if head then
+        return head
+    end
+    
+    -- If no head found, use HumanoidRootPart
+    local humanoidRootPart = boss:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        return humanoidRootPart
+    end
+    
+    -- Last resort: try torso or upper torso
+    local torso = boss:FindFirstChild("Torso") or boss:FindFirstChild("UpperTorso")
+    return torso
+end
+
+-- FIXED: Check if mouse is inside FOV circle
+local function isMouseInFOV()
     local mouseLocation = UserInputService:GetMouseLocation()
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local distanceFromCenter = (mouseLocation - screenCenter).Magnitude
+    return distanceFromCenter <= AimbotFOV
+end
+
+-- FIXED: FOV check uses CENTER of screen for target distance
+local function isTargetInFOV(targetPart)
+    if not targetPart then
+        return false
+    end
+    
+    local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+    
+    if not onScreen then
+        return false
+    end
+    
+    -- Calculate distance from CENTER of screen to target on screen
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - screenCenter).Magnitude
+    
+    -- Check if target is within FOV circle (using screen center as center)
+    return distance <= AimbotFOV
+end
+
+-- FIXED: Unified target collection that checks ALL entities together using CENTER FOV
+local function getAllValidTargets()
+    local validTargets = {}
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
     -- Check players
     for _, player in pairs(Players:GetPlayers()) do
@@ -855,20 +904,82 @@ local function getClosestTargetToCursor()
             local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
             
             local targetPart = head or torso or humanoidRootPart
-            if targetPart then
-                -- Convert 3D position to 2D screen position
-                local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+            if targetPart and isTargetInFOV(targetPart) then
+                local targetPosition = Camera:WorldToViewportPoint(targetPart.Position)
+                local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - screenCenter).Magnitude
                 
-                if onScreen then
-                    -- Calculate distance from cursor to target on screen
-                    local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - mouseLocation).Magnitude
+                if not wallCheck(targetPart.Position) then
+                    table.insert(validTargets, {
+                        targetPart = targetPart,
+                        character = player.Character,
+                        distance = distance,
+                        type = "player"
+                    })
+                end
+            end
+        end
+    end
+    
+    -- Check NPCs folder
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        -- Regular NPCs (not in boss folder)
+        for _, npc in pairs(npcsFolder:GetChildren()) do
+            if npc:IsA("Model") and npc.Name ~= "Boss" and isAlive(npc) then
+                -- Skip if this NPC is actually yourself (when you're a boss)
+                if npc == LocalPlayer.Character then
+                    continue
+                end
+                
+                local head = npc:FindFirstChild("Head")
+                local torso = npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+                local humanoidRootPart = npc:FindFirstChild("HumanoidRootPart")
+                
+                local targetPart = head or torso or humanoidRootPart
+                if targetPart and isTargetInFOV(targetPart) then
+                    local targetPosition = Camera:WorldToViewportPoint(targetPart.Position)
+                    local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - screenCenter).Magnitude
                     
-                    if distance < closestDistance and distance < AimbotFOV then
-                        -- Wall check
+                    if not wallCheck(targetPart.Position) then
+                        table.insert(validTargets, {
+                            targetPart = targetPart,
+                            character = npc,
+                            distance = distance,
+                            type = "npc"
+                        })
+                    end
+                end
+            end
+        end
+        
+        -- Boss NPCs
+        local bossFolder = npcsFolder:FindFirstChild("Boss")
+        if bossFolder then
+            for _, boss in pairs(bossFolder:GetChildren()) do
+                if boss:IsA("Model") and isAlive(boss) then
+                    -- CRITICAL FIX: Skip targeting yourself when you're the boss
+                    if boss == LocalPlayer.Character then
+                        continue
+                    end
+                    
+                    -- NEW FIX: Skip targeting the SILLYSTATUE boss
+                    if string.lower(boss.Name) == "sillystatue" then
+                        continue
+                    end
+                    
+                    -- FIXED: Use the improved boss targeting function
+                    local targetPart = getBossTargetPart(boss)
+                    if targetPart and isTargetInFOV(targetPart) then
+                        local targetPosition = Camera:WorldToViewportPoint(targetPart.Position)
+                        local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - screenCenter).Magnitude
+                        
                         if not wallCheck(targetPart.Position) then
-                            closestDistance = distance
-                            closestTarget = targetPart
-                            closestCharacter = player.Character
+                            table.insert(validTargets, {
+                                targetPart = targetPart,
+                                character = boss,
+                                distance = distance,
+                                type = "boss"
+                            })
                         end
                     end
                 end
@@ -876,81 +987,23 @@ local function getClosestTargetToCursor()
         end
     end
     
-    -- Check NPCs if no player found
-    if not closestTarget then
-        -- Check NPCs folder
-        local npcsFolder = Workspace:FindFirstChild("NPCs")
-        if npcsFolder then
-            -- Regular NPCs (target head/torso)
-            for _, npc in pairs(npcsFolder:GetChildren()) do
-                if npc:IsA("Model") and npc.Name ~= "Boss" and isAlive(npc) then
-                    -- Skip if this NPC is actually yourself (when you're a boss)
-                    if npc == LocalPlayer.Character then
-                        continue
-                    end
-                    
-                    local head = npc:FindFirstChild("Head")
-                    local torso = npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
-                    local humanoidRootPart = npc:FindFirstChild("HumanoidRootPart")
-                    
-                    local targetPart = head or torso or humanoidRootPart
-                    if targetPart then
-                        local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                        
-                        if onScreen then
-                            local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - mouseLocation).Magnitude
-                            
-                            if distance < closestDistance and distance < AimbotFOV then
-                                if not wallCheck(targetPart.Position) then
-                                    closestDistance = distance
-                                    closestTarget = targetPart
-                                    closestCharacter = npc
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            
-            -- Boss NPCs (target HumanoidRootPart)
-            local bossFolder = npcsFolder:FindFirstChild("Boss")
-            if bossFolder then
-                for _, boss in pairs(bossFolder:GetChildren()) do
-                    if boss:IsA("Model") and isAlive(boss) then
-                        -- CRITICAL FIX: Skip targeting yourself when you're the boss
-                        if boss == LocalPlayer.Character then
-                            continue
-                        end
-                        
-                        -- NEW FIX: Skip targeting the SILLYSTATUE boss
-                        if string.lower(boss.Name) == "sillystatue" then
-                            continue
-                        end
-                        
-                        -- For bosses, prioritize HumanoidRootPart over Head
-                        local head = boss:FindFirstChild("Head")
-                        local torso = boss:FindFirstChild("Torso") or boss:FindFirstChild("UpperTorso")
-                        local humanoidRootPart = boss:FindFirstChild("HumanoidRootPart")
-                        
-                        local targetPart = humanoidRootPart or head or torso
-                        if targetPart then
-                            local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                            
-                            if onScreen then
-                                local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - mouseLocation).Magnitude
-                                
-                                if distance < closestDistance and distance < AimbotFOV then
-                                    if not wallCheck(targetPart.Position) then
-                                        closestDistance = distance
-                                        closestTarget = targetPart
-                                        closestCharacter = boss
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
+    return validTargets
+end
+
+-- FIXED: Aimbot target selection that picks the CLOSEST target to CENTER of screen
+local function getClosestTargetToCursor()
+    local validTargets = getAllValidTargets()
+    
+    local closestTarget = nil
+    local closestCharacter = nil
+    local closestDistance = math.huge
+    
+    -- Find the closest target from all valid targets (closest to center of screen)
+    for _, targetData in pairs(validTargets) do
+        if targetData.distance < closestDistance then
+            closestDistance = targetData.distance
+            closestTarget = targetData.targetPart
+            closestCharacter = targetData.character
         end
     end
     
@@ -971,7 +1024,7 @@ local function aimAtTarget(targetPart)
     camera.CFrame = camera.CFrame:Lerp(lookAt, AimbotSmoothness)
 end
 
--- Fixed Aimbot loop
+-- Fixed Aimbot loop - NOW CHECKS IF MOUSE IS IN FOV
 local aimbotConnection
 local function startAimbot()
     if aimbotConnection then
@@ -990,7 +1043,8 @@ local function startAimbot()
                 isAimbotKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
             end
             
-            if isAimbotKeyPressed and isHoldingItem() then
+            -- FIXED: Only aim if mouse is inside FOV circle AND holding item
+            if isAimbotKeyPressed and isHoldingItem() and isMouseInFOV() then
                 if not isAiming then
                     -- Just started aiming - find initial target
                     local closestTarget, distance, closestCharacter = getClosestTargetToCursor()
@@ -1019,7 +1073,7 @@ local function startAimbot()
                     end
                 end
             else
-                -- Aimbot key not pressed or not holding item
+                -- Aimbot key not pressed, not holding item, or mouse outside FOV
                 if isAiming then
                     -- Just stopped aiming
                     currentAimTarget = nil
@@ -1325,7 +1379,7 @@ local AimbotToggle = AimbotTab:CreateToggle({
             FOVCircle.Visible = true
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "Aimbot enabled - Hold " .. getKeyName(AimbotKey) .. " while holding an item to aim",
+                Content = "Aimbot enabled - Hold " .. getKeyName(AimbotKey) .. " while holding an item AND mouse inside FOV circle to aim",
                 Duration = 4,
                 Image = 4483362458
             })
