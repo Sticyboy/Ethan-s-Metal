@@ -1,0 +1,637 @@
+-- Auto Block Script for Zombie Game
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+local PlayerGui = lp:WaitForChild("PlayerGui")
+
+-- Load Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local Window = Rayfield:CreateWindow({
+    Name = "auto block for backshots",
+    LoadingTitle = "time to backshot",
+    LoadingSubtitle = "by ben dover",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "zombiebackshot",
+        FileName = "Settings"
+    },
+    Discord = {Enabled = false},
+    KeySystem = false
+})
+
+local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
+
+-- Audio IDs for zombies
+local autoBlockTriggerSounds = {
+    ["133615523996464"] = true,  -- Normal/Deathaxe first hit sound
+    ["92560100204784"] = true,   -- Normal/Deathaxe second hit sound
+    ["113702274120842"] = true,  -- Elite Deathaxe first hit sound
+    ["108248505808935"] = true,  -- Elite Deathaxe second hit sound
+    ["88874721963703"] = true,   -- Skeleton Rogue/Axe Skeleton first hit sound
+    ["92665931198774"] = true    -- Skeleton Rogue/Axe Skeleton second hit sound
+}
+
+-- Enemy delay configurations (in seconds)
+local enemyDelays = {
+    -- Normal Zombies
+    normal = {
+        ["133615523996464"] = 0.5, -- First attack
+        ["92560100204784"] = 0.5   -- Second attack
+    },
+    -- Deathaxe Skeletons
+    deathaxe = {
+        ["133615523996464"] = 0.85,   -- First attack: 0.85s
+        ["92560100204784"] = 0.5      -- Second attack
+    },
+    -- Elite Deathaxe
+    elite_deathaxe = {
+        ["113702274120842"] = 0.85,   -- First attack: 0.85s
+        ["108248505808935"] = 0.5     -- Second attack
+    },
+    -- Skeleton Rogue
+    skeleton_rogue = {
+        ["88874721963703"] = 0.15,    -- First attack: 0.15s
+        ["92665931198774"] = 0.2      -- Second attack: 0.2s (changed from 0.1 to 0.2)
+    },
+    -- Axe Skeleton
+    axe_skeleton = {
+        ["88874721963703"] = 0.2,     -- First attack: 0.2s
+        ["92665931198774"] = 0.1      -- Second attack: 0.1s
+    },
+    -- Delver Zombies
+    delver = {
+        ["133615523996464"] = 0.4, -- First attack
+        ["92560100204784"] = 0.2   -- Second attack (faster)
+    }
+}
+
+-- State Variables
+local autoBlockAudioOn = false
+local detectionRange = 13
+local detectionRangeSq = detectionRange * detectionRange
+local facingCheckEnabled = true
+local customFacingDot = -0.3
+
+-- Track enemy attack sequences
+local enemyAttackTracker = {}
+
+-- Visuals (on player only)
+local facingVisualOn = false
+local facingVisual = nil
+local rangeVisualOn = false
+local rangeVisual = nil
+
+-- Sound handling
+local soundHooks = {}
+local soundBlockedUntil = {}
+
+-- Block functions
+local function fireBlock()
+    game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ToolService"):WaitForChild("RF"):WaitForChild("StartBlock"):InvokeServer()
+end
+
+local function fireStopBlock()
+    game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ToolService"):WaitForChild("RF"):WaitForChild("StopBlock"):InvokeServer()
+end
+
+-- Get enemy type from name
+local function getEnemyType(enemy)
+    if not enemy or not enemy.Name then return "unknown" end
+    
+    local name = enemy.Name
+    
+    -- Check for Elite Deathaxe
+    if string.find(name, "Elite Deathaxe") then
+        return "elite_deathaxe"
+    -- Check for Elite Rogue Skeleton
+    elseif string.find(name, "Elite Rogue Skeleton") then
+        return "skeleton_rogue"  -- Use same delays as Skeleton Rogue
+    -- Check for Deathaxe Skeleton
+    elseif string.find(name, "Deathaxe Skeleton") then
+        return "deathaxe"
+    -- Check for Skeleton Rogue
+    elseif string.find(name, "Skeleton Rogue") then
+        return "skeleton_rogue"
+    -- Check for Axe Skeleton
+    elseif string.find(name, "Axe Skeleton") then
+        return "axe_skeleton"
+    -- Check for Delver Zombie
+    elseif string.find(name, "Delver Zombie") then
+        return "delver"
+    -- Check for normal Zombie
+    elseif string.find(name, "Zombie") then
+        return "normal"
+    else
+        return "unknown"
+    end
+end
+
+-- Get appropriate block DELAY based on enemy type and sound ID
+local function getBlockDelay(enemy, soundId)
+    local enemyType = getEnemyType(enemy)
+    local enemyName = enemy.Name
+    local currentTime = tick()
+    
+    -- Get the delay configuration for this enemy type
+    local delayConfig = enemyDelays[enemyType] or enemyDelays.normal
+    local baseDelay = delayConfig[soundId] or 0.5
+    
+    -- Debug output
+    print("=== BLOCK DELAY DEBUG ===")
+    print("Enemy: " .. enemyName)
+    print("Type: " .. enemyType)
+    print("Sound: " .. (soundId or "unknown"))
+    print("Delay: " .. baseDelay .. "s")
+    
+    return baseDelay
+end
+
+-- Get nearest enemy within detection range (exclude player)
+local function getNearestEnemyInRange()
+    local enemiesFolder = workspace:FindFirstChild("Living")
+    if not enemiesFolder then return nil end
+
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local closest, closestDist = nil, detectionRange
+    for _, enemy in ipairs(enemiesFolder:GetChildren()) do
+        -- Skip if this is the player's character
+        local player = Players:GetPlayerFromCharacter(enemy)
+        if not player then
+            -- Check if it's a zombie or skeleton
+            if string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") then
+                local hrp = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
+                if hrp then
+                    local dist = (hrp.Position - myRoot.Position).Magnitude
+                    if dist <= detectionRange and dist < closestDist then
+                        closest, closestDist = enemy, dist
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Check if enemy is within detection range (exclude player)
+local function isEnemyInRange(enemy)
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+    
+    -- Skip if this is the player's character
+    local player = Players:GetPlayerFromCharacter(enemy)
+    if player then return false end
+    
+    -- Check if it's a zombie or skeleton
+    if not (string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton")) then
+        return false
+    end
+    
+    local enemyHRP = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
+    if not enemyHRP then return false end
+    
+    local dist = (enemyHRP.Position - myRoot.Position).Magnitude
+    return dist <= detectionRange
+end
+
+-- Facing check function (from player to enemy)
+local function isFacingEnemy(enemy)
+    if not facingCheckEnabled then
+        return true
+    end
+
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    local enemyHRP = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
+    if not myRoot or not enemyHRP then return false end
+
+    local dx = enemyHRP.Position.X - myRoot.Position.X
+    local dy = enemyHRP.Position.Y - myRoot.Position.Y
+    local dz = enemyHRP.Position.Z - myRoot.Position.Z
+
+    local mag = math.sqrt(dx*dx + dy*dy + dz*dz)
+    if mag == 0 then
+        return true
+    end
+    local invMag = 1 / mag
+
+    local ux, uy, uz = dx * invMag, dy * invMag, dz * invMag
+    local lv = enemyHRP.CFrame.LookVector
+    local lx, ly, lz = lv.X, lv.Y, lv.Z
+
+    local dot = lx * ux + ly * uy + lz * uz
+    return dot > (customFacingDot or -0.3)
+end
+
+-- Facing Check Visual (on player only)
+local function updateFacingVisual()
+    if not facingVisual or not facingVisual.Parent then return end
+    
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    local dot = math.clamp(customFacingDot or -0.3, -1, 1)
+    local angle = math.acos(dot)
+    local frac = angle / math.pi
+
+    local minFrac = 0.20
+    local radius = math.max(1, detectionRange * (minFrac + (1 - minFrac) * frac))
+    facingVisual.Radius = radius
+    facingVisual.Height = 0.12
+
+    local forwardDist = detectionRange * (0.35 + 0.15 * frac)
+    local yOffset = -(myRoot.Size.Y / 2 + 0.05)
+    facingVisual.CFrame = CFrame.new(0, yOffset, -forwardDist) * CFrame.Angles(math.rad(90), 0, 0)
+
+    -- Check if any enemy is in range and facing us
+    local nearestEnemy = getNearestEnemyInRange()
+    local inRange = false
+    local facingOkay = false
+
+    if nearestEnemy then
+        inRange = true
+        facingOkay = (not facingCheckEnabled) or isFacingEnemy(nearestEnemy)
+    end
+
+    if inRange and facingOkay then
+        facingVisual.Color3 = Color3.fromRGB(0, 255, 0)
+        facingVisual.Transparency = 0.40
+    else
+        facingVisual.Color3 = Color3.fromRGB(255, 255, 0)
+        facingVisual.Transparency = 0.85
+    end
+end
+
+local function createFacingVisual()
+    if facingVisual then
+        facingVisual:Destroy()
+        facingVisual = nil
+    end
+    
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    facingVisual = Instance.new("CylinderHandleAdornment")
+    facingVisual.Name = "PlayerFacingCheckVisual"
+    facingVisual.Adornee = myRoot
+    facingVisual.AlwaysOnTop = true
+    facingVisual.ZIndex = 2
+    facingVisual.Transparency = 0.55
+    facingVisual.Color3 = Color3.fromRGB(0, 255, 0)
+    facingVisual.Parent = myRoot
+
+    updateFacingVisual()
+end
+
+local function removeFacingVisual()
+    if facingVisual then
+        facingVisual:Destroy()
+        facingVisual = nil
+    end
+end
+
+-- Range Visual (on player only)
+local function updateRangeVisual()
+    if not rangeVisual or not rangeVisual.Parent then return end
+    
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    rangeVisual.Radius = detectionRange
+    rangeVisual.Height = 0.12
+    local yOffset = -(myRoot.Size.Y / 2 + 0.05)
+    rangeVisual.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
+end
+
+local function createRangeVisual()
+    if rangeVisual then
+        rangeVisual:Destroy()
+        rangeVisual = nil
+    end
+    
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    rangeVisual = Instance.new("CylinderHandleAdornment")
+    rangeVisual.Name = "PlayerRangeVisual"
+    rangeVisual.Adornee = myRoot
+    rangeVisual.Color3 = Color3.fromRGB(255, 0, 0)
+    rangeVisual.AlwaysOnTop = true
+    rangeVisual.ZIndex = 1
+    rangeVisual.Transparency = 0.6
+    rangeVisual.Parent = myRoot
+
+    updateRangeVisual()
+end
+
+local function removeRangeVisual()
+    if rangeVisual then
+        rangeVisual:Destroy()
+        rangeVisual = nil
+    end
+end
+
+-- Keep visuals updated
+RunService.RenderStepped:Connect(function()
+    if facingVisualOn and facingVisual then
+        updateFacingVisual()
+    end
+    if rangeVisualOn and rangeVisual then
+        updateRangeVisual()
+    end
+end)
+
+-- Character added/removed handling
+lp.CharacterAdded:Connect(function(char)
+    task.wait(1) -- Wait for character to load
+    if facingVisualOn then
+        createFacingVisual()
+    end
+    if rangeVisualOn then
+        createRangeVisual()
+    end
+end)
+
+lp.CharacterRemoving:Connect(function()
+    removeFacingVisual()
+    removeRangeVisual()
+end)
+
+-- Damage detection for StopBlock
+local function setupDamageDetection()
+    local char = lp.Character
+    if not char then return end
+    
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    -- Store original health to detect damage
+    local lastHealth = humanoid.Health
+    
+    humanoid.HealthChanged:Connect(function()
+        if humanoid.Health < lastHealth then
+            -- Took damage, stop blocking
+            fireStopBlock()
+        end
+        lastHealth = humanoid.Health
+    end)
+end
+
+-- Setup damage detection when character loads
+lp.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    setupDamageDetection()
+end)
+
+-- Extract sound ID
+local function extractNumericSoundId(sound)
+    if not sound then return nil end
+    local sid = sound.SoundId
+    if not sid then return nil end
+    sid = (type(sid) == "string") and sid or tostring(sid)
+    
+    local num = string.match(sid, "rbxassetid://(%d+)") or
+                string.match(sid, "://(%d+)") or
+                string.match(sid, "^(%d+)$")
+    
+    return num
+end
+
+-- Get sound world position and check if it's from an enemy in range
+local function getSoundWorldPosition(sound)
+    if not sound then return nil, nil, nil, false end
+    local parent = sound.Parent
+    if parent then
+        if parent:IsA("BasePart") then
+            local position = parent.Position
+            local enemyModel = parent:FindFirstAncestorOfClass("Model")
+            local isInRange = false
+            
+            -- Check if the sound is from an enemy in range
+            if enemyModel then
+                isInRange = isEnemyInRange(enemyModel)
+            end
+            
+            return position, parent, enemyModel, isInRange
+        end
+        if parent:IsA("Attachment") then
+            local gp = parent.Parent
+            if gp and gp:IsA("BasePart") then
+                local position = gp.Position
+                local enemyModel = gp:FindFirstAncestorOfClass("Model")
+                local isInRange = false
+                
+                -- Check if the sound is from an enemy in range
+                if enemyModel then
+                    isInRange = isEnemyInRange(enemyModel)
+                end
+                
+                return position, gp, enemyModel, isInRange
+            end
+        end
+    end
+    return nil, nil, nil, false
+end
+
+-- Regular Audio Detection
+local function attemptBlockForSound(sound)
+    if not autoBlockAudioOn then return end
+    if not sound or not sound:IsA("Sound") then return end
+    if not sound.IsPlaying then return end
+
+    local id = extractNumericSoundId(sound)
+    if not id or not autoBlockTriggerSounds[id] then return end
+
+    local t = tick()
+    if soundBlockedUntil[sound] and t < soundBlockedUntil[sound] then return end
+
+    local myChar = lp and lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    local soundPos, soundPart, enemyModel, isInRange = getSoundWorldPosition(sound)
+    if not soundPos or not soundPart or not enemyModel or not isInRange then return end
+
+    -- Check if sound is from an enemy in range and facing
+    local nearestEnemy = getNearestEnemyInRange()
+    if not nearestEnemy then return end
+
+    local enemyHRP = nearestEnemy:FindFirstChild("HumanoidRootPart") or nearestEnemy:FindFirstChild("Head")
+    if not enemyHRP then return end
+
+    -- Check facing
+    if facingCheckEnabled and not isFacingEnemy(nearestEnemy) then
+        return
+    end
+
+    -- Mark sound as processed immediately
+    soundBlockedUntil[sound] = t + 1.2
+
+    -- Start the blocking process in a separate thread
+    task.spawn(function()
+        -- Get appropriate block DELAY based on enemy type
+        local blockDelay = getBlockDelay(nearestEnemy, id)
+        
+        print("DEBUG: Waiting " .. blockDelay .. " seconds before blocking")
+        
+        -- Wait for the delay BEFORE blocking
+        if blockDelay > 0 then
+            task.wait(blockDelay)
+        end
+        
+        -- Now block after waiting
+        fireBlock()
+        
+        -- Keep blocking for a short duration (0.1 seconds) then release
+        task.wait(0.1)
+        fireStopBlock()
+    end)
+end
+
+-- Sound hooking system
+local function hookSound(sound)
+    if not sound or not sound:IsA("Sound") then return end
+    if soundHooks[sound] then return end
+
+    local preId = extractNumericSoundId(sound)
+    soundHooks[sound] = { id = preId }
+
+    local function handleAttempt(snd, id)
+        if not autoBlockAudioOn then return end
+        attemptBlockForSound(snd, id)
+    end
+
+    local playedConn = sound.Played:Connect(function()
+        handleAttempt(sound, preId)
+    end)
+
+    local propConn = sound:GetPropertyChangedSignal("IsPlaying"):Connect(function()
+        if sound.IsPlaying then
+            handleAttempt(sound, preId)
+        end
+    end)
+
+    local destroyConn
+    destroyConn = sound.Destroying:Connect(function()
+        if playedConn and playedConn.Connected then playedConn:Disconnect() end
+        if propConn and propConn.Connected then propConn:Disconnect() end
+        if destroyConn and destroyConn.Connected then destroyConn:Disconnect() end
+        soundHooks[sound] = nil
+        soundBlockedUntil[sound] = nil
+    end)
+
+    soundHooks[sound].playedConn = playedConn
+    soundHooks[sound].propConn = propConn
+    soundHooks[sound].destroyConn = destroyConn
+
+    if sound.IsPlaying then
+        handleAttempt(sound, preId)
+    end
+end
+
+-- Hook existing sounds in enemies
+local enemiesFolder = workspace:FindFirstChild("Living")
+if enemiesFolder then
+    for _, desc in ipairs(enemiesFolder:GetDescendants()) do
+        if desc:IsA("Sound") then
+            hookSound(desc)
+        end
+    end
+
+    enemiesFolder.DescendantAdded:Connect(function(desc)
+        if desc:IsA("Sound") then
+            hookSound(desc)
+        end
+    end)
+end
+
+-- GUI Elements
+AutoBlockTab:CreateToggle({
+    Name = "Auto Block (Audio)",
+    CurrentValue = false,
+    Flag = "AutoBlockAudio",
+    Callback = function(state)
+        autoBlockAudioOn = state
+    end,
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Enable Facing Check",
+    CurrentValue = true,
+    Flag = "FacingCheckToggle",
+    Callback = function(Value)
+        facingCheckEnabled = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Facing Check Visual (On Player)",
+    CurrentValue = false,
+    Flag = "FacingCheckVisualToggle",
+    Callback = function(state)
+        facingVisualOn = state
+        if state then
+            createFacingVisual()
+        else
+            removeFacingVisual()
+        end
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Range Visual (On Player)",
+    CurrentValue = false,
+    Flag = "RangeVisualToggle",
+    Callback = function(state)
+        rangeVisualOn = state
+        if state then
+            createRangeVisual()
+        else
+            removeRangeVisual()
+        end
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Detection Range",
+    PlaceholderText = "13",
+    RemoveTextAfterFocusLost = false,
+    Flag = "DetectionRange",
+    Callback = function(Text)
+        detectionRange = tonumber(Text) or detectionRange
+        detectionRangeSq = detectionRange * detectionRange
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Facing Check angle (DOT)",
+    PlaceholderText = "-0.3",
+    RemoveTextAfterFocusLost = false,
+    Flag = "Facingcheckdot",
+    Callback = function(Text)
+        customFacingDot = tonumber(Text) or customFacingDot
+    end
+})
+
+AutoBlockTab:CreateParagraph({
+    Title = "Enemy Delay Settings",
+    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack)"
+})
+
+-- Initialize visuals if character exists
+task.spawn(function()
+    task.wait(2)
+    if facingVisualOn then
+        createFacingVisual()
+    end
+    if rangeVisualOn then
+        createRangeVisual()
+    end
+    setupDamageDetection()
+end)
+
+Rayfield:LoadConfiguration()
+
+loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
