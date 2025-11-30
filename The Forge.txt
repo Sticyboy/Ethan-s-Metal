@@ -76,9 +76,9 @@ local enemyDelays = {
     blazing_slime = {
         ["133615523996464"] = 0.2     -- Single attack: 0.2s
     },
-    -- Bomber (0.35 delay for dash)
+    -- Bomber (0.5 delay for dash)
     bomber = {
-        ["105894780238520"] = 0.35     -- Explosion sound: 0.35s delay
+        ["105894780238520"] = 0.5     -- Explosion sound: 0.5s delay
     }
 }
 
@@ -511,7 +511,7 @@ local function attemptBlockForSound(sound)
         
         -- Special handling for Bomber - use dash instead of block
         if getEnemyType(nearestEnemy) == "bomber" and id == "105894780238520" then
-            -- Wait for the 0.35s delay BEFORE dashing
+            -- Wait for the 0.5s delay BEFORE dashing
             if blockDelay > 0 then
                 task.wait(blockDelay)
             end
@@ -661,7 +661,7 @@ AutoBlockTab:CreateInput({
 
 AutoBlockTab:CreateParagraph({
     Title = "Enemy Delay Settings",
-    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack) | Reaper: 0.2s all three attacks | Blazing Slime: 0.2s single attack | Bomber: 0.35s delay then dash"
+    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack) | Reaper: 0.2s all three attacks | Blazing Slime: 0.2s single attack | Bomber: 0.5s delay then dash"
 })
 
 -- Initialize visuals if character exists
