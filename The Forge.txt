@@ -78,7 +78,7 @@ local enemyDelays = {
     },
     -- Bomber (0.25 delay for dash)
     bomber = {
-        ["105894780238520"] = 0.25     -- Explosion sound: 0.25s delay
+        ["105894780238520"] = 0.35     -- Explosion sound: 0.35s delay
     }
 }
 
