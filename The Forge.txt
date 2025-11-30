@@ -25,10 +25,10 @@ local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
 
 -- Audio IDs for zombies
 local autoBlockTriggerSounds = {
-    ["133615523996464"] = true,  -- Normal/Deathaxe first hit sound
+    ["133615523996464"] = true,  -- Normal/Deathaxe first hit sound / Blazing Slime attack
     ["92560100204784"] = true,   -- Normal/Deathaxe second hit sound
-    ["113702274120842"] = true,  -- Elite Deathaxe first hit sound
-    ["108248505808935"] = true,  -- Elite Deathaxe second hit sound
+    ["113702274120842"] = true,  -- Elite Deathaxe first hit sound / Reaper first & third attack
+    ["108248505808935"] = true,  -- Elite Deathaxe second hit sound / Reaper second attack
     ["88874721963703"] = true,   -- Skeleton Rogue/Axe Skeleton first hit sound
     ["92665931198774"] = true    -- Skeleton Rogue/Axe Skeleton second hit sound
 }
@@ -64,6 +64,16 @@ local enemyDelays = {
     delver = {
         ["133615523996464"] = 0.4, -- First attack
         ["92560100204784"] = 0.2   -- Second attack (faster)
+    },
+    -- Reaper
+    reaper = {
+        ["113702274120842"] = 0.2,    -- First attack: 0.2s
+        ["108248505808935"] = 0.2,    -- Second attack: 0.2s
+        -- Third attack uses same audio as first attack (113702274120842) with 0.2s delay
+    },
+    -- Blazing Slime
+    blazing_slime = {
+        ["133615523996464"] = 0.2     -- Single attack: 0.2s
     }
 }
 
@@ -102,8 +112,14 @@ local function getEnemyType(enemy)
     
     local name = enemy.Name
     
+    -- Check for Blazing Slime
+    if string.find(name, "Blazing Slime") then
+        return "blazing_slime"
+    -- Check for Reaper
+    elseif string.find(name, "Reaper") then
+        return "reaper"
     -- Check for Elite Deathaxe
-    if string.find(name, "Elite Deathaxe") then
+    elseif string.find(name, "Elite Deathaxe") then
         return "elite_deathaxe"
     -- Check for Elite Rogue Skeleton
     elseif string.find(name, "Elite Rogue Skeleton") then
@@ -161,8 +177,8 @@ local function getNearestEnemyInRange()
         -- Skip if this is the player's character
         local player = Players:GetPlayerFromCharacter(enemy)
         if not player then
-            -- Check if it's a zombie or skeleton
-            if string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") then
+            -- Check if it's a zombie, skeleton, reaper, or slime
+            if string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") or string.find(enemy.Name, "Reaper") or string.find(enemy.Name, "Slime") then
                 local hrp = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
                 if hrp then
                     local dist = (hrp.Position - myRoot.Position).Magnitude
@@ -185,8 +201,8 @@ local function isEnemyInRange(enemy)
     local player = Players:GetPlayerFromCharacter(enemy)
     if player then return false end
     
-    -- Check if it's a zombie or skeleton
-    if not (string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton")) then
+    -- Check if it's a zombie, skeleton, reaper, or slime
+    if not (string.find(enemy.Name, "Zombie") or string.find(enemy.Name, "Deathaxe") or string.find(enemy.Name, "Skeleton") or string.find(enemy.Name, "Reaper") or string.find(enemy.Name, "Slime")) then
         return false
     end
     
@@ -617,7 +633,7 @@ AutoBlockTab:CreateInput({
 
 AutoBlockTab:CreateParagraph({
     Title = "Enemy Delay Settings",
-    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack)"
+    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack) | Reaper: 0.2s all three attacks | Blazing Slime: 0.2s single attack"
 })
 
 -- Initialize visuals if character exists
