@@ -25,13 +25,15 @@ local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
 
 -- Audio IDs for zombies
 local autoBlockTriggerSounds = {
-    ["133615523996464"] = true,  -- Normal/Deathaxe first hit sound / Blazing Slime attack
-    ["92560100204784"] = true,   -- Normal/Deathaxe second hit sound
-    ["113702274120842"] = true,  -- Elite Deathaxe first hit sound / Reaper first & third attack
+    ["133615523996464"] = true,  -- Normal/Deathaxe first hit sound / Blazing Slime attack / Brute Zombie
+    ["92560100204784"] = true,   -- Normal/Deathaxe second hit sound / Brute Zombie
+    ["113702274120842"] = true,  -- Elite Deathaxe first hit sound / Reaper first & third attack / Elite Zombie first & third attack
     ["108248505808935"] = true,  -- Elite Deathaxe second hit sound / Reaper second attack
     ["88874721963703"] = true,   -- Skeleton Rogue/Axe Skeleton first hit sound
     ["92665931198774"] = true,   -- Skeleton Rogue/Axe Skeleton second hit sound
-    ["105894780238520"] = true   -- Bomber explosion sound
+    ["105894780238520"] = true,  -- Bomber explosion sound
+    ["84780561643826"] = true,   -- Elite Zombie first attack
+    ["88906813164827"] = true    -- Elite Zombie second attack
 }
 
 -- Enemy delay configurations (in seconds)
@@ -70,7 +72,6 @@ local enemyDelays = {
     reaper = {
         ["113702274120842"] = 0.2,    -- First attack: 0.2s
         ["108248505808935"] = 0.2,    -- Second attack: 0.2s
-        -- Third attack uses same audio as first attack (113702274120842) with 0.2s delay
     },
     -- Blazing Slime
     blazing_slime = {
@@ -79,6 +80,17 @@ local enemyDelays = {
     -- Bomber (0.5 delay for dash)
     bomber = {
         ["105894780238520"] = 0.5     -- Explosion sound: 0.5s delay
+    },
+    -- Brute Zombie
+    brute_zombie = {
+        ["133615523996464"] = 0.2,    -- First attack: 0.2s
+        ["92560100204784"] = 0.2      -- Second attack: 0.2s
+    },
+    -- Elite Zombie (UPDATED DELAYS)
+    elite_zombie = {
+        ["84780561643826"] = 0.3,     -- First attack: 0.3s
+        ["88906813164827"] = 0.3,     -- Second attack: 0.3s
+        ["113702274120842"] = 0.1     -- Third attack: 0.2s
     }
 }
 
@@ -129,6 +141,9 @@ local function getEnemyType(enemy)
     -- Check for Bomber
     if string.find(name, "Bomber") then
         return "bomber"
+    -- Check for Brute Zombie
+    elseif string.find(name, "Brute Zombie") then
+        return "brute_zombie"
     -- Check for Blazing Slime
     elseif string.find(name, "Blazing Slime") then
         return "blazing_slime"
@@ -138,6 +153,9 @@ local function getEnemyType(enemy)
     -- Check for Elite Deathaxe
     elseif string.find(name, "Elite Deathaxe") then
         return "elite_deathaxe"
+    -- Check for Elite Zombie (FIXED - no space)
+    elseif string.find(name, "EliteZombie") then
+        return "elite_zombie"
     -- Check for Elite Rogue Skeleton
     elseif string.find(name, "Elite Rogue Skeleton") then
         return "skeleton_rogue"  -- Use same delays as Skeleton Rogue
@@ -154,7 +172,7 @@ local function getEnemyType(enemy)
     elseif string.find(name, "Delver Zombie") then
         return "delver"
     -- Check for normal Zombie
-    elseif string.find(name, "Zombie") then
+    elseif string.find(name, "Zombie") and not string.find(name, "Elite") then
         return "normal"
     else
         return "unknown"
@@ -661,7 +679,7 @@ AutoBlockTab:CreateInput({
 
 AutoBlockTab:CreateParagraph({
     Title = "Enemy Delay Settings",
-    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack) | Reaper: 0.2s all three attacks | Blazing Slime: 0.2s single attack | Bomber: 0.5s delay then dash"
+    Content = "Normal Zombies: 0.5s both attacks | Deathaxe Skeletons: 0.85s (1st attack), 0.5s (2nd attack) | Elite Deathaxe: 0.85s (1st attack), 0.5s (2nd attack) | Elite Zombie: 0.3s (1st attack), 0.3s (2nd attack), 0.1s (3rd attack) | Skeleton Rogue: 0.15s (1st attack), 0.2s (2nd attack) | Elite Rogue Skeleton: 0.15s (1st attack), 0.2s (2nd attack) | Axe Skeleton: 0.2s (1st attack), 0.1s (2nd attack) | Delver Zombies: 0.4s (1st attack), 0.2s (2nd attack) | Reaper: 0.2s all three attacks | Blazing Slime: 0.2s single attack | Bomber: 0.5s delay then dash | Brute Zombie: 0.2s both attacks"
 })
 
 -- Initialize visuals if character exists
