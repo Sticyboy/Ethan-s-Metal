@@ -90,7 +90,7 @@ local enemyDelays = {
     elite_zombie = {
         ["84780561643826"] = 0.3,     -- First attack: 0.3s
         ["88906813164827"] = 0.3,     -- Second attack: 0.3s
-        ["113702274120842"] = 0.1     -- Third attack: 0.2s
+        ["113702274120842"] = 0.1     -- Third attack: 0.1s
     }
 }
 
@@ -101,7 +101,7 @@ local detectionRangeSq = detectionRange * detectionRange
 local facingCheckEnabled = true
 local customFacingDot = -0.3
 
--- Track enemy attack sequences
+-- Track enemy attack sequences (FIXED: For tracking Elite Zombie combos)
 local enemyAttackTracker = {}
 
 -- Visuals (on player only)
@@ -183,9 +183,67 @@ end
 local function getBlockDelay(enemy, soundId)
     local enemyType = getEnemyType(enemy)
     local enemyName = enemy.Name
-    local currentTime = tick()
+    local enemyId = tostring(enemy)  -- Get unique identifier for this enemy instance
     
-    -- Get the delay configuration for this enemy type
+    -- Special handling for Elite Zombie - track attack sequence
+    if enemyType == "elite_zombie" then
+        -- Initialize tracker for this enemy if not exists
+        if not enemyAttackTracker[enemyId] then
+            enemyAttackTracker[enemyId] = {
+                attackCount = 0,
+                lastAttackTime = 0,
+                lastSoundId = nil
+            }
+        end
+        
+        local tracker = enemyAttackTracker[enemyId]
+        local currentTime = tick()
+        
+        -- Reset attack count if too much time has passed (3 seconds)
+        if currentTime - tracker.lastAttackTime > 3 then
+            tracker.attackCount = 0
+        end
+        
+        -- Check if this is a new attack (same sound within 0.5 seconds doesn't count)
+        local isNewAttack = true
+        if soundId == tracker.lastSoundId and currentTime - tracker.lastAttackTime < 0.5 then
+            isNewAttack = false
+        end
+        
+        if isNewAttack then
+            tracker.attackCount = tracker.attackCount + 1
+            tracker.lastAttackTime = currentTime
+            tracker.lastSoundId = soundId
+            
+            -- Reset after 3 attacks (or if we exceed 3)
+            if tracker.attackCount > 3 then
+                tracker.attackCount = 1
+            end
+            
+            print("=== ELITE ZOMBIE ATTACK SEQUENCE ===")
+            print("Enemy: " .. enemyName)
+            print("Attack #" .. tracker.attackCount)
+            print("Sound: " .. soundId)
+        end
+        
+        -- Get delay based on attack number
+        local delayConfig = enemyDelays.elite_zombie
+        
+        if tracker.attackCount == 1 and soundId == "84780561643826" then
+            return delayConfig["84780561643826"] or 0.3  -- First attack
+        elseif tracker.attackCount == 2 and soundId == "88906813164827" then
+            return delayConfig["88906813164827"] or 0.3  -- Second attack
+        elseif tracker.attackCount == 3 and soundId == "113702274120842" then
+            return delayConfig["113702274120842"] or 0.1  -- Third attack
+        else
+            -- Fallback for other cases
+            local baseDelay = delayConfig[soundId] or 0.5
+            print("DEBUG: Using fallback delay: " .. baseDelay .. "s")
+            return baseDelay
+        end
+    end
+    
+    -- For non-Elite Zombie enemies, use normal logic
     local delayConfig = enemyDelays[enemyType] or enemyDelays.normal
     local baseDelay = delayConfig[soundId] or 0.5
     
@@ -408,6 +466,24 @@ end)
 lp.CharacterRemoving:Connect(function()
     removeFacingVisual()
     removeRangeVisual()
+end)
+
+-- Clean up enemy trackers when enemy is removed
+local function cleanupEnemyTracker(enemy)
+    if enemy then
+        local enemyId = tostring(enemy)
+        enemyAttackTracker[enemyId] = nil
+    end
+end
+
+-- Set up listener for enemy removal
+spawn(function()
+    local enemiesFolder = workspace:WaitForChild("Living")
+    if enemiesFolder then
+        enemiesFolder.ChildRemoved:Connect(function(enemy)
+            cleanupEnemyTracker(enemy)
+        end)
+    end
 end)
 
 -- Damage detection for StopBlock
