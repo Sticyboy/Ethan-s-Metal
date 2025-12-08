@@ -1379,9 +1379,24 @@ local AimbotToggle = AimbotTab:CreateToggle({
             startAimbot()
             createFOVCircle()
             FOVCircle.Visible = not NearestTargetMode -- Hide FOV circle in nearest target mode
+            
+            -- Build notification message based on settings
+            local message = "Aimbot enabled - Hold " .. getKeyName(AimbotKey)
+            if RequireHoldingTool then
+                message = message .. " while holding an item"
+                if not NearestTargetMode then
+                    message = message .. " AND mouse inside FOV circle"
+                end
+            else
+                if not NearestTargetMode then
+                    message = message .. " while mouse inside FOV circle"
+                end
+            end
+            message = message .. " to aim"
+            
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "Aimbot enabled - Hold " .. getKeyName(AimbotKey) .. " while " .. (RequireHoldingTool and "holding an item" .. (NearestTargetMode and "" : " AND mouse inside FOV circle") or (NearestTargetMode and "" : "mouse inside FOV circle")) .. " to aim",
+                Content = message,
                 Duration = 4,
                 Image = 4483362458
             })
@@ -1434,9 +1449,23 @@ local NearestTargetToggle = AimbotTab:CreateToggle({
         
         -- Update notification text
         if AimbotEnabled then
+            -- Build notification message based on settings
+            local message = "Aimbot updated - Hold " .. getKeyName(AimbotKey)
+            if RequireHoldingTool then
+                message = message .. " while holding an item"
+                if not NearestTargetMode then
+                    message = message .. " AND mouse inside FOV circle"
+                end
+            else
+                if not NearestTargetMode then
+                    message = message .. " while mouse inside FOV circle"
+                end
+            end
+            message = message .. " to aim"
+            
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "Aimbot updated - Hold " .. getKeyName(AimbotKey) .. " while " .. (RequireHoldingTool and "holding an item" .. (NearestTargetMode and "" : " AND mouse inside FOV circle") or (NearestTargetMode and "" : "mouse inside FOV circle")) .. " to aim",
+                Content = message,
                 Duration = 4,
                 Image = 4483362458
             })
@@ -1461,9 +1490,23 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
         
         -- Update notification text
         if AimbotEnabled then
+            -- Build notification message based on settings
+            local message = "Aimbot updated - Hold " .. getKeyName(AimbotKey)
+            if RequireHoldingTool then
+                message = message .. " while holding an item"
+                if not NearestTargetMode then
+                    message = message .. " AND mouse inside FOV circle"
+                end
+            else
+                if not NearestTargetMode then
+                    message = message .. " while mouse inside FOV circle"
+                end
+            end
+            message = message .. " to aim"
+            
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "Aimbot updated - Hold " .. getKeyName(AimbotKey) .. " while " .. (RequireHoldingTool and "holding an item" .. (NearestTargetMode and "" : " AND mouse inside FOV circle") or (NearestTargetMode and "" : "mouse inside FOV circle")) .. " to aim",
+                Content = message,
                 Duration = 4,
                 Image = 4483362458
             })
