@@ -44,7 +44,6 @@ local RequireHoldingTool = true -- NEW: Toggle for requiring tool holding
 
 -- NEW: Toggle for nearest target mode
 local NearestTargetMode = false
-local OriginalFOVCircleVisible = true
 
 -- Key binding variables
 local ListeningForKey = false
@@ -184,7 +183,7 @@ local function createFOVCircle()
     end
     
     local circle = Drawing.new("Circle")
-    circle.Visible = not NearestTargetMode -- Disable FOV circle when in nearest target mode
+    circle.Visible = true
     circle.Thickness = 2
     circle.Color = Color3.new(1, 1, 1)
     circle.Transparency = 1
@@ -749,12 +748,8 @@ local function processExistingNPCs()
     end
 end
 
--- FIXED: Check if mouse is inside FOV circle (only used when NOT in nearest target mode)
+-- FIXED: Check if mouse is inside FOV circle (same for both modes)
 local function isMouseInFOV()
-    if NearestTargetMode then
-        return true -- Always return true in nearest target mode
-    end
-    
     local mouseLocation = UserInputService:GetMouseLocation()
     local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     local distanceFromCenter = (mouseLocation - screenCenter).Magnitude
@@ -764,7 +759,7 @@ end
 -- FIXED: FOV check uses CENTER of screen for target distance (only used when NOT in nearest target mode)
 local function isTargetInFOV(targetPart)
     if NearestTargetMode then
-        return true -- Always return true in nearest target mode
+        return true -- In nearest target mode, consider all targets
     end
     
     if not targetPart then
@@ -1053,7 +1048,7 @@ local function aimAtTarget(targetPart)
     camera.CFrame = camera.CFrame:Lerp(lookAt, AimbotSmoothness)
 end
 
--- Fixed Aimbot loop - NOW CHECKS IF MOUSE IS IN FOV (only in FOV mode)
+-- Fixed Aimbot loop - BOTH MODES require mouse inside FOV circle
 local aimbotConnection
 local function startAimbot()
     if aimbotConnection then
@@ -1072,26 +1067,19 @@ local function startAimbot()
                 isAimbotKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
             end
             
-            -- FIXED: Only aim if:
-            -- 1. In nearest target mode: always aim when key is pressed (and holding item if required)
-            -- 2. In FOV mode: only aim when mouse is inside FOV circle AND (not requiring tool OR holding item)
+            -- Check conditions for aiming - BOTH MODES require mouse inside FOV
             local shouldAim = false
-            if NearestTargetMode then
-                shouldAim = true -- Always aim in nearest target mode (if key is pressed)
-            else
-                if RequireHoldingTool then
-                    shouldAim = isHoldingItem() and isMouseInFOV()
+            if isAimbotKeyPressed then
+                -- Check tool requirement
+                if RequireHoldingTool and not isHoldingItem() then
+                    shouldAim = false
                 else
+                    -- BOTH MODES require mouse to be inside FOV circle
                     shouldAim = isMouseInFOV()
                 end
             end
             
-            -- Additional check for tool requirement in nearest target mode
-            if NearestTargetMode and RequireHoldingTool then
-                shouldAim = shouldAim and isHoldingItem()
-            end
-            
-            if isAimbotKeyPressed and shouldAim then
+            if shouldAim then
                 if not isAiming then
                     -- Just started aiming - find initial target
                     local closestTarget, distance, closestCharacter = getClosestTargetToCursor()
@@ -1120,7 +1108,7 @@ local function startAimbot()
                     end
                 end
             else
-                -- Aimbot key not pressed, not holding item (if required), or mouse outside FOV (in FOV mode)
+                -- Not aiming conditions met
                 if isAiming then
                     -- Just stopped aiming
                     currentAimTarget = nil
@@ -1378,21 +1366,21 @@ local AimbotToggle = AimbotTab:CreateToggle({
         if Value then
             startAimbot()
             createFOVCircle()
-            FOVCircle.Visible = not NearestTargetMode -- Hide FOV circle in nearest target mode
+            FOVCircle.Visible = true -- Always show FOV circle
             
             -- Build notification message based on settings
             local message = "Aimbot enabled - Hold " .. getKeyName(AimbotKey)
             if RequireHoldingTool then
-                message = message .. " while holding an item"
-                if not NearestTargetMode then
-                    message = message .. " AND mouse inside FOV circle"
-                end
+                message = message .. " while holding an item AND mouse inside FOV circle to aim"
             else
-                if not NearestTargetMode then
-                    message = message .. " while mouse inside FOV circle"
-                end
+                message = message .. " while mouse inside FOV circle to aim"
             end
-            message = message .. " to aim"
+            
+            if NearestTargetMode then
+                message = message .. " (Nearest Target Mode)"
+            else
+                message = message .. " (FOV Mode)"
+            end
             
             Rayfield:Notify({
                 Title = "Aimbot",
@@ -1417,28 +1405,20 @@ local AimbotToggle = AimbotTab:CreateToggle({
 
 -- NEW: Nearest Target Mode Toggle
 local NearestTargetToggle = AimbotTab:CreateToggle({
-    Name = "Nearest Target Mode (Ignores FOV)",
+    Name = "Nearest Target Mode",
     CurrentValue = false,
     Flag = "NearestTargetToggle",
     Callback = function(Value)
         NearestTargetMode = Value
         
-        -- Store original FOV circle visibility
         if Value then
-            if FOVCircle then
-                OriginalFOVCircleVisible = FOVCircle.Visible
-                FOVCircle.Visible = false
-            end
             Rayfield:Notify({
                 Title = "Aimbot Mode",
-                Content = "Switched to Nearest Target Mode - Targets closest entity to you (ignores FOV)",
+                Content = "Switched to Nearest Target Mode - Targets closest entity to you (still requires mouse inside FOV)",
                 Duration = 4,
                 Image = 4483362458
             })
         else
-            if FOVCircle then
-                FOVCircle.Visible = OriginalFOVCircleVisible
-            end
             Rayfield:Notify({
                 Title = "Aimbot Mode",
                 Content = "Switched to FOV Mode - Targets closest to cursor within FOV circle",
@@ -1452,16 +1432,16 @@ local NearestTargetToggle = AimbotTab:CreateToggle({
             -- Build notification message based on settings
             local message = "Aimbot updated - Hold " .. getKeyName(AimbotKey)
             if RequireHoldingTool then
-                message = message .. " while holding an item"
-                if not NearestTargetMode then
-                    message = message .. " AND mouse inside FOV circle"
-                end
+                message = message .. " while holding an item AND mouse inside FOV circle to aim"
             else
-                if not NearestTargetMode then
-                    message = message .. " while mouse inside FOV circle"
-                end
+                message = message .. " while mouse inside FOV circle to aim"
             end
-            message = message .. " to aim"
+            
+            if NearestTargetMode then
+                message = message .. " (Nearest Target Mode)"
+            else
+                message = message .. " (FOV Mode)"
+            end
             
             Rayfield:Notify({
                 Title = "Aimbot",
@@ -1493,16 +1473,16 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
             -- Build notification message based on settings
             local message = "Aimbot updated - Hold " .. getKeyName(AimbotKey)
             if RequireHoldingTool then
-                message = message .. " while holding an item"
-                if not NearestTargetMode then
-                    message = message .. " AND mouse inside FOV circle"
-                end
+                message = message .. " while holding an item AND mouse inside FOV circle to aim"
             else
-                if not NearestTargetMode then
-                    message = message .. " while mouse inside FOV circle"
-                end
+                message = message .. " while mouse inside FOV circle to aim"
             end
-            message = message .. " to aim"
+            
+            if NearestTargetMode then
+                message = message .. " (Nearest Target Mode)"
+            else
+                message = message .. " (FOV Mode)"
+            end
             
             Rayfield:Notify({
                 Title = "Aimbot",
@@ -1584,10 +1564,7 @@ local FOVCircleToggle = AimbotTab:CreateToggle({
     Flag = "FOVCircleToggle",
     Callback = function(Value)
         if FOVCircle then
-            if not NearestTargetMode then
-                FOVCircle.Visible = Value
-            end
-            OriginalFOVCircleVisible = Value
+            FOVCircle.Visible = Value
         end
         local message = Value and "FOV circle shown" or "FOV circle hidden"
         Rayfield:Notify({
@@ -2074,7 +2051,10 @@ createSafeZonePlatform()
 
 print("Player & NPC Highlighter with Aimbot and Safe Zone Loaded!")
 print("NPC targeting: Now targets NPCs in workspace.Models folder")
-print("Nearest Target Mode: When enabled, targets the closest entity to you (ignores FOV)")
+print("Aimbot Modes:")
+print("  - FOV Mode: Targets closest enemy within FOV circle")
+print("  - Nearest Target Mode: Targets closest enemy to you (anywhere)")
+print("  - Both modes require mouse inside FOV circle to aim")
 
 loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
 
