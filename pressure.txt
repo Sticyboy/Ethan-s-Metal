@@ -1,0 +1,695 @@
+-- Services
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Game Info
+local placeId = game.PlaceId
+
+-- Player
+local player = Players.LocalPlayer
+local rooms = game.Workspace.GameplayFolder.Rooms
+local monstersFolder = game.Workspace.GameplayFolder.Monsters
+
+-- ====== NIGHT VISION SETTINGS ======
+local NIGHT_VISION_DURATION = 30
+local STATIC_WARNING_TIME = 8  -- Radio static starts 8 seconds before end
+local RESET_WINDOW_TIME = 10  -- Time NV must stay off to reset timer
+
+-- ====== AUTO-FIX SETTINGS ======
+local AutoFixEnabled = false
+
+-- ====== FEATURE FLAGS ======
+local ENABLE_INFINITE_STAMINA = (placeId == 12552511828) -- Heartburn
+local ENABLE_ENTITY_NOTIFY = (placeId == 12552538292) -- Hadal Blacksite
+local ENABLE_PASSWORD_NOTIFY = (placeId == 12552538292) -- Hadal Blacksite
+local ENABLE_GENERATOR_AUTO_FIX = (placeId == 12552538292) -- Hadal Blacksite
+
+-- ====== ENTITY TRACKING ======
+local npcNames = {
+    "Angler",
+    "Pinkie", 
+    "Froger",
+    "Chainsmoker",
+    "Blitz",
+    "A60",
+    "Pandemonium"
+}
+
+local notifiedNPCs = {}
+
+-- Night Vision State
+local nightVisionEnabled = false
+local canUseNightVision = true
+local timeElapsed = 0
+local regenerationTimer = 0
+local isRegenerating = false
+local staticSoundPlaying = false
+local resetWindowTimer = 0
+local isInResetWindow = false
+local ranOutOfPower = false  -- NEW: Track if NV ran out of power
+
+-- Store original lighting
+local originalValues = {
+    Ambient = Lighting.Ambient,
+    FogStart = Lighting.FogStart,
+    FogEnd = Lighting.FogEnd,
+    FogColor = Lighting.FogColor,
+    Brightness = Lighting.Brightness
+}
+
+-- ====== NIGHT VISION UI ======
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "NightVisionOverlay"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
+screenGui.IgnoreGuiInset = true
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(1, 0, 1, 0)
+frame.Position = UDim2.new(0, 0, 0, 0)
+frame.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+frame.BackgroundTransparency = 0.85
+frame.BorderSizePixel = 0
+frame.Visible = false
+frame.Parent = screenGui
+
+-- ====== SOUNDS ======
+local function loadSound(id, volume)
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://" .. tostring(id)
+    sound.Volume = volume or 3.0
+    sound.Parent = workspace
+    return sound
+end
+
+-- Night Vision Sounds
+local nightVisionSound = loadSound("376178316", 3.0)
+local powerDownSound = loadSound("97552743371959", 3.0)
+local outOfPowerSound = loadSound("17871250897", 3.0)
+local radioStaticSound = loadSound("4860560167", 3.0)  -- Radio Static Sound (8 seconds before end)
+local menuErrorSound = loadSound("3779045779", 3.0)
+local radioBeepSound = loadSound("2734269544", 3.0)  -- Radio beep sound (used for regeneration end AND timer reset)
+
+-- NPC Notification Settings
+local npcSettings = {
+    Angler = {
+        color = Color3.fromRGB(0, 162, 255),
+        icon = "rbxassetid://4464953299",
+        sound = "rbxassetid://3570577957"
+    },
+    Pinkie = {
+        color = Color3.fromRGB(255, 105, 180),
+        icon = "rbxassetid://4464953299"
+    },
+    Froger = {
+        color = Color3.fromRGB(0, 255, 0),
+        icon = "rbxassetid://4464953299"
+    },
+    Chainsmoker = {
+        color = Color3.fromRGB(128, 128, 128),
+        icon = "rbxassetid://4464953299"
+    },
+    Blitz = {
+        color = Color3.fromRGB(255, 255, 0),
+        icon = "rbxassetid://4464953299"
+    },
+    A60 = {
+        color = Color3.fromRGB(255, 0, 0),
+        icon = "rbxassetid://4464953299"
+    },
+    Pandemonium = {
+        color = Color3.fromRGB(148, 0, 211),
+        icon = "rbxassetid://4464953299"
+    }
+}
+
+-- ====== NIGHT VISION FUNCTIONS ======
+local function stopAllSounds()
+    if radioStaticSound.IsPlaying then
+        radioStaticSound:Stop()
+    end
+    if nightVisionSound.IsPlaying then
+        nightVisionSound:Stop()
+    end
+    if outOfPowerSound.IsPlaying then
+        outOfPowerSound:Stop()
+    end
+end
+
+local function stopAndCleanupStatic()
+    if staticSoundPlaying and radioStaticSound.IsPlaying then
+        radioStaticSound:Stop()
+        staticSoundPlaying = false
+    end
+end
+
+local function turnOffNightVisionVisuals()
+    frame.Visible = false
+    for property, value in pairs(originalValues) do
+        Lighting[property] = value
+    end
+end
+
+local function turnOnNightVisionVisuals()
+    frame.Visible = true
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    Lighting.FogStart = 100000
+    Lighting.FogEnd = 100000
+    Lighting.Brightness = 2
+end
+
+local function startResetWindow()
+    isInResetWindow = true
+    resetWindowTimer = RESET_WINDOW_TIME
+end
+
+local function resetNightVisionTimer()
+    timeElapsed = 0
+    staticSoundPlaying = false
+    ranOutOfPower = false  -- Reset this flag too
+    
+    -- Stop any playing sounds before playing radio beep
+    if radioStaticSound.IsPlaying then
+        radioStaticSound:Stop()
+    end
+    
+    -- Play radio beep sound when timer resets
+    radioBeepSound:Play()
+end
+
+local function enableNightVision()
+    if nightVisionEnabled then
+        -- Already on, do nothing
+        return
+    end
+    
+    nightVisionEnabled = true
+    
+    -- If we're in reset window, stop the reset window
+    if isInResetWindow then
+        isInResetWindow = false
+        resetWindowTimer = 0
+    end
+    
+    -- Stop regeneration if it was happening
+    if isRegenerating then
+        isRegenerating = false
+    end
+    
+    -- Reset the "ran out of power" flag when we successfully turn it on
+    ranOutOfPower = false
+    
+    -- Reset static sound state if we're not near the end
+    if timeElapsed < (NIGHT_VISION_DURATION - STATIC_WARNING_TIME) then
+        staticSoundPlaying = false
+    end
+    
+    -- Stop all sounds except we'll play the night vision sound
+    stopAllSounds()
+    nightVisionSound:Play()
+    turnOnNightVisionVisuals()
+end
+
+local function formatOneDecimal(number)
+    -- Format number to one decimal place
+    return math.floor(number * 10 + 0.5) / 10
+end
+
+local function calculateRegenerationTime(usedTime)
+    -- Calculate regeneration time based on used time divided by 2, with one decimal place
+    -- EXCEPTION: If used all 30 seconds, punishment is 20 seconds instead of 15
+    if usedTime >= NIGHT_VISION_DURATION then
+        return 20.0  -- Punishment for using all 30 seconds (30/2 = 15, but punishment makes it 20)
+    end
+    
+    local calculatedRegeneration = usedTime / 2
+    
+    -- Ensure minimum regeneration of 0.5 second if any time was used
+    if calculatedRegeneration < 0.5 and usedTime > 0 then
+        calculatedRegeneration = 0.5
+    end
+    
+    -- Format to one decimal place
+    return formatOneDecimal(calculatedRegeneration)
+end
+
+local function disableNightVision(ranOut)
+    if not nightVisionEnabled then return end
+    
+    nightVisionEnabled = false
+    
+    stopAndCleanupStatic()
+    turnOffNightVisionVisuals()
+    
+    if ranOut then
+        outOfPowerSound:Play()
+        ranOutOfPower = true  -- Set flag that it ran out of power
+        
+        -- Calculate regeneration time based on used time (30 seconds used when it runs out)
+        local usedTime = NIGHT_VISION_DURATION
+        regenerationTimer = calculateRegenerationTime(usedTime)
+        isRegenerating = true
+    else
+        powerDownSound:Play()
+        ranOutOfPower = false  -- Not ran out, manually turned off
+        
+        -- Calculate regeneration time based on actual used time
+        local usedTime = timeElapsed
+        
+        if usedTime > 0 then
+            -- Manual turn off with some time used - calculate regeneration time
+            regenerationTimer = calculateRegenerationTime(usedTime)
+            isRegenerating = true
+        else
+            -- Turned off immediately - no regeneration needed
+            isRegenerating = false
+            startResetWindow()  -- Start reset window when manually turned off immediately
+        end
+    end
+end
+
+local function playRegenerationEndSound()
+    radioBeepSound:Play()
+end
+
+-- ====== INFINITE STAMINA FUNCTION ======
+local function setupInfiniteStamina()
+    if not ENABLE_INFINITE_STAMINA then return end
+    
+    local function applyInfiniteStamina()
+        local mainClient = player.PlayerGui:WaitForChild("Main"):WaitForChild("Client"):WaitForChild("MainClient"):WaitForChild("Sprinting")
+        if mainClient then
+            local success, sprintingModule = pcall(require, mainClient)
+            if success and sprintingModule then
+                local function changeStaminaValues(newMaxStamina, newStamina)
+                    sprintingModule.MaxStamina = newMaxStamina
+                    sprintingModule.Stamina = newStamina
+                    if sprintingModule.ChangeStamina then
+                        sprintingModule.ChangeStamina(newStamina)
+                    end
+                end
+                changeStaminaValues(math.huge, math.huge)
+            end
+        end
+    end
+    
+    -- Try to apply immediately
+    task.spawn(applyInfiniteStamina)
+    
+    -- Also apply when player respawns
+    player.CharacterAdded:Connect(function()
+        task.wait(1) -- Wait for GUI to load
+        applyInfiniteStamina()
+    end)
+end
+
+-- ====== ENTITY NOTIFICATION FUNCTIONS ======
+local function notifyEntity(entityName)
+    if not ENABLE_ENTITY_NOTIFY then return end
+    
+    local settings = npcSettings[entityName] or {}
+    
+    local emojiPrefix = "⚠️"
+    if entityName == "Angler" then emojiPrefix = "🎣"
+    elseif entityName == "Pinkie" then emojiPrefix = "💖"
+    elseif entityName == "Froger" then emojiPrefix = "🐸"
+    elseif entityName == "Chainsmoker" then emojiPrefix = "🚬"
+    elseif entityName == "Blitz" then emojiPrefix = "⚡"
+    elseif entityName == "A60" then emojiPrefix = "🔴"
+    elseif entityName == "Pandemonium" then emojiPrefix = "💢"
+    end
+    
+    StarterGui:SetCore("SendNotification", {
+        Title = emojiPrefix .. " " .. entityName .. " Detected!",
+        Text = "An " .. entityName .. " has appeared in the workspace!",
+        Icon = settings.icon or "rbxassetid://4464953299",
+        Duration = 6,
+        Button1 = "Acknowledge"
+    })
+end
+
+-- ====== PASSWORD NOTIFICATION FUNCTIONS ======
+local function notifyPassword(password)
+    if not ENABLE_PASSWORD_NOTIFY then return end
+    
+    if password then
+        StarterGui:SetCore("SendNotification", {
+            Title = "📄 Password Found!",
+            Text = "The Password Is: " .. password,
+            Duration = 10,
+            Icon = "rbxassetid://4464953299",
+            Button1 = "Copy"
+        })
+    end
+end
+
+-- ====== GENERATOR AUTO-FIX FUNCTIONS ======
+local function getGeneratorPosition(obj)
+    if obj.PrimaryPart then
+        return obj.PrimaryPart.Position
+    end
+
+    local rootPart = obj:FindFirstChild("Root") or obj:FindFirstChild("Base")
+    if rootPart and rootPart:IsA("BasePart") then
+        return rootPart.Position
+    end
+
+    local parts = {}
+    for _, part in pairs(obj:GetDescendants()) do
+        if part:IsA("BasePart") then
+            table.insert(parts, part)
+        end
+    end
+
+    if #parts == 0 then
+        return nil
+    end
+
+    local totalPosition = Vector3.new(0, 0, 0)
+    for _, part in pairs(parts) do
+        totalPosition = totalPosition + part.Position
+    end
+    return totalPosition / #parts
+end
+
+local function fixGenerator(obj)
+    if not ENABLE_GENERATOR_AUTO_FIX then return end
+    
+    pcall(function()
+        local generatorPosition = getGeneratorPosition(obj)
+        if not generatorPosition then
+            return
+        end
+
+        local character = player.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if not rootPart then
+            return
+        end
+
+        local distance = (rootPart.Position - generatorPosition).Magnitude
+
+        if distance > 10 then
+            return
+        end
+
+        if obj:FindFirstChild("RemoteFunction") then
+            obj.RemoteFunction:InvokeServer()
+        end
+
+        if obj:FindFirstChild("RemoteEvent") then
+            for i = 1, 30 do
+                obj.RemoteEvent:FireServer(true)
+                task.wait(0.05)
+            end
+        end
+    end)
+end
+
+-- ====== EVENT HANDLERS ======
+
+-- Night Vision Input (ALWAYS LOADED)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.Y then
+        if nightVisionEnabled then
+            -- Turn off if currently on
+            disableNightVision(false)
+        else
+            -- Check if we just ran out of power
+            if ranOutOfPower and isRegenerating then
+                -- If we RAN OUT OF POWER (not manually turned off), play error sound
+                menuErrorSound:Play()
+                return
+            else
+                -- Can turn on (either manually turned off or regeneration completed)
+                enableNightVision()
+            end
+        end
+    end
+end)
+
+-- Entity Monitoring (Only for Hadal Blacksite)
+if ENABLE_ENTITY_NOTIFY then
+    workspace.ChildAdded:Connect(function(child)
+        -- Check for NPC names
+        for _, npcName in ipairs(npcNames) do
+            if child.Name == npcName and not notifiedNPCs[npcName] then
+                notifyEntity(npcName)
+                notifiedNPCs[npcName] = true
+                
+                local function trackRemoval()
+                    notifiedNPCs[npcName] = false
+                end
+                
+                child.AncestryChanged:Connect(function()
+                    if not child:IsDescendantOf(workspace) then
+                        trackRemoval()
+                    end
+                end)
+                
+                child.Destroying:Connect(trackRemoval)
+            end
+        end
+    end)
+
+    workspace.DescendantAdded:Connect(function(descendant)
+        -- Check for NPC names
+        for _, npcName in ipairs(npcNames) do
+            if descendant.Name == npcName and not notifiedNPCs[npcName] then
+                notifyEntity(npcName)
+                notifiedNPCs[npcName] = true
+                
+                local function trackRemoval()
+                    notifiedNPCs[npcName] = false
+                end
+                
+                descendant.AncestryChanged:Connect(function()
+                    if not descendant:IsDescendantOf(workspace) then
+                        trackRemoval()
+                    end
+                end)
+                
+                descendant.Destroying:Connect(trackRemoval)
+            end
+        end
+    end)
+end
+
+-- Password Monitoring (Only for Hadal Blacksite)
+local passwordConns = {}
+
+local function startPasswordMonitoring()
+    if not ENABLE_PASSWORD_NOTIFY then return end
+    
+    -- Scan existing password papers
+    for _, room in pairs(rooms:GetChildren()) do
+        for _, obj in pairs(room:GetChildren()) do
+            local spawnLocations = obj:FindFirstChild("SpawnLocations")
+            if spawnLocations then
+                for _, spawn in pairs(spawnLocations:GetChildren()) do
+                    local passwordPaper = spawn:FindFirstChild("PasswordPaper")
+                    if passwordPaper then
+                        local code = passwordPaper:FindFirstChild("Code")
+                        if code then
+                            local surfaceGui = code:FindFirstChild("SurfaceGui")
+                            if surfaceGui then
+                                local textLabel = surfaceGui:FindFirstChild("TextLabel")
+                                if textLabel and textLabel.ContentText then
+                                    notifyPassword(textLabel.ContentText)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Monitor for new password papers
+    table.insert(passwordConns, rooms.DescendantAdded:Connect(function(child)
+        if child.Name == "PasswordPaper" then
+            task.wait(0.1) -- Wait for properties to load
+            local code = child:FindFirstChild("Code")
+            if code then
+                local surfaceGui = code:FindFirstChild("SurfaceGui")
+                if surfaceGui then
+                    local textLabel = surfaceGui:FindFirstChild("TextLabel")
+                    if textLabel and textLabel.ContentText then
+                        notifyPassword(textLabel.ContentText)
+                    end
+                end
+            end
+        end
+    end))
+end
+
+local function stopPasswordMonitoring()
+    for _, conn in pairs(passwordConns) do
+        conn:Disconnect()
+    end
+    passwordConns = {}
+end
+
+-- ====== MAIN LOOPS ======
+
+-- Night Vision Timer Loop (ALWAYS LOADED)
+local nightVisionHeartbeat
+local regenerationEndSoundPlayed = false
+
+nightVisionHeartbeat = RunService.Heartbeat:Connect(function(deltaTime)
+    -- Main timer (only when NV is ON)
+    if nightVisionEnabled then
+        timeElapsed = timeElapsed + deltaTime
+        
+        -- Start radio static warning (8 seconds before end)
+        if timeElapsed >= (NIGHT_VISION_DURATION - STATIC_WARNING_TIME) and not staticSoundPlaying then
+            staticSoundPlaying = true
+            radioStaticSound:Play()
+        end
+        
+        -- Ran out of power
+        if timeElapsed >= NIGHT_VISION_DURATION then
+            disableNightVision(true)
+        end
+    end
+    
+    -- Reset window timer (when NV is OFF but not regenerating)
+    if isInResetWindow then
+        resetWindowTimer = resetWindowTimer - deltaTime
+        
+        if resetWindowTimer <= 0 then
+            -- Timer reset window completed
+            isInResetWindow = false
+            resetNightVisionTimer()  -- This plays the radio beep sound
+        end
+    end
+    
+    -- Regeneration timer (waits for night vision to recharge) - only when NV is OFF
+    if isRegenerating and not nightVisionEnabled then
+        regenerationTimer = regenerationTimer - deltaTime
+        
+        if regenerationTimer <= 0 and not regenerationEndSoundPlayed then
+            isRegenerating = false
+            regenerationEndSoundPlayed = true
+            playRegenerationEndSound()
+            
+            -- CRITICAL FIX: Reset the night vision timer to 0 when regeneration completes
+            timeElapsed = 0
+        end
+        
+        if regenerationTimer > 0 then
+            regenerationEndSoundPlayed = false
+        end
+    end
+end)
+
+-- Generator Auto-Fix Loop (Only for Hadal Blacksite)
+local generatorLoop
+if ENABLE_GENERATOR_AUTO_FIX then
+    AutoFixEnabled = true
+    generatorLoop = task.spawn(function()
+        while AutoFixEnabled do
+            local character = player.Character
+            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                for _, room in pairs(rooms:GetChildren()) do
+                    if room.Name == "SearchlightsTramStart" or room.Name == "SearchlightsEncounter" or room.Name == "SearchlightsEnding" or room.Name == "SearchlightsEndingP" then
+                        local interactables = room:FindFirstChild("Interactables")
+                        if interactables then
+                            for _, obj in pairs(interactables:GetChildren()) do
+                                if obj.Name == "PresetGenerator" or obj.Name == "Generator" then
+                                    fixGenerator(obj)
+                                    task.wait(0.05)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            task.wait(0.05)
+        end
+    end)
+end
+
+-- ====== INITIALIZATION ======
+
+-- Setup features based on place ID
+
+-- ALWAYS LOAD Night Vision
+
+-- Load Infinite Stamina for Heartburn (12552511828)
+if ENABLE_INFINITE_STAMINA then
+    setupInfiniteStamina()
+end
+
+-- Load Entity Notify for Hadal Blacksite (12552538292)
+if ENABLE_ENTITY_NOTIFY then
+    -- Initial NPC check
+    for _, npcName in ipairs(npcNames) do
+        local npc = workspace:FindFirstChild(npcName, true)
+        if npc then
+            notifyEntity(npcName)
+            notifiedNPCs[npcName] = true
+        end
+    end
+end
+
+-- Load Password Notify for Hadal Blacksite (12552538292)
+if ENABLE_PASSWORD_NOTIFY then
+    startPasswordMonitoring()
+end
+
+-- Load Generator Auto-Fix for Hadal Blacksite (12552538292)
+if ENABLE_GENERATOR_AUTO_FIX then
+    -- Already started above
+end
+
+-- ====== CLEANUP ======
+local function cleanup()
+    if nightVisionHeartbeat then
+        nightVisionHeartbeat:Disconnect()
+    end
+    
+    if generatorLoop then
+        task.cancel(generatorLoop)
+    end
+    
+    if nightVisionEnabled then
+        disableNightVision(false)
+    end
+    
+    stopAllSounds()
+    stopPasswordMonitoring()
+    
+    if screenGui then
+        screenGui:Destroy()
+    end
+    
+    for _, sound in pairs({nightVisionSound, powerDownSound, outOfPowerSound, radioStaticSound, menuErrorSound, radioBeepSound}) do
+        if sound then
+            sound:Destroy()
+        end
+    end
+    
+    AutoFixEnabled = false
+end
+
+-- Auto cleanup on character change
+player.CharacterAdded:Connect(function()
+    if nightVisionEnabled then
+        disableNightVision(false)
+    end
+end)
+
+-- ====== FINAL MESSAGE ======
+print("Goodluck. This will still be hard.")
+
+-- Return cleanup function for executors
+return cleanup
