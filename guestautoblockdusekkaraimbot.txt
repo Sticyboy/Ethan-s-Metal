@@ -1,10 +1,3 @@
--- ===== AUTO BLOCK HUB - SIMPLE VERSION =====
--- FIXED: Better error handling and folder detection
--- UPDATED: Added new sound IDs and Guest 1337 animation detection
--- ADDED: Dusekkar Silent Aim (FIXED - No goto statements)
--- CLEANED: Only essential notifications remain
-
--- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -118,6 +111,9 @@ local autoBlockTriggerSounds = {
     ["132596270805754"] = true,
     ["83851356262523"] = true,
     ["111910850942168"] = true,
+    -- New Guest1337 auto block sounds
+    ["136728245733659"] = true,
+    ["94317217837143"] = true,
 }
 
 -- ===== STATE VARIABLES =====
@@ -125,6 +121,7 @@ local autoBlockForGuest = false
 local ragingPaceAutoParry = false
 local error404AutoParry = false
 local ragingPaceAutoPunish = false
+local onexOnexOnexOneAutoPunish = false
 local doubleblocktech = false
 local blockdelay = 0
 local detectionRange = 18
@@ -185,6 +182,22 @@ local KILLER_CONFIGS = {
             end
         end,
         abilityName = "404Error"
+    },
+    ["1x1x1x1"] = {
+        abilityRemote = function()
+            if testRemote then
+                local args = {
+                    "UseActorAbility",
+                    {
+                        buffer.fromstring("\003\r\000\000\000MassInfection")
+                    }
+                }
+                local success, err = pcall(function()
+                    testRemote:FireServer(unpack(args))
+                end)
+            end
+        end,
+        abilityName = "MassInfection"
     }
 }
 
@@ -504,7 +517,7 @@ local function getNearestKiller()
     return nearestKiller
 end
 
--- Function to use silent aim on target (FIXED)
+-- Function to use silent aim on target
 local function useSilentAim()
     if not dusekkarEnabled then
         return false
@@ -628,7 +641,7 @@ end
 local function getAllCharactersByName(name)
     local characters = {}
     
-    if name == "Shedletsky" or name == "Guest1337" then
+    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 if survivor.Name == name then
@@ -636,7 +649,7 @@ local function getAllCharactersByName(name)
                 end
             end
         end
-    elseif name == "Slasher" or name == "JohnDoe" then
+    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" then
         if KillersFolder then
             for _, killer in ipairs(KillersFolder:GetChildren()) do
                 if killer.Name == name then
@@ -672,14 +685,25 @@ local function checkSpecialKillerAutoParry()
     
     -- Table of sound IDs that trigger special killer abilities
     local triggerSoundIds = {
-        ["12222225"] = true,  -- Original sound ID (rbxassetid://12222225)
-        ["132596270805754"] = true,  -- New sound ID 1
-        ["83851356262523"] = true,   -- New sound ID 2
-        ["111910850942168"] = true,  -- New sound ID 3
+        -- Shedletsky sounds
+        ["12222225"] = true,
+        ["132596270805754"] = true,
+        ["83851356262523"] = true,
+        ["111910850942168"] = true,
+        -- TwoTime sounds
+        ["99820161736138"] = true,
+        ["86710781315432"] = true,
+        -- Chance sounds
+        ["201858045"] = true,
+        ["2920960"] = true,
+        ["139012439429121"] = true,
+        ["80188965454763"] = true,
     }
     
-    -- Slasher Auto Parry (sounds from ALL Shedletsky)
-    if currentKillerType == "Slasher" and ragingPaceAutoParry then
+    -- Check Shedletsky sounds (uses detectionRange)
+    if (currentKillerType == "Slasher" and ragingPaceAutoParry) or 
+       (currentKillerType == "JohnDoe" and error404AutoParry) then
+        
         local allShedletskies = getAllCharactersByName("Shedletsky")
         
         for _, shedletsky in ipairs(allShedletskies) do
@@ -690,7 +714,7 @@ local function checkSpecialKillerAutoParry()
                     for _, sound in ipairs(shedletsky:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
-                            if soundId and triggerSoundIds[soundId] then  -- Check against all trigger sounds
+                            if soundId and triggerSoundIds[soundId] then
                                 shouldUseAbility = true
                                 break
                             end
@@ -702,19 +726,23 @@ local function checkSpecialKillerAutoParry()
         end
     end
     
-    -- JohnDoe Auto Parry (sounds from ALL Shedletsky)
-    if currentKillerType == "JohnDoe" and error404AutoParry then
-        local allShedletskies = getAllCharactersByName("Shedletsky")
+    -- Check TwoTime sounds (FIXED 30 range - COMPLETELY SEPARATE from detectionRange)
+    if not shouldUseAbility and 
+       ((currentKillerType == "Slasher" and ragingPaceAutoParry) or 
+        (currentKillerType == "JohnDoe" and error404AutoParry)) then
         
-        for _, shedletsky in ipairs(allShedletskies) do
-            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
-            if shedletskyHrp then
-                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
-                if distance <= detectionRange then
-                    for _, sound in ipairs(shedletsky:GetDescendants()) do
+        local allTwoTimes = getAllCharactersByName("TwoTime")
+        
+        for _, twotime in ipairs(allTwoTimes) do
+            local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
+            if twotimeHrp then
+                -- USING FIXED 30, NOT detectionRange
+                local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 30 then
+                    for _, sound in ipairs(twotime:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
-                            if soundId and triggerSoundIds[soundId] then  -- Check against all trigger sounds
+                            if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
                                 shouldUseAbility = true
                                 break
                             end
@@ -726,8 +754,39 @@ local function checkSpecialKillerAutoParry()
         end
     end
     
-    -- Slasher Auto Punish (animations from ALL Guest1337)
-    if currentKillerType == "Slasher" and ragingPaceAutoPunish then
+    -- Check Chance sounds (FIXED 90 range - COMPLETELY SEPARATE from detectionRange)
+    if not shouldUseAbility and 
+       ((currentKillerType == "Slasher" and ragingPaceAutoParry) or 
+        (currentKillerType == "JohnDoe" and error404AutoParry)) then
+        
+        local allChances = getAllCharactersByName("Chance")
+        
+        for _, chance in ipairs(allChances) do
+            local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
+            if chanceHrp then
+                -- USING FIXED 90, NOT detectionRange
+                local distance = (chanceHrp.Position - myRoot.Position).Magnitude
+                if distance <= 90 then
+                    for _, sound in ipairs(chance:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and (soundId == "201858045" or 
+                                          soundId == "2920960" or 
+                                          soundId == "139012439429121" or 
+                                          soundId == "80188965454763") then
+                                shouldUseAbility = true
+                                break
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    -- Slasher Auto Punish (animations from Guest1337) - uses detectionRange
+    if not shouldUseAbility and currentKillerType == "Slasher" and ragingPaceAutoPunish then
         local allGuest1337s = getAllCharactersByName("Guest1337")
         
         for _, guest1337 in ipairs(allGuest1337s) do
@@ -747,11 +806,50 @@ local function checkSpecialKillerAutoParry()
                                         ["82036084568393"] = true,
                                         ["120748030255574"] = true,
                                         ["72722244508749"] = true,
-                                        -- Newly added Guest 1337 animation ID
                                         ["140671644163156"] = true,
+                                        ["100926346851492"] = true,
                                     }
                                     
                                     if slasherAnims[id] then
+                                        shouldUseAbility = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    -- 1x1x1x1 Auto Punish (animations from Guest1337) - uses detectionRange
+    if not shouldUseAbility and currentKillerType == "1x1x1x1" and onexOnexOnexOneAutoPunish then
+        local allGuest1337s = getAllCharactersByName("Guest1337")
+        
+        for _, guest1337 in ipairs(allGuest1337s) do
+            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
+            if guest1337Hrp then
+                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local id = tostring(track.Animation.AnimationId):match("%d+")
+                                if id then
+                                    local guest1337BlockAnims = {
+                                        ["95802026624883"] = true,
+                                        ["82036084568393"] = true,
+                                        ["120748030255574"] = true,
+                                        ["72722244508749"] = true,
+                                        ["140671644163156"] = true,
+                                        ["100926346851492"] = true,
+                                    }
+                                    
+                                    if guest1337BlockAnims[id] then
                                         shouldUseAbility = true
                                         break
                                     end
@@ -797,6 +895,7 @@ local function checkSpecialKillerStatus()
     
     local allSlashers = getAllCharactersByName("Slasher")
     local allJohnDoes = getAllCharactersByName("JohnDoe")
+    local allOnexOnexOnexOnes = getAllCharactersByName("1x1x1x1")
     
     for _, slasher in ipairs(allSlashers) do
         local usernameAttr = slasher:GetAttribute("Username")
@@ -817,6 +916,19 @@ local function checkSpecialKillerStatus()
             if not isPlayingAsSpecialKiller or currentKillerType ~= "JohnDoe" then
                 isPlayingAsSpecialKiller = true
                 currentKillerType = "JohnDoe"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, onexone in ipairs(allOnexOnexOnexOnes) do
+        local usernameAttr = onexone:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "1x1x1x1" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "1x1x1x1"
                 originalFacingCheckState = facingCheckEnabled
                 facingCheckEnabled = false
             end
@@ -938,23 +1050,44 @@ local function updateDetectionRangeVisuals()
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
     
+    -- If playing as special killer, show circles on survivors with appropriate ranges
     if isPlayingAsSpecialKiller and currentKillerType then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 local survivorHrp = survivor:FindFirstChild("HumanoidRootPart")
                 if survivorHrp and not survivorHrp:FindFirstChild("DetectionCircle") then
+                    
+                    -- Determine the correct range based on survivor type
+                    local visualRange = detectionRange -- Default to slider value
+                    local circleColor = Color3.fromRGB(255, 255, 0) -- Default yellow
+                    
+                    if survivor.Name == "Chance" then
+                        visualRange = 90
+                        circleColor = Color3.fromRGB(255, 0, 255) -- Purple for Chance
+                    elseif survivor.Name == "TwoTime" then
+                        visualRange = 30
+                        circleColor = Color3.fromRGB(0, 255, 255) -- Cyan for TwoTime
+                    elseif survivor.Name == "Shedletsky" then
+                        visualRange = detectionRange -- Uses slider
+                        circleColor = Color3.fromRGB(0, 255, 0) -- Green for Shedletsky
+                    elseif survivor.Name == "Guest1337" then
+                        visualRange = detectionRange -- Uses slider
+                        circleColor = Color3.fromRGB(255, 165, 0) -- Orange for Guest1337
+                    end
+                    
                     local distance = (survivorHrp.Position - myRoot.Position).Magnitude
-                    local inRange = distance <= detectionRange
+                    local inRange = distance <= visualRange
                     
                     pcall(function()
                         local circle = Instance.new("CylinderHandleAdornment")
                         circle.Name = "DetectionCircle"
                         circle.Adornee = survivorHrp
-                        circle.Color3 = inRange and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 0)
+                        -- Change color based on in-range status
+                        circle.Color3 = inRange and circleColor or Color3.fromRGB(128, 128, 128) -- Gray if out of range
                         circle.AlwaysOnTop = true
                         circle.ZIndex = 1
                         circle.Transparency = 0.6
-                        circle.Radius = detectionRange
+                        circle.Radius = visualRange -- Use the specific range for this survivor
                         circle.Height = 0.12
                         
                         local yOffset = -(survivorHrp.Size.Y / 2 + 0.05)
@@ -967,6 +1100,7 @@ local function updateDetectionRangeVisuals()
             end
         end
     else
+        -- Regular mode - show circles on killers
         if KillersFolder then
             for _, killer in ipairs(KillersFolder:GetChildren()) do
                 local killerHrp = killer:FindFirstChild("HumanoidRootPart")
@@ -1026,9 +1160,9 @@ end)
 -- ===== UI =====
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local Window = Rayfield:CreateWindow({
-    Name = "Auto Block Hub - SIMPLE",
-    LoadingTitle = "Auto Block Script",
-    LoadingSubtitle = "Simple Version + Dusekkar Silent Aim",
+    Name = "time for say gex",
+    LoadingTitle = "loading gaming chair",
+    LoadingSubtitle = "allat features (matthew gay included)",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "AutoBlockHub",
@@ -1075,6 +1209,15 @@ AutoBlockTab:CreateToggle({
     Flag = "RagingPaceAutoPunish",
     Callback = function(Value)
         ragingPaceAutoPunish = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "5. Mass Infection Auto Punish (1x1x1x1)",
+    CurrentValue = false,
+    Flag = "OnexOnexOnexOneAutoPunish",
+    Callback = function(Value)
+        onexOnexOnexOneAutoPunish = Value
     end
 })
 
@@ -1331,5 +1474,4 @@ local function cleanup()
     mainLoopConn:Disconnect()
 end
 
-print("Auto Block Hub - Simple Version Loaded!")
-print("Dusekkar Silent Aim Ready - Press F to fire")
+print("wahoo wario time")
