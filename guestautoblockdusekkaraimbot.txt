@@ -670,6 +670,14 @@ local function checkSpecialKillerAutoParry()
     
     local shouldUseAbility = false
     
+    -- Table of sound IDs that trigger special killer abilities
+    local triggerSoundIds = {
+        ["12222225"] = true,  -- Original sound ID (rbxassetid://12222225)
+        ["132596270805754"] = true,  -- New sound ID 1
+        ["83851356262523"] = true,   -- New sound ID 2
+        ["111910850942168"] = true,  -- New sound ID 3
+    }
+    
     -- Slasher Auto Parry (sounds from ALL Shedletsky)
     if currentKillerType == "Slasher" and ragingPaceAutoParry then
         local allShedletskies = getAllCharactersByName("Shedletsky")
@@ -682,7 +690,7 @@ local function checkSpecialKillerAutoParry()
                     for _, sound in ipairs(shedletsky:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
-                            if soundId == config.soundId then
+                            if soundId and triggerSoundIds[soundId] then  -- Check against all trigger sounds
                                 shouldUseAbility = true
                                 break
                             end
@@ -706,7 +714,7 @@ local function checkSpecialKillerAutoParry()
                     for _, sound in ipairs(shedletsky:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
-                            if soundId == config.soundId then
+                            if soundId and triggerSoundIds[soundId] then  -- Check against all trigger sounds
                                 shouldUseAbility = true
                                 break
                             end
