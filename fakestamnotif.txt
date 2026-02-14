@@ -1,0 +1,289 @@
+--// Stamina System GUI (Updated with module logic)
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- ScreenGui Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "StaminaGui"
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+ScreenGui.Parent = game:GetService("CoreGui")
+
+-- Stamina Label
+local StaminaLabel = Instance.new("TextLabel")
+StaminaLabel.Parent = ScreenGui
+StaminaLabel.Size = UDim2.new(0, 200, 0, 30)
+StaminaLabel.Position = UDim2.new(0, 20, 1, -50)
+StaminaLabel.BackgroundTransparency = 0.3	
+StaminaLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+StaminaLabel.TextScaled = true
+StaminaLabel.Font = Enum.Font.SourceSansBold
+StaminaLabel.Text = "Stamina: 100"
+
+-- Buttons (on right side of stamina box)
+local SurvivorButton = Instance.new("TextButton")
+SurvivorButton.Parent = ScreenGui
+SurvivorButton.Size = UDim2.new(0, 80, 0, 30)
+SurvivorButton.Position = UDim2.new(0, 230, 1, -50)
+SurvivorButton.Text = "Survivor"
+SurvivorButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SurvivorButton.TextColor3 = Color3.new(1,1,1)
+
+local KillerButton = Instance.new("TextButton")
+KillerButton.Parent = ScreenGui
+KillerButton.Size = UDim2.new(0, 80, 0, 30)
+KillerButton.Position = UDim2.new(0, 320, 1, -50)
+KillerButton.Text = "Killer"
+KillerButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+KillerButton.TextColor3 = Color3.new(1,1,1)
+
+-- Vars (Updated with module values)
+local currentMode = "Survivor"
+local maxStamina, stamina, drainRate, regenRate
+maxStamina = 100
+stamina = 100
+drainRate = 10  -- StaminaLoss from module
+regenRate = 20  -- StaminaGain from module
+
+-- Module-inspired variables
+local timeUntilStaminaRecovers = 0  -- Timer that must be <= 0 to regen
+local holdingShift = false
+local isSprinting = false
+local wasSprinting = false
+
+local localPlayer = Players.LocalPlayer
+local localCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local humanoidRootPart = localCharacter:WaitForChild("HumanoidRootPart")
+
+local isMoving = false
+local lastPosition = humanoidRootPart.Position
+local positionCheckTime = 0
+local POSITION_CHECK_INTERVAL = 0.1
+
+local KILLER_CHECK_RANGE = 110
+local isInKillerRange = false
+
+-- Update character references when character respawns
+localPlayer.CharacterAdded:Connect(function(character)
+    localCharacter = character
+    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    lastPosition = humanoidRootPart.Position
+    stamina = maxStamina
+    timeUntilStaminaRecovers = 0
+    isSprinting = false
+end)
+
+-- Function to check if player is moving
+local function updateMovementCheck()
+    local currentTime = tick()
+    if currentTime - positionCheckTime >= POSITION_CHECK_INTERVAL then
+        if humanoidRootPart and humanoidRootPart:IsDescendantOf(workspace) then
+            local currentPosition = humanoidRootPart.Position
+            local distanceMoved = (currentPosition - lastPosition).Magnitude
+            
+            -- If moved more than 0.4 studs (module uses 0.4), consider it movement
+            isMoving = distanceMoved > 0.4
+            
+            lastPosition = currentPosition
+            positionCheckTime = currentTime
+        end
+    end
+end
+
+-- Function to check if killer is near other players
+local function updateKillerRangeCheck()
+    if not localCharacter or not humanoidRootPart then 
+        isInKillerRange = false
+        return 
+    end
+    
+    local killerPosition = humanoidRootPart.Position
+    local foundPlayer = false
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local targetCharacter = player.Character
+            local targetRootPart = targetCharacter:FindFirstChild("HumanoidRootPart")
+            
+            if targetRootPart then
+                local distance = (killerPosition - targetRootPart.Position).Magnitude
+                if distance <= KILLER_CHECK_RANGE then
+                    foundPlayer = true
+                    break
+                end
+            end
+        end
+    end
+    
+    isInKillerRange = foundPlayer
+end
+
+-- Function to check if we can regenerate stamina (from module)
+local function canRegenStamina()
+    return timeUntilStaminaRecovers <= 0
+end
+
+-- Switch Modes
+local function setMode(mode)
+    if mode == "Survivor" then
+        maxStamina = 100
+        stamina = maxStamina
+        drainRate = 10  -- Module: StaminaLoss = 10
+        regenRate = 20  -- Module: StaminaGain = 20
+        SurvivorButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+        KillerButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    elseif mode == "Killer" then
+        maxStamina = 110
+        stamina = maxStamina
+        drainRate = 9.5  -- Slightly lower drain for killer
+        regenRate = 21   -- Slightly higher regen for killer
+        SurvivorButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        KillerButton.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+    end
+    currentMode = mode
+    isInKillerRange = false
+    timeUntilStaminaRecovers = 0
+    isSprinting = false
+    wasSprinting = false
+end
+
+SurvivorButton.MouseButton1Click:Connect(function()
+    setMode("Survivor")
+end)
+
+KillerButton.MouseButton1Click:Connect(function()
+    setMode("Killer")
+end)
+
+-- Input events
+UserInputService.InputBegan:Connect(function(input, gp)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        holdingShift = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gp)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        holdingShift = false
+    end
+end)
+
+-- Heartbeat loop (Updated with module logic)
+RunService.Heartbeat:Connect(function(dt)
+    -- Update movement check
+    updateMovementCheck()
+    
+    -- Update killer range check if in killer mode
+    if currentMode == "Killer" then
+        updateKillerRangeCheck()
+    end
+    
+    -- Determine if we should be sprinting (module conditions)
+    local canSprint = true  -- Your CanSprint equivalent
+    local shouldSprint = false
+    
+    if currentMode == "Survivor" then
+        shouldSprint = holdingShift and isMoving and stamina > 0 and canSprint
+    elseif currentMode == "Killer" then
+        shouldSprint = holdingShift and isMoving and isInKillerRange and stamina > 0 and canSprint
+    end
+    
+    -- Track sprinting state changes
+    wasSprinting = isSprinting
+    isSprinting = shouldSprint
+    
+    -- Handle sprinting ended (apply 0.1s delay from module)
+    if wasSprinting and not isSprinting then
+        if timeUntilStaminaRecovers > 0.1 then
+            timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + 0.1, 0, 3)
+        else
+            timeUntilStaminaRecovers = 0.1  -- Module adds 0.1s delay when sprinting stops
+        end
+    end
+    
+    -- Handle stamina changes (module logic)
+    if isSprinting and stamina > 0 then
+        -- Draining stamina while sprinting
+        stamina = stamina - drainRate * dt
+        timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + dt * 0.05, 0.2, 3)
+        
+        if stamina <= 0 then
+            stamina = 0
+            isSprinting = false
+            timeUntilStaminaRecovers = 2  -- 2-second penalty when stamina hits 0 (from module)
+        end
+    else
+        -- Not sprinting, decrement recovery timer
+        timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers - dt, 0, 3)
+        
+        -- Regenerate stamina if timer allows
+        if canRegenStamina() and stamina < maxStamina then
+            stamina = stamina + regenRate * dt
+            if stamina > maxStamina then
+                stamina = maxStamina
+            end
+        end
+    end
+    
+    -- Update label + color
+    local statusText = ""
+    if currentMode == "Killer" then
+        if isInKillerRange then
+            statusText = " (IN RANGE)"
+        else
+            statusText = " (OUT OF RANGE)"
+        end
+    end
+    
+    -- Add movement status
+    if not isMoving then
+        statusText = statusText .. " (STATIONARY)"
+    end
+    
+    -- Add sprint status
+    if isSprinting then
+        if stamina > 0 then
+            statusText = statusText .. " (SPRINTING)"
+        else
+            statusText = statusText .. " (EXHAUSTED)"
+        end
+    elseif isMoving and not holdingShift then
+        statusText = statusText .. " (WALKING)"
+    elseif holdingShift and not isMoving then
+        statusText = statusText .. " (SHIFT HELD)"
+    end
+    
+    -- Add regeneration status
+    if stamina < maxStamina and not isSprinting then
+        if timeUntilStaminaRecovers > 0 then
+            statusText = statusText .. string.format(" (DELAY %.1fs)", timeUntilStaminaRecovers)
+        else
+            statusText = statusText .. " (REGENERATING)"
+        end
+    elseif stamina >= maxStamina then
+        statusText = statusText .. " (FULL)"
+    end
+    
+    StaminaLabel.Text = string.format("Stamina: %d%s", math.floor(stamina), statusText)
+    
+    -- Color coding
+    if stamina < 20 then
+        StaminaLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+        StaminaLabel.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+    elseif stamina < 50 then
+        StaminaLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+        StaminaLabel.BackgroundColor3 = Color3.fromRGB(30, 15, 0)
+    else
+        StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        StaminaLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    end
+    
+    -- Update button transparency based on current mode
+    SurvivorButton.BackgroundTransparency = currentMode == "Survivor" and 0.1 or 0.3
+    KillerButton.BackgroundTransparency = currentMode == "Killer" and 0.1 or 0.3
+end)
+
+-- Initialize with Survivor mode
+setMode("Survivor")
