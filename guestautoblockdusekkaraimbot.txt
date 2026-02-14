@@ -1,0 +1,1395 @@
+-- ===== AUTO BLOCK HUB - SIMPLE VERSION =====
+-- FIXED: Better error handling and folder detection
+-- UPDATED: Added new sound IDs and Guest 1337 animation detection
+-- ADDED: Dusekkar Aimbot with cursor-based targeting and target switching
+
+-- Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Camera = Workspace.CurrentCamera
+local lp = Players.LocalPlayer
+local PlayerGui = lp:WaitForChild("PlayerGui")
+
+-- Remotes with error handling
+local testRemote = nil
+local success, result = pcall(function()
+    return ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent")
+end)
+if success then
+    testRemote = result
+else
+    -- Try alternative paths
+    success, result = pcall(function()
+        return ReplicatedStorage:FindFirstChild("Network"):WaitForChild("RemoteEvent")
+    end)
+    if success then
+        testRemote = result
+    else
+        testRemote = ReplicatedStorage:FindFirstChild("RemoteEvent") or Instance.new("RemoteEvent")
+    end
+end
+
+-- Killers and Survivors folders with error handling
+local KillersFolder = nil
+local SurvivorsFolder = nil
+
+local playersFolder = Workspace:FindFirstChild("Players")
+if playersFolder then
+    KillersFolder = playersFolder:FindFirstChild("Killers") or Instance.new("Folder")
+    KillersFolder.Name = "Killers"
+    SurvivorsFolder = playersFolder:FindFirstChild("Survivors") or Instance.new("Folder")
+    SurvivorsFolder.Name = "Survivors"
+else
+    KillersFolder = Instance.new("Folder")
+    KillersFolder.Name = "Killers"
+    SurvivorsFolder = Instance.new("Folder")
+    SurvivorsFolder.Name = "Survivors"
+end
+
+-- ===== UTILITY FUNCTIONS =====
+local function SendNotif(title, text, duration)
+    local success, err = pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title or "Auto Block",
+            Text = text or "Notification",
+            Duration = duration or 4
+        })
+    end)
+end
+
+-- ===== SOUND IDs FOR AUTO BLOCK =====
+local autoBlockTriggerSounds = {
+    ["102228729296384"] = true,
+    ["124903763333174"] = true,
+    ["128367348686124"] = true,
+    ["104910828105172"] = true,
+    ["140242176732868"] = true,
+    ["112809109188560"] = true,
+    ["115026634746636"] = true,
+    ["84116622032112"] = true,
+    ["108907358619313"] = true,
+    ["127793641088496"] = true,
+    ["86174610237192"] = true,
+    ["95079963655241"] = true,
+    ["101199185291628"] = true,
+    ["119942598489800"] = true,
+    ["84307400688050"] = true,
+    ["113037804008732"] = true,
+    ["105200830849301"] = true,
+    ["75330693422988"] = true,
+    ["124397369810639"] = true,
+    ["107444859834748"] = true,
+    ["82221759983649"] = true,
+    ["76467993976301"] = true,
+    ["81702359653578"] = true,
+    ["128195973631079"] = true,
+    ["108610718831698"] = true,
+    ["112395455254818"] = true,
+    ["109431876587852"] = true,
+    ["109348678063422"] = true,
+    ["85853080745515"] = true,
+    ["86785901416030"] = true,
+    ["12222216"] = true,
+    ["105840448036441"] = true,
+    ["114742322778642"] = true,
+    ["119583605486352"] = true,
+    ["79980897195554"] = true,
+    ["71805956520207"] = true,
+    ["79391273191671"] = true,
+    ["89004992452376"] = true,
+    ["101553872555606"] = true,
+    ["98675142200448"] = true,
+    ["101698569375359"] = true,
+    ["106300477136129"] = true,
+    ["116581754553533"] = true,
+    ["117231507259853"] = true,
+    ["119089145505438"] = true,
+    ["121954639447247"] = true,
+    ["125213046326879"] = true,
+    ["131406927389838"] = true,
+    ["117173212095661"] = true,
+    ["80516583309685"] = true,
+    -- Newly added sound IDs
+    ["132596270805754"] = true,
+    ["83851356262523"] = true,
+    ["111910850942168"] = true,
+}
+
+-- ===== STATE VARIABLES =====
+local autoBlockForGuest = false
+local ragingPaceAutoParry = false
+local error404AutoParry = false
+local ragingPaceAutoPunish = false
+local doubleblocktech = false
+local blockdelay = 0
+local detectionRange = 18
+local messageWhenAutoBlockOn = false
+local messageWhenAutoBlock = ""
+local blockChance = 100
+local facingCheckEnabled = true
+local customFacingDot = -0.3
+local killerCirclesVisible = false
+local autoblocktype = "Block"
+local autoSwitchBlockCharge = false
+local originalBlockType = "Block"
+
+-- ===== DUSEKKAR AIMBOT VARIABLES =====
+local dusekkarEnabled = false
+local dusekkarTargetMode = "Survivors" -- "Survivors" or "Killers"
+local isAiming = false
+local aimConnection = nil
+local currentTarget = nil
+local aimDuration = 1.5 -- 1.5 seconds lock
+local lastFireTime = 0
+local FIRE_COOLDOWN = 0.3 -- Fire every 0.3 seconds during lock
+local aimSmoothness = 0.1
+
+-- ===== SPECIAL KILLER DETECTION =====
+local isPlayingAsSpecialKiller = false
+local currentKillerType = nil
+local originalFacingCheckState = true
+
+local KILLER_CONFIGS = {
+    Slasher = {
+        soundId = "12222225",
+        abilityRemote = function()
+            if testRemote then
+                local args = {
+                    "UseActorAbility",
+                    {
+                        buffer.fromstring("\003\n\000\000\000RagingPace")
+                    }
+                }
+                local success, err = pcall(function()
+                    testRemote:FireServer(unpack(args))
+                end)
+            end
+        end,
+        abilityName = "RagingPace"
+    },
+    JohnDoe = {
+        soundId = "12222225",
+        abilityRemote = function()
+            if testRemote then
+                local args = {
+                    "UseActorAbility",
+                    {
+                        buffer.fromstring("\003\b\000\000\000404Error")
+                    }
+                }
+                local success, err = pcall(function()
+                    testRemote:FireServer(unpack(args))
+                end)
+            end
+        end,
+        abilityName = "404Error"
+    }
+}
+
+-- ===== PERFORMANCE CACHES =====
+local detectionRangeSq = detectionRange * detectionRange
+local cachedPunchBtn, cachedBlockBtn, cachedChargeBtn, cachedCloneBtn
+local cachedCooldown
+local detectionCircles = {}
+local survivorCircles = {}
+local _lastBlockMessageTime = 0
+local MESSAGE_BLOCK_COOLDOWN = 0.6
+
+-- ===== BASIC FUNCTIONS =====
+local function refreshUIRefs()
+    local main = PlayerGui:FindFirstChild("MainUI")
+    if main then
+        local ability = main:FindFirstChild("AbilityContainer")
+        if ability then
+            cachedPunchBtn = ability:FindFirstChild("Punch")
+            cachedBlockBtn = ability:FindFirstChild("Block")
+            cachedChargeBtn = ability:FindFirstChild("Charge")
+            cachedCloneBtn = ability:FindFirstChild("Clone")
+            
+            if cachedBlockBtn then
+                cachedCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
+            end
+        end
+    end
+end
+
+local function fireGuiBlock()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Block")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+local function fireGuiPunch()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Punch")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+local function fireGuiCharge()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\006\000\000\000Charge")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+local function fireGuiClone()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Clone")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+-- ===== DUSEKKAR PLASMA BEAM FUNCTIONS =====
+-- Check if I'm Dusekkar
+local function amIDusekkar()
+    -- Look for my character in Survivors folder with Dusekkar name
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Dusekkar" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Check if plasma beam is on cooldown
+local function isPlasmaBeamOnCooldown()
+    local success, cooldownText = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
+    end)
+    
+    if success then
+        -- If cooldown text is not empty and not "0", it's on cooldown
+        return cooldownText ~= "" and cooldownText ~= "0"
+    end
+    return true -- Assume cooldown if we can't check
+end
+
+local function firePlasmaBeam()
+    if not testRemote then return false end
+    
+    -- Check cooldown first
+    if isPlasmaBeamOnCooldown() then
+        return false
+    end
+    
+    local args = {
+        "UseActorAbility",
+        {
+            buffer.fromstring("\003\n\000\000\000PlasmaBeam")
+        }
+    }
+    
+    local success = pcall(function()
+        testRemote:FireServer(unpack(args))
+    end)
+    
+    if success then
+        lastFireTime = tick()
+        return true
+    end
+    return false
+end
+
+-- Function to find survivor closest to cursor
+local function getSurvivorClosestToCursor()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    -- Get mouse position
+    local mousePosition = UserInputService:GetMouseLocation()
+    local viewportSize = Camera.ViewportSize
+    local screenCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+    
+    local validTargets = {}
+    
+    -- First, find all valid survivors
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        -- Skip if this is me
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            continue
+        end
+        
+        -- Check if survivor is alive
+        local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            continue
+        end
+        
+        local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+        if targetHrp then
+            -- Check if survivor is on screen
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
+            
+            if onScreen then
+                -- Calculate distance from cursor to this survivor on screen
+                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                local distanceToCursor = (screenVector - mousePosition).Magnitude
+                
+                table.insert(validTargets, {
+                    survivor = survivor,
+                    screenDistance = distanceToCursor
+                })
+            end
+        end
+    end
+    
+    -- Sort by screen distance (closest to cursor)
+    table.sort(validTargets, function(a, b)
+        return a.screenDistance < b.screenDistance
+    end)
+    
+    -- Return the closest to cursor, or nil if none found
+    if #validTargets > 0 then
+        return validTargets[1].survivor
+    end
+    
+    -- If no survivors on screen, fall back to nearest by world distance
+    local nearestByDistance = nil
+    local nearestDist = math.huge
+    
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            continue
+        end
+        
+        local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            continue
+        end
+        
+        local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+        if targetHrp then
+            local distance = (targetHrp.Position - myRoot.Position).Magnitude
+            if distance < nearestDist then
+                nearestDist = distance
+                nearestByDistance = survivor
+            end
+        end
+    end
+    
+    return nearestByDistance
+end
+
+-- Function to find the nearest killer
+local function getNearestKiller()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    local nearestKiller = nil
+    local nearestDistance = math.huge
+    
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        -- Skip if this is me (if I somehow appear in killers folder)
+        local usernameAttr = killer:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            continue
+        end
+        
+        -- Target any killer model
+        local targetHrp = killer:FindFirstChild("HumanoidRootPart")
+        if targetHrp then
+            -- Check if killer is alive
+            local humanoid = killer:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                if distance < nearestDistance then
+                    nearestDistance = distance
+                    nearestKiller = killer
+                end
+            end
+        end
+    end
+    
+    return nearestKiller
+end
+
+-- Function to enable shiftlock
+local function enableShiftLock()
+    -- Try to use the game's built-in shiftlock first
+    local success, SmoothShiftLock = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("Systems"):WaitForChild("Player"):WaitForChild("Game"):WaitForChild("SmoothShiftLock"))
+    end)
+    
+    if success and SmoothShiftLock and type(SmoothShiftLock) == "table" then
+        if not SmoothShiftLock.Enabled then
+            SmoothShiftLock:ToggleShiftLock()
+        end
+    else
+        -- Fallback: Simulate shiftlock key press
+        local ShiftlockKeybindEnum = lp.PlayerData and lp.PlayerData.Settings and lp.PlayerData.Settings.Keybinds and lp.PlayerData.Settings.Keybinds.ShiftLock and lp.PlayerData.Settings.Keybinds.ShiftLock.Value
+        if ShiftlockKeybindEnum then
+            local ShiftlockKeyCode = Enum.KeyCode[ShiftlockKeybindEnum]
+            local VIM = game:GetService("VirtualInputManager")
+            VIM:SendKeyEvent(true, ShiftlockKeyCode, false, lp.PlayerGui)
+            VIM:SendKeyEvent(false, ShiftlockKeyCode, false, lp.PlayerGui)
+        end
+    end
+end
+
+-- Main Dusekkar aiming + firing function
+local function dusekkarAimAndFire()
+    if isAiming then return end
+    if not dusekkarEnabled then return end
+    
+    -- Check if I'm Dusekkar first
+    if not amIDusekkar() then
+        return
+    end
+    
+    -- Find target based on mode
+    local target = nil
+    if dusekkarTargetMode == "Survivors" then
+        target = getSurvivorClosestToCursor()
+    else -- Killers mode
+        target = getNearestKiller()
+    end
+    
+    if not target then
+        return
+    end
+    
+    -- Check if plasma beam is on cooldown before starting
+    if isPlasmaBeamOnCooldown() then
+        return
+    end
+    
+    currentTarget = target
+    isAiming = true
+    lastFireTime = 0 -- Reset fire cooldown
+    
+    -- Enable shiftlock
+    pcall(enableShiftLock)
+    
+    -- Set mouse behavior to lock center
+    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    
+    -- Store start time for 1.5 second duration
+    local startTime = tick()
+    
+    -- Create aiming + firing loop
+    aimConnection = RunService.Heartbeat:Connect(function()
+        -- Check if we've exceeded 1.5 seconds
+        if tick() - startTime >= aimDuration then
+            -- Time's up - disable aiming
+            isAiming = false
+            if aimConnection then
+                aimConnection:Disconnect()
+                aimConnection = nil
+            end
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            return
+        end
+        
+        -- Make sure target still exists and is alive
+        if not currentTarget or not currentTarget.Parent then
+            -- Try to find a new target
+            if dusekkarTargetMode == "Survivors" then
+                currentTarget = getSurvivorClosestToCursor()
+            else
+                currentTarget = getNearestKiller()
+            end
+            if not currentTarget then
+                -- No targets, disable aiming
+                isAiming = false
+                if aimConnection then
+                    aimConnection:Disconnect()
+                    aimConnection = nil
+                end
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                return
+            end
+        end
+        
+        -- Check if target is still alive
+        local humanoid = currentTarget:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            -- Target is dead, find new one
+            if dusekkarTargetMode == "Survivors" then
+                currentTarget = getSurvivorClosestToCursor()
+            else
+                currentTarget = getNearestKiller()
+            end
+            if not currentTarget then
+                isAiming = false
+                if aimConnection then
+                    aimConnection:Disconnect()
+                    aimConnection = nil
+                end
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                return
+            end
+        end
+        
+        -- Get target HRP
+        local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
+        if not targetHrp then return end
+        
+        -- Get my character position
+        local myChar = lp.Character
+        if not myChar then return end
+        
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+        
+        -- Calculate direction to target
+        local directionToTarget = (targetHrp.Position - myRoot.Position).Unit
+        
+        -- Create target CFrame (look at target)
+        local targetCFrame = CFrame.lookAt(
+            Camera.CFrame.Position,
+            Camera.CFrame.Position + directionToTarget
+        )
+        
+        -- Smoothly tween the camera to target
+        TweenService:Create(
+            Camera, 
+            TweenInfo.new(aimSmoothness, Enum.EasingStyle.Linear), 
+            { CFrame = targetCFrame }
+        ):Play()
+        
+        -- Check cooldown before firing
+        if not isPlasmaBeamOnCooldown() then
+            -- FIRE THE PLASMA BEAM!
+            firePlasmaBeam()
+        end
+    end)
+end
+
+-- ===== CHANCE-BASED BLOCKING =====
+local function shouldBlock()
+    if blockChance >= 100 then return true end
+    if blockChance <= 0 then return false end
+    return math.random(1, 100) <= blockChance
+end
+
+-- ===== FACING CHECK =====
+local function isFacing(localRoot, targetRoot)
+    if not facingCheckEnabled then return true end
+    
+    local dx = localRoot.Position.X - targetRoot.Position.X
+    local dy = localRoot.Position.Y - targetRoot.Position.Y
+    local dz = localRoot.Position.Z - targetRoot.Position.Z
+    
+    local mag = math.sqrt(dx*dx + dy*dy + dz*dz)
+    if mag == 0 then return true end
+    local invMag = 1 / mag
+    
+    local ux, uy, uz = dx * invMag, dy * invMag, dz * invMag
+    local lv = targetRoot.CFrame.LookVector
+    local dot = lv.X * ux + lv.Y * uy + lv.Z * uz
+    
+    return dot > customFacingDot
+end
+
+-- ===== AUTO-SWITCH BLOCK/CHARGE =====
+local lastBlockCheckTime = 0
+local BLOCK_CHECK_INTERVAL = 0.2
+
+local function checkAndSwitchBlockType()
+    if not autoSwitchBlockCharge then return end
+    
+    local currentTime = tick()
+    if currentTime - lastBlockCheckTime < BLOCK_CHECK_INTERVAL then return end
+    lastBlockCheckTime = currentTime
+    
+    refreshUIRefs()
+    
+    if not cachedBlockBtn then return end
+    
+    local blockCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
+    if not blockCooldown then return end
+    
+    if blockCooldown.Text ~= "" and blockCooldown.Text ~= "0" then
+        if autoblocktype ~= "Charge" then
+            originalBlockType = autoblocktype
+            autoblocktype = "Charge"
+        end
+    else
+        if autoblocktype == "Charge" and originalBlockType ~= "Charge" then
+            autoblocktype = originalBlockType
+        end
+    end
+end
+
+-- ===== SOUND CHECKING =====
+local lastBlockTime = 0
+local BLOCK_COOLDOWN = 0.7
+
+local function extractNumericSoundId(sound)
+    if not sound then return nil end
+    local sid = tostring(sound.SoundId)
+    
+    local num = sid:match("rbxassetid://(%d+)") or
+                sid:match("://(%d+)") or
+                sid:match("^(%d+)$")
+    return num
+end
+
+-- ===== GET ALL CHARACTERS WITH SPECIFIC NAME =====
+local function getAllCharactersByName(name)
+    local characters = {}
+    
+    if name == "Shedletsky" or name == "Guest1337" then
+        if SurvivorsFolder then
+            for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+                if survivor.Name == name then
+                    table.insert(characters, survivor)
+                end
+            end
+        end
+    elseif name == "Slasher" or name == "JohnDoe" then
+        if KillersFolder then
+            for _, killer in ipairs(KillersFolder:GetChildren()) do
+                if killer.Name == name then
+                    table.insert(characters, killer)
+                end
+            end
+        end
+    end
+    
+    return characters
+end
+
+-- ===== SPECIAL KILLER AUTO PARRY =====
+local lastSpecialAbilityTime = 0
+local SPECIAL_ABILITY_COOLDOWN = 1.0
+
+local function checkSpecialKillerAutoParry()
+    if not isPlayingAsSpecialKiller or not currentKillerType then return end
+    
+    local now = tick()
+    if now - lastSpecialAbilityTime < SPECIAL_ABILITY_COOLDOWN then return end
+    
+    local config = KILLER_CONFIGS[currentKillerType]
+    if not config then return end
+    
+    local myChar = lp.Character
+    if not myChar then return end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    local shouldUseAbility = false
+    
+    -- Slasher Auto Parry (sounds from ALL Shedletsky)
+    if currentKillerType == "Slasher" and ragingPaceAutoParry then
+        local allShedletskies = getAllCharactersByName("Shedletsky")
+        
+        for _, shedletsky in ipairs(allShedletskies) do
+            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
+            if shedletskyHrp then
+                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    for _, sound in ipairs(shedletsky:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId == config.soundId then
+                                shouldUseAbility = true
+                                break
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    -- JohnDoe Auto Parry (sounds from ALL Shedletsky)
+    if currentKillerType == "JohnDoe" and error404AutoParry then
+        local allShedletskies = getAllCharactersByName("Shedletsky")
+        
+        for _, shedletsky in ipairs(allShedletskies) do
+            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
+            if shedletskyHrp then
+                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    for _, sound in ipairs(shedletsky:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId == config.soundId then
+                                shouldUseAbility = true
+                                break
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    -- Slasher Auto Punish (animations from ALL Guest1337)
+    if currentKillerType == "Slasher" and ragingPaceAutoPunish then
+        local allGuest1337s = getAllCharactersByName("Guest1337")
+        
+        for _, guest1337 in ipairs(allGuest1337s) do
+            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
+            if guest1337Hrp then
+                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local id = tostring(track.Animation.AnimationId):match("%d+")
+                                if id then
+                                    local slasherAnims = {
+                                        ["95802026624883"] = true,
+                                        ["82036084568393"] = true,
+                                        ["120748030255574"] = true,
+                                        ["72722244508749"] = true,
+                                        -- Newly added Guest 1337 animation ID
+                                        ["140671644163156"] = true,
+                                    }
+                                    
+                                    if slasherAnims[id] then
+                                        shouldUseAbility = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    if shouldUseAbility then
+        if blockdelay > 0 then
+            task.wait(blockdelay)
+        end
+        
+        local success = pcall(function()
+            config.abilityRemote()
+        end)
+        
+        if success then
+            lastSpecialAbilityTime = now
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- ===== SPECIAL KILLER DETECTION =====
+local function checkSpecialKillerStatus()
+    local character = lp.Character
+    if not character then 
+        if isPlayingAsSpecialKiller then
+            isPlayingAsSpecialKiller = false
+            currentKillerType = nil
+            facingCheckEnabled = originalFacingCheckState
+        end
+        return false
+    end
+    
+    local allSlashers = getAllCharactersByName("Slasher")
+    local allJohnDoes = getAllCharactersByName("JohnDoe")
+    
+    for _, slasher in ipairs(allSlashers) do
+        local usernameAttr = slasher:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "Slasher" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "Slasher"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, johnDoe in ipairs(allJohnDoes) do
+        local usernameAttr = johnDoe:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "JohnDoe" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "JohnDoe"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    if isPlayingAsSpecialKiller then
+        isPlayingAsSpecialKiller = false
+        currentKillerType = nil
+        facingCheckEnabled = originalFacingCheckState
+    end
+    
+    return false
+end
+
+-- ===== CHECK FOR ATTACK SOUNDS =====
+local function checkForAttackSounds()
+    if not autoBlockForGuest then return end
+    if isPlayingAsSpecialKiller then return end
+    
+    local now = tick()
+    if now - lastBlockTime < BLOCK_COOLDOWN then return end
+    
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    if not KillersFolder then return end
+    
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local usernameAttr = killer:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            continue
+        end
+        
+        for _, sound in ipairs(killer:GetDescendants()) do
+            if sound:IsA("Sound") and sound.IsPlaying then
+                local soundId = extractNumericSoundId(sound)
+                if soundId and autoBlockTriggerSounds[soundId] then
+                    local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+                    if not killerHrp then continue end
+                    
+                    local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                    if distance > detectionRange then continue end
+                    
+                    if facingCheckEnabled and not isFacing(myRoot, killerHrp) then continue end
+                    if not shouldBlock() then continue end
+                    
+                    if blockdelay > 0 then
+                        task.wait(blockdelay)
+                    end
+                    
+                    refreshUIRefs()
+                    
+                    if autoblocktype == "Block" then
+                        if cachedCooldown and cachedCooldown.Text == "" then
+                            fireGuiBlock()
+                            if doubleblocktech then
+                                fireGuiPunch()
+                            end
+                            if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
+                                _lastBlockMessageTime = tick()
+                            end
+                            lastBlockTime = now
+                            return
+                        end
+                    elseif autoblocktype == "Charge" then
+                        if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
+                            fireGuiCharge()
+                            lastBlockTime = now
+                            return
+                        end
+                    elseif autoblocktype == "7n7 Clone" then
+                        if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
+                            fireGuiClone()
+                            lastBlockTime = now
+                            return
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ===== VISUAL RANGE =====
+local lastVisualUpdate = 0
+local VISUAL_UPDATE_COOLDOWN = 0.5
+
+local function safeDestroyCircle(circle)
+    if not circle then return end
+    pcall(function()
+        if circle.Parent then
+            circle:Destroy()
+        end
+    end)
+end
+
+local function updateDetectionRangeVisuals()
+    local now = tick()
+    if now - lastVisualUpdate < VISUAL_UPDATE_COOLDOWN then return end
+    lastVisualUpdate = now
+    
+    for _, circle in pairs(detectionCircles) do
+        safeDestroyCircle(circle)
+    end
+    detectionCircles = {}
+    
+    for _, circle in pairs(survivorCircles) do
+        safeDestroyCircle(circle)
+    end
+    survivorCircles = {}
+    
+    if not killerCirclesVisible then return end
+    
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    if isPlayingAsSpecialKiller and currentKillerType then
+        if SurvivorsFolder then
+            for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+                local survivorHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if survivorHrp and not survivorHrp:FindFirstChild("DetectionCircle") then
+                    local distance = (survivorHrp.Position - myRoot.Position).Magnitude
+                    local inRange = distance <= detectionRange
+                    
+                    pcall(function()
+                        local circle = Instance.new("CylinderHandleAdornment")
+                        circle.Name = "DetectionCircle"
+                        circle.Adornee = survivorHrp
+                        circle.Color3 = inRange and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 0)
+                        circle.AlwaysOnTop = true
+                        circle.ZIndex = 1
+                        circle.Transparency = 0.6
+                        circle.Radius = detectionRange
+                        circle.Height = 0.12
+                        
+                        local yOffset = -(survivorHrp.Size.Y / 2 + 0.05)
+                        circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
+                        
+                        circle.Parent = survivorHrp
+                        survivorCircles[survivor] = circle
+                    end)
+                end
+            end
+        end
+    else
+        if KillersFolder then
+            for _, killer in ipairs(KillersFolder:GetChildren()) do
+                local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+                if killerHrp and not killerHrp:FindFirstChild("DetectionCircle") then
+                    local usernameAttr = killer:GetAttribute("Username")
+                    if usernameAttr and usernameAttr == lp.Name then continue end
+                    
+                    local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                    local inRange = distance <= detectionRange
+                    
+                    pcall(function()
+                        local circle = Instance.new("CylinderHandleAdornment")
+                        circle.Name = "DetectionCircle"
+                        circle.Adornee = killerHrp
+                        circle.Color3 = inRange and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 165, 0)
+                        circle.AlwaysOnTop = true
+                        circle.ZIndex = 1
+                        circle.Transparency = 0.6
+                        circle.Radius = detectionRange
+                        circle.Height = 0.12
+                        
+                        local yOffset = -(killerHrp.Size.Y / 2 + 0.05)
+                        circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
+                        
+                        circle.Parent = killerHrp
+                        detectionCircles[killer] = circle
+                    end)
+                end
+            end
+        end
+    end
+end
+
+-- ===== MAIN LOOP =====
+local mainLoopConn = RunService.Heartbeat:Connect(function()
+    pcall(checkSpecialKillerStatus)
+    
+    if autoSwitchBlockCharge and not isPlayingAsSpecialKiller then
+        pcall(checkAndSwitchBlockType)
+    end
+    
+    if autoBlockForGuest and not isPlayingAsSpecialKiller then
+        pcall(checkForAttackSounds)
+    end
+    
+    if isPlayingAsSpecialKiller then
+        pcall(checkSpecialKillerAutoParry)
+    end
+    
+    if killerCirclesVisible then
+        pcall(updateDetectionRangeVisuals)
+    end
+end)
+
+-- ===== UI =====
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local Window = Rayfield:CreateWindow({
+    Name = "Auto Block Hub - SIMPLE",
+    LoadingTitle = "Auto Block Script",
+    LoadingSubtitle = "Simple Version + Dusekkar Aimbot",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "AutoBlockHub",
+        FileName = "Settings"
+    },
+    Discord = {Enabled = false},
+    KeySystem = false
+})
+
+local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
+local TechTab = Window:CreateTab("Techs", 4483362458)
+local DusekkarTab = Window:CreateTab("Dusekkar Aimbot", 4483362458)
+
+AutoBlockTab:CreateToggle({
+    Name = "1. Auto Block For Guest",
+    CurrentValue = false,
+    Flag = "AutoBlockForGuest",
+    Callback = function(Value)
+        autoBlockForGuest = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "2. Raging Pace Auto Parry (Slasher)",
+    CurrentValue = false,
+    Flag = "RagingPaceAutoParry",
+    Callback = function(Value)
+        ragingPaceAutoParry = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "3. Error 404 Auto Parry (JohnDoe)",
+    CurrentValue = false,
+    Flag = "Error404AutoParry",
+    Callback = function(Value)
+        error404AutoParry = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "4. Raging Pace Auto Punish (Slasher)",
+    CurrentValue = false,
+    Flag = "RagingPaceAutoPunish",
+    Callback = function(Value)
+        ragingPaceAutoPunish = Value
+    end
+})
+
+AutoBlockTab:CreateSlider({
+    Name = "Block Chance",
+    Range = {0, 100},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 100,
+    Flag = "BlockChance",
+    Callback = function(Value)
+        blockChance = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Auto Switch Block/Charge",
+    CurrentValue = false,
+    Flag = "AutoSwitchToggle",
+    Callback = function(Value)
+        autoSwitchBlockCharge = Value
+        if not Value then
+            autoblocktype = originalBlockType
+        else
+            originalBlockType = autoblocktype
+        end
+    end
+})
+
+AutoBlockTab:CreateButton({
+    Name = "Change auto block type",
+    Callback = function()
+        if autoblocktype == "Block" then
+            autoblocktype = "Charge"
+            originalBlockType = "Charge"
+        elseif autoblocktype == "Charge" then
+            autoblocktype = "7n7 Clone"
+            originalBlockType = "7n7 Clone"
+        elseif autoblocktype == "7n7 Clone" then
+            autoblocktype = "Block"
+            originalBlockType = "Block"
+        end
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Message When Blocking",
+    CurrentValue = false,
+    Flag = "MessageWhenBlockToggle",
+    Callback = function(Value)
+        messageWhenAutoBlockOn = Value
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Block Delay",
+    PlaceholderText = "0",
+    RemoveTextAfterFocusLost = false,
+    Flag = "blockdelaynumber",
+    Callback = function(Text)
+        blockdelay = tonumber(Text) or 0
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Message when blocking",
+    PlaceholderText = "im gonna block ya",
+    RemoveTextAfterFocusLost = false,
+    Flag = "MessageWhenBlockText",
+    Callback = function(Text)
+        messageWhenAutoBlock = Text
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Enable Facing Check",
+    CurrentValue = true,
+    Flag = "FacingCheckToggle",
+    Callback = function(Value)
+        facingCheckEnabled = Value
+        if not isPlayingAsSpecialKiller then
+            originalFacingCheckState = Value
+        end
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Facing Check angle (DOT)",
+    PlaceholderText = "-0.3",
+    RemoveTextAfterFocusLost = false,
+    Flag = "Facingcheckdot",
+    Callback = function(Text)
+        customFacingDot = tonumber(Text) or -0.3
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Detection Range",
+    PlaceholderText = "18",
+    RemoveTextAfterFocusLost = false,
+    Flag = "DetectionRange",
+    Callback = function(Text)
+        detectionRange = tonumber(Text) or 18
+        detectionRangeSq = detectionRange * detectionRange
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Range Visual",
+    CurrentValue = false,
+    Flag = "KillerCircleToggle",
+    Callback = function(Value)
+        killerCirclesVisible = Value
+        if not Value then
+            for _, circle in pairs(detectionCircles) do
+                safeDestroyCircle(circle)
+            end
+            detectionCircles = {}
+            
+            for _, circle in pairs(survivorCircles) do
+                safeDestroyCircle(circle)
+            end
+            survivorCircles = {}
+        end
+    end
+})
+
+TechTab:CreateToggle({
+    Name = "Double Punch Tech",
+    CurrentValue = false,
+    Flag = "doubleblockTechtoggle",
+    Callback = function(Value)
+        doubleblocktech = Value
+    end
+})
+
+TechTab:CreateButton({
+    Name = "Fake Lag Tech",
+    Callback = function()
+        local char = lp.Character
+        if not char then return end
+        
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+        
+        local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+        
+        for _, t in ipairs(animator:GetPlayingAnimationTracks()) do
+            local id = tostring(t.Animation.AnimationId):match("%d+")
+            if id == "136252471123500" then
+                t:Stop()
+            end
+        end
+        
+        local anim = Instance.new("Animation")
+        anim.AnimationId = "rbxassetid://136252471123500"
+        local track = animator:LoadAnimation(anim)
+        track:Play()
+    end
+})
+
+-- ===== DUSEKKAR AIMBOT TAB =====
+DusekkarTab:CreateToggle({
+    Name = "Enable Dusekkar Aimbot",
+    CurrentValue = false,
+    Flag = "DusekkarToggle",
+    Callback = function(Value)
+        dusekkarEnabled = Value
+        if not Value then
+            -- Stop any ongoing aiming
+            isAiming = false
+            if aimConnection then
+                aimConnection:Disconnect()
+                aimConnection = nil
+            end
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end
+    end
+})
+
+DusekkarTab:CreateDropdown({
+    Name = "Target Mode",
+    Options = {"Survivors", "Killers"},
+    CurrentOption = "Survivors",
+    Flag = "DusekkarTargetMode",
+    Callback = function(Option)
+        dusekkarTargetMode = Option
+    end
+})
+
+DusekkarTab:CreateKeybind({
+    Name = "Switch Target Mode",
+    CurrentKeybind = "Q",
+    HoldToInteract = false,
+    Flag = "DusekkarKeybind",
+    Callback = function()
+        -- Only allow switching if playing as Dusekkar
+        if not amIDusekkar() then
+            return
+        end
+        
+        -- Toggle between Survivors and Killers
+        if dusekkarTargetMode == "Survivors" then
+            dusekkarTargetMode = "Killers"
+        else
+            dusekkarTargetMode = "Survivors"
+        end
+        
+        -- Show notification for mode switch (only notification left)
+        SendNotif("Dusekkar", "Switched to targeting: " .. dusekkarTargetMode, 2)
+    end
+})
+
+DusekkarTab:CreateKeybind({
+    Name = "Activate Aimbot",
+    CurrentKeybind = "F",
+    HoldToInteract = false,
+    Flag = "DusekkarActivateKey",
+    Callback = function()
+        if not dusekkarEnabled then
+            return
+        end
+        dusekkarAimAndFire()
+    end
+})
+
+DusekkarTab:CreateSlider({
+    Name = "Aim Duration (seconds)",
+    Range = {0.5, 3},
+    Increment = 0.1,
+    Suffix = "s",
+    CurrentValue = 1.5,
+    Flag = "DusekkarDuration",
+    Callback = function(Value)
+        aimDuration = Value
+    end
+})
+
+DusekkarTab:CreateSlider({
+    Name = "Fire Cooldown (seconds)",
+    Range = {0.1, 1},
+    Increment = 0.05,
+    Suffix = "s",
+    CurrentValue = 0.3,
+    Flag = "DusekkarCooldown",
+    Callback = function(Value)
+        FIRE_COOLDOWN = Value
+    end
+})
+
+DusekkarTab:CreateSlider({
+    Name = "Aim Smoothness",
+    Range = {0.03, 0.3},
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = 0.1,
+    Flag = "DusekkarSmoothness",
+    Callback = function(Value)
+        aimSmoothness = Value
+    end
+})
+
+DusekkarTab:CreateParagraph({
+    Title = "Instructions",
+    Content = "DUSEKKAR AIMBOT:\n\n" ..
+              "1. Must be playing as Dusekkar\n" ..
+              "2. Enable the aimbot toggle first\n" ..
+              "3. Press Q to switch between Survivors/Killers (only works as Dusekkar)\n" ..
+              "4. Press F to activate 1.5s lock and fire\n\n" ..
+              "SURVIVOR MODE: Targets survivor closest to your cursor\n" ..
+              "KILLER MODE: Targets nearest killer (only one at a time)\n\n" ..
+              "Auto-checks: Plasma beam cooldown, character validity"
+})
+
+Rayfield:LoadConfiguration()
+
+refreshUIRefs()
+
+print("Auto Block Hub - Simple Version Loaded!")
+print("Added Dusekkar Aimbot with cursor-based targeting and Q key to switch modes!")
