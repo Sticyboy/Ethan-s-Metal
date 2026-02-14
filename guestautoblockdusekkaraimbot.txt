@@ -1,7 +1,8 @@
 -- ===== AUTO BLOCK HUB - SIMPLE VERSION =====
 -- FIXED: Better error handling and folder detection
 -- UPDATED: Added new sound IDs and Guest 1337 animation detection
--- ADDED: Dusekkar Aimbot with cursor-based targeting and target switching
+-- ADDED: Dusekkar Silent Aim (FIXED - No goto statements)
+-- CLEANED: Only essential notifications remain
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,7 +11,6 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local Camera = Workspace.CurrentCamera
 local lp = Players.LocalPlayer
 local PlayerGui = lp:WaitForChild("PlayerGui")
@@ -138,16 +138,13 @@ local autoblocktype = "Block"
 local autoSwitchBlockCharge = false
 local originalBlockType = "Block"
 
--- ===== DUSEKKAR AIMBOT VARIABLES =====
+-- ===== DUSEKKAR SILENT AIM VARIABLES =====
 local dusekkarEnabled = false
 local dusekkarTargetMode = "Survivors" -- "Survivors" or "Killers"
-local isAiming = false
-local aimConnection = nil
+local silentAimActive = false
+local originalGetMousePos = nil
+local mousePositionModule = nil
 local currentTarget = nil
-local aimDuration = 1.5 -- 1.5 seconds lock
-local lastFireTime = 0
-local FIRE_COOLDOWN = 0.3 -- Fire every 0.3 seconds during lock
-local aimSmoothness = 0.1
 
 -- ===== SPECIAL KILLER DETECTION =====
 local isPlayingAsSpecialKiller = false
@@ -274,6 +271,69 @@ local function fireGuiClone()
     end
 end
 
+-- ===== SILENT AIM HOOK SETUP =====
+local function setupSilentAim()
+    -- Try to require the mouse position module
+    local success, module = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
+    end)
+    
+    if not success then
+        -- Try alternative path
+        success, module = pcall(function()
+            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
+        end)
+    end
+    
+    if success and module then
+        mousePositionModule = module
+        originalGetMousePos = module.GetMousePos
+        
+        -- Create hooked function
+        local function hookedGetMousePos(self, ...)
+            local args = {...}
+            local p1 = args[1] -- Prediction amount (provided by plasma beam)
+            
+            -- Check if silent aim is active and we have a target
+            if silentAimActive and currentTarget then
+                local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    -- With prediction (like the original code)
+                    if p1 then
+                        local myChar = lp.Character
+                        if myChar and myChar.PrimaryPart then
+                            local distance = (targetHrp.Position - myChar.PrimaryPart.Position).Magnitude
+                            local velocity = targetHrp.AssemblyLinearVelocity
+                            local predictionAmount = typeof(p1) ~= "number" and 50 or p1
+                            
+                            if velocity.Magnitude == 0 then
+                                return targetHrp.Position
+                            else
+                                return targetHrp.Position + velocity * (distance / predictionAmount)
+                            end
+                        end
+                    end
+                    return targetHrp.Position
+                end
+            end
+            
+            -- Otherwise use original function
+            return originalGetMousePos(self, ...)
+        end
+        
+        -- Replace the function
+        module.GetMousePos = hookedGetMousePos
+        return true
+    end
+    return false
+end
+
+local function restoreSilentAim()
+    if mousePositionModule and originalGetMousePos then
+        mousePositionModule.GetMousePos = originalGetMousePos
+    end
+end
+
 -- ===== DUSEKKAR PLASMA BEAM FUNCTIONS =====
 -- Check if I'm Dusekkar
 local function amIDusekkar()
@@ -324,7 +384,6 @@ local function firePlasmaBeam()
     end)
     
     if success then
-        lastFireTime = tick()
         return true
     end
     return false
@@ -340,8 +399,6 @@ local function getSurvivorClosestToCursor()
     
     -- Get mouse position
     local mousePosition = UserInputService:GetMouseLocation()
-    local viewportSize = Camera.ViewportSize
-    local screenCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
     
     local validTargets = {}
     
@@ -350,29 +407,27 @@ local function getSurvivorClosestToCursor()
         -- Skip if this is me
         local usernameAttr = survivor:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            continue
-        end
-        
-        -- Check if survivor is alive
-        local humanoid = survivor:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            continue
-        end
-        
-        local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
-        if targetHrp then
-            -- Check if survivor is on screen
-            local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
-            
-            if onScreen then
-                -- Calculate distance from cursor to this survivor on screen
-                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                local distanceToCursor = (screenVector - mousePosition).Magnitude
-                
-                table.insert(validTargets, {
-                    survivor = survivor,
-                    screenDistance = distanceToCursor
-                })
+            -- Skip this survivor
+        else
+            -- Check if survivor is alive
+            local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    -- Check if survivor is on screen
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
+                    
+                    if onScreen then
+                        -- Calculate distance from cursor to this survivor on screen
+                        local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                        local distanceToCursor = (screenVector - mousePosition).Magnitude
+                        
+                        table.insert(validTargets, {
+                            survivor = survivor,
+                            screenDistance = distanceToCursor
+                        })
+                    end
+                end
             end
         end
     end
@@ -394,20 +449,18 @@ local function getSurvivorClosestToCursor()
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         local usernameAttr = survivor:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            continue
-        end
-        
-        local humanoid = survivor:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            continue
-        end
-        
-        local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
-        if targetHrp then
-            local distance = (targetHrp.Position - myRoot.Position).Magnitude
-            if distance < nearestDist then
-                nearestDist = distance
-                nearestByDistance = survivor
+            -- Skip this survivor
+        else
+            local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDist then
+                        nearestDist = distance
+                        nearestByDistance = survivor
+                    end
+                end
             end
         end
     end
@@ -427,22 +480,22 @@ local function getNearestKiller()
     local nearestDistance = math.huge
     
     for _, killer in ipairs(KillersFolder:GetChildren()) do
-        -- Skip if this is me (if I somehow appear in killers folder)
+        -- Skip if this is me
         local usernameAttr = killer:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            continue
-        end
-        
-        -- Target any killer model
-        local targetHrp = killer:FindFirstChild("HumanoidRootPart")
-        if targetHrp then
-            -- Check if killer is alive
-            local humanoid = killer:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                local distance = (targetHrp.Position - myRoot.Position).Magnitude
-                if distance < nearestDistance then
-                    nearestDistance = distance
-                    nearestKiller = killer
+            -- Skip this killer
+        else
+            -- Target any killer model
+            local targetHrp = killer:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                -- Check if killer is alive
+                local humanoid = killer:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestKiller = killer
+                    end
                 end
             end
         end
@@ -451,37 +504,15 @@ local function getNearestKiller()
     return nearestKiller
 end
 
--- Function to enable shiftlock
-local function enableShiftLock()
-    -- Try to use the game's built-in shiftlock first
-    local success, SmoothShiftLock = pcall(function()
-        return require(ReplicatedStorage:WaitForChild("Systems"):WaitForChild("Player"):WaitForChild("Game"):WaitForChild("SmoothShiftLock"))
-    end)
-    
-    if success and SmoothShiftLock and type(SmoothShiftLock) == "table" then
-        if not SmoothShiftLock.Enabled then
-            SmoothShiftLock:ToggleShiftLock()
-        end
-    else
-        -- Fallback: Simulate shiftlock key press
-        local ShiftlockKeybindEnum = lp.PlayerData and lp.PlayerData.Settings and lp.PlayerData.Settings.Keybinds and lp.PlayerData.Settings.Keybinds.ShiftLock and lp.PlayerData.Settings.Keybinds.ShiftLock.Value
-        if ShiftlockKeybindEnum then
-            local ShiftlockKeyCode = Enum.KeyCode[ShiftlockKeybindEnum]
-            local VIM = game:GetService("VirtualInputManager")
-            VIM:SendKeyEvent(true, ShiftlockKeyCode, false, lp.PlayerGui)
-            VIM:SendKeyEvent(false, ShiftlockKeyCode, false, lp.PlayerGui)
-        end
+-- Function to use silent aim on target (FIXED)
+local function useSilentAim()
+    if not dusekkarEnabled then
+        return false
     end
-end
-
--- Main Dusekkar aiming + firing function
-local function dusekkarAimAndFire()
-    if isAiming then return end
-    if not dusekkarEnabled then return end
     
     -- Check if I'm Dusekkar first
     if not amIDusekkar() then
-        return
+        return false
     end
     
     -- Find target based on mode
@@ -493,114 +524,34 @@ local function dusekkarAimAndFire()
     end
     
     if not target then
-        return
+        return false
     end
     
-    -- Check if plasma beam is on cooldown before starting
+    -- Check if plasma beam is on cooldown
     if isPlasmaBeamOnCooldown() then
-        return
+        return false
     end
     
+    -- Set current target for silent aim (this will persist for the windup)
     currentTarget = target
-    isAiming = true
-    lastFireTime = 0 -- Reset fire cooldown
+    silentAimActive = true
     
-    -- Enable shiftlock
-    pcall(enableShiftLock)
+    -- Fire the plasma beam (1.5 second windup starts now)
+    local success = firePlasmaBeam()
     
-    -- Set mouse behavior to lock center
-    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    if success then
+        SendNotif("Dusekkar", "Firing at " .. target.Name, 1)
+        
+        -- Keep the target active for 2.5 seconds (covers windup + firing + a little extra)
+        -- The plasma beam has a 1.5s windup, then fires
+        task.wait(2.5)
+    end
     
-    -- Store start time for 1.5 second duration
-    local startTime = tick()
+    -- Clear target after firing is complete
+    silentAimActive = false
+    currentTarget = nil
     
-    -- Create aiming + firing loop
-    aimConnection = RunService.Heartbeat:Connect(function()
-        -- Check if we've exceeded 1.5 seconds
-        if tick() - startTime >= aimDuration then
-            -- Time's up - disable aiming
-            isAiming = false
-            if aimConnection then
-                aimConnection:Disconnect()
-                aimConnection = nil
-            end
-            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-            return
-        end
-        
-        -- Make sure target still exists and is alive
-        if not currentTarget or not currentTarget.Parent then
-            -- Try to find a new target
-            if dusekkarTargetMode == "Survivors" then
-                currentTarget = getSurvivorClosestToCursor()
-            else
-                currentTarget = getNearestKiller()
-            end
-            if not currentTarget then
-                -- No targets, disable aiming
-                isAiming = false
-                if aimConnection then
-                    aimConnection:Disconnect()
-                    aimConnection = nil
-                end
-                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-                return
-            end
-        end
-        
-        -- Check if target is still alive
-        local humanoid = currentTarget:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            -- Target is dead, find new one
-            if dusekkarTargetMode == "Survivors" then
-                currentTarget = getSurvivorClosestToCursor()
-            else
-                currentTarget = getNearestKiller()
-            end
-            if not currentTarget then
-                isAiming = false
-                if aimConnection then
-                    aimConnection:Disconnect()
-                    aimConnection = nil
-                end
-                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-                return
-            end
-        end
-        
-        -- Get target HRP
-        local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
-        if not targetHrp then return end
-        
-        -- Get my character position
-        local myChar = lp.Character
-        if not myChar then return end
-        
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-        
-        -- Calculate direction to target
-        local directionToTarget = (targetHrp.Position - myRoot.Position).Unit
-        
-        -- Create target CFrame (look at target)
-        local targetCFrame = CFrame.lookAt(
-            Camera.CFrame.Position,
-            Camera.CFrame.Position + directionToTarget
-        )
-        
-        -- Smoothly tween the camera to target
-        TweenService:Create(
-            Camera, 
-            TweenInfo.new(aimSmoothness, Enum.EasingStyle.Linear), 
-            { CFrame = targetCFrame }
-        ):Play()
-        
-        -- Check cooldown before firing
-        if not isPlasmaBeamOnCooldown() then
-            -- FIRE THE PLASMA BEAM!
-            firePlasmaBeam()
-        end
-    end)
+    return success
 end
 
 -- ===== CHANCE-BASED BLOCKING =====
@@ -891,51 +842,52 @@ local function checkForAttackSounds()
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            continue
-        end
-        
-        for _, sound in ipairs(killer:GetDescendants()) do
-            if sound:IsA("Sound") and sound.IsPlaying then
-                local soundId = extractNumericSoundId(sound)
-                if soundId and autoBlockTriggerSounds[soundId] then
-                    local killerHrp = killer:FindFirstChild("HumanoidRootPart")
-                    if not killerHrp then continue end
-                    
-                    local distance = (killerHrp.Position - myRoot.Position).Magnitude
-                    if distance > detectionRange then continue end
-                    
-                    if facingCheckEnabled and not isFacing(myRoot, killerHrp) then continue end
-                    if not shouldBlock() then continue end
-                    
-                    if blockdelay > 0 then
-                        task.wait(blockdelay)
-                    end
-                    
-                    refreshUIRefs()
-                    
-                    if autoblocktype == "Block" then
-                        if cachedCooldown and cachedCooldown.Text == "" then
-                            fireGuiBlock()
-                            if doubleblocktech then
-                                fireGuiPunch()
+            -- Skip this killer
+        else
+            for _, sound in ipairs(killer:GetDescendants()) do
+                if sound:IsA("Sound") and sound.IsPlaying then
+                    local soundId = extractNumericSoundId(sound)
+                    if soundId and autoBlockTriggerSounds[soundId] then
+                        local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+                        if killerHrp then
+                            local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                            if distance <= detectionRange then
+                                if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
+                                    if shouldBlock() then
+                                        if blockdelay > 0 then
+                                            task.wait(blockdelay)
+                                        end
+                                        
+                                        refreshUIRefs()
+                                        
+                                        if autoblocktype == "Block" then
+                                            if cachedCooldown and cachedCooldown.Text == "" then
+                                                fireGuiBlock()
+                                                if doubleblocktech then
+                                                    fireGuiPunch()
+                                                end
+                                                if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
+                                                    _lastBlockMessageTime = tick()
+                                                end
+                                                lastBlockTime = now
+                                                return
+                                            end
+                                        elseif autoblocktype == "Charge" then
+                                            if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
+                                                fireGuiCharge()
+                                                lastBlockTime = now
+                                                return
+                                            end
+                                        elseif autoblocktype == "7n7 Clone" then
+                                            if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
+                                                fireGuiClone()
+                                                lastBlockTime = now
+                                                return
+                                            end
+                                        end
+                                    end
+                                end
                             end
-                            if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
-                                _lastBlockMessageTime = tick()
-                            end
-                            lastBlockTime = now
-                            return
-                        end
-                    elseif autoblocktype == "Charge" then
-                        if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
-                            fireGuiCharge()
-                            lastBlockTime = now
-                            return
-                        end
-                    elseif autoblocktype == "7n7 Clone" then
-                        if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
-                            fireGuiClone()
-                            lastBlockTime = now
-                            return
                         end
                     end
                 end
@@ -1012,28 +964,30 @@ local function updateDetectionRangeVisuals()
                 local killerHrp = killer:FindFirstChild("HumanoidRootPart")
                 if killerHrp and not killerHrp:FindFirstChild("DetectionCircle") then
                     local usernameAttr = killer:GetAttribute("Username")
-                    if usernameAttr and usernameAttr == lp.Name then continue end
-                    
-                    local distance = (killerHrp.Position - myRoot.Position).Magnitude
-                    local inRange = distance <= detectionRange
-                    
-                    pcall(function()
-                        local circle = Instance.new("CylinderHandleAdornment")
-                        circle.Name = "DetectionCircle"
-                        circle.Adornee = killerHrp
-                        circle.Color3 = inRange and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 165, 0)
-                        circle.AlwaysOnTop = true
-                        circle.ZIndex = 1
-                        circle.Transparency = 0.6
-                        circle.Radius = detectionRange
-                        circle.Height = 0.12
+                    if usernameAttr and usernameAttr == lp.Name then
+                        -- Skip this killer
+                    else
+                        local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                        local inRange = distance <= detectionRange
                         
-                        local yOffset = -(killerHrp.Size.Y / 2 + 0.05)
-                        circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
-                        
-                        circle.Parent = killerHrp
-                        detectionCircles[killer] = circle
-                    end)
+                        pcall(function()
+                            local circle = Instance.new("CylinderHandleAdornment")
+                            circle.Name = "DetectionCircle"
+                            circle.Adornee = killerHrp
+                            circle.Color3 = inRange and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 165, 0)
+                            circle.AlwaysOnTop = true
+                            circle.ZIndex = 1
+                            circle.Transparency = 0.6
+                            circle.Radius = detectionRange
+                            circle.Height = 0.12
+                            
+                            local yOffset = -(killerHrp.Size.Y / 2 + 0.05)
+                            circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
+                            
+                            circle.Parent = killerHrp
+                            detectionCircles[killer] = circle
+                        end)
+                    end
                 end
             end
         end
@@ -1066,7 +1020,7 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local Window = Rayfield:CreateWindow({
     Name = "Auto Block Hub - SIMPLE",
     LoadingTitle = "Auto Block Script",
-    LoadingSubtitle = "Simple Version + Dusekkar Aimbot",
+    LoadingSubtitle = "Simple Version + Dusekkar Silent Aim",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "AutoBlockHub",
@@ -1078,7 +1032,7 @@ local Window = Rayfield:CreateWindow({
 
 local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
 local TechTab = Window:CreateTab("Techs", 4483362458)
-local DusekkarTab = Window:CreateTab("Dusekkar Aimbot", 4483362458)
+local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
 AutoBlockTab:CreateToggle({
     Name = "1. Auto Block For Guest",
@@ -1274,21 +1228,18 @@ TechTab:CreateButton({
     end
 })
 
--- ===== DUSEKKAR AIMBOT TAB =====
+-- ===== DUSEKKAR SILENT AIM TAB =====
 DusekkarTab:CreateToggle({
-    Name = "Enable Dusekkar Aimbot",
+    Name = "Enable Dusekkar Silent Aim",
     CurrentValue = false,
     Flag = "DusekkarToggle",
     Callback = function(Value)
         dusekkarEnabled = Value
         if not Value then
-            -- Stop any ongoing aiming
-            isAiming = false
-            if aimConnection then
-                aimConnection:Disconnect()
-                aimConnection = nil
-            end
-            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            -- Restore original function when disabled
+            restoreSilentAim()
+            silentAimActive = false
+            currentTarget = nil
         end
     end
 })
@@ -1300,6 +1251,7 @@ DusekkarTab:CreateDropdown({
     Flag = "DusekkarTargetMode",
     Callback = function(Option)
         dusekkarTargetMode = Option
+        SendNotif("Dusekkar", "Now targeting: " .. Option, 1)
     end
 })
 
@@ -1321,75 +1273,55 @@ DusekkarTab:CreateKeybind({
             dusekkarTargetMode = "Survivors"
         end
         
-        -- Show notification for mode switch (only notification left)
-        SendNotif("Dusekkar", "Switched to targeting: " .. dusekkarTargetMode, 2)
+        -- Show notification for mode switch
+        SendNotif("Dusekkar", "Now targeting: " .. dusekkarTargetMode, 2)
     end
 })
 
 DusekkarTab:CreateKeybind({
-    Name = "Activate Aimbot",
+    Name = "Fire Plasma Beam (Silent)",
     CurrentKeybind = "F",
     HoldToInteract = false,
-    Flag = "DusekkarActivateKey",
+    Flag = "DusekkarFireKey",
     Callback = function()
         if not dusekkarEnabled then
             return
         end
-        dusekkarAimAndFire()
-    end
-})
-
-DusekkarTab:CreateSlider({
-    Name = "Aim Duration (seconds)",
-    Range = {0.5, 3},
-    Increment = 0.1,
-    Suffix = "s",
-    CurrentValue = 1.5,
-    Flag = "DusekkarDuration",
-    Callback = function(Value)
-        aimDuration = Value
-    end
-})
-
-DusekkarTab:CreateSlider({
-    Name = "Fire Cooldown (seconds)",
-    Range = {0.1, 1},
-    Increment = 0.05,
-    Suffix = "s",
-    CurrentValue = 0.3,
-    Flag = "DusekkarCooldown",
-    Callback = function(Value)
-        FIRE_COOLDOWN = Value
-    end
-})
-
-DusekkarTab:CreateSlider({
-    Name = "Aim Smoothness",
-    Range = {0.03, 0.3},
-    Increment = 0.01,
-    Suffix = "s",
-    CurrentValue = 0.1,
-    Flag = "DusekkarSmoothness",
-    Callback = function(Value)
-        aimSmoothness = Value
+        useSilentAim()
     end
 })
 
 DusekkarTab:CreateParagraph({
-    Title = "Instructions",
-    Content = "DUSEKKAR AIMBOT:\n\n" ..
-              "1. Must be playing as Dusekkar\n" ..
-              "2. Enable the aimbot toggle first\n" ..
-              "3. Press Q to switch between Survivors/Killers (only works as Dusekkar)\n" ..
-              "4. Press F to activate 1.5s lock and fire\n\n" ..
+    Title = "How Silent Aim Works",
+    Content = "PURE SILENT AIM:\n\n" ..
+              "✓ NO camera movement\n" ..
+              "✓ NO shiftlock\n" ..
+              "✓ NO suspicious aiming\n\n" ..
+              "How it works:\n" ..
+              "• Hooks into game's mouse position system\n" ..
+              "• Target stays locked for FULL 2.5 seconds\n" ..
+              "• Covers the 1.5s windup + firing time\n" ..
+              "• Includes velocity prediction\n\n" ..
+              "Instructions:\n" ..
+              "1. Enable the toggle\n" ..
+              "2. Press Q to switch between Survivors/Killers\n" ..
+              "3. Press F to silently fire at target\n\n" ..
               "SURVIVOR MODE: Targets survivor closest to your cursor\n" ..
-              "KILLER MODE: Targets nearest killer (only one at a time)\n\n" ..
-              "Auto-checks: Plasma beam cooldown, character validity"
+              "KILLER MODE: Targets nearest killer"
 })
 
 Rayfield:LoadConfiguration()
 
 refreshUIRefs()
 
+-- Setup silent aim hook when script starts
+setupSilentAim()
+
+-- Cleanup on script end
+local function cleanup()
+    restoreSilentAim()
+    mainLoopConn:Disconnect()
+end
+
 print("Auto Block Hub - Simple Version Loaded!")
-print("Added Dusekkar Aimbot with cursor-based targeting and Q key to switch modes!")
+print("Dusekkar Silent Aim Ready - Press F to fire")
