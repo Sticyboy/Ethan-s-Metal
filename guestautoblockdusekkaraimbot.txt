@@ -142,6 +142,9 @@ local silentAimActive = false
 local originalGetMousePos = nil
 local mousePositionModule = nil
 local currentTarget = nil
+local predictionMultiplier = 1.0 -- Default value (1 = normal prediction)
+local predictionMin = 0.5  -- Minimum prediction factor
+local predictionMax = 2.5  -- Maximum prediction factor
 
 -- ===== SPECIAL KILLER DETECTION =====
 local isPlayingAsSpecialKiller = false
@@ -311,13 +314,17 @@ local function setupSilentAim()
             if silentAimActive and currentTarget then
                 local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
                 if targetHrp then
-                    -- With prediction (like the original code)
+                    -- With prediction based on the slider value
                     if p1 then
                         local myChar = lp.Character
                         if myChar and myChar.PrimaryPart then
                             local distance = (targetHrp.Position - myChar.PrimaryPart.Position).Magnitude
                             local velocity = targetHrp.AssemblyLinearVelocity
+                            
+                            -- Apply prediction multiplier to the prediction amount
+                            -- Higher multiplier = more prediction (shoot further ahead)
                             local predictionAmount = typeof(p1) ~= "number" and 50 or p1
+                            predictionAmount = predictionAmount * predictionMultiplier
                             
                             if velocity.Magnitude == 0 then
                                 return targetHrp.Position
@@ -1407,6 +1414,20 @@ DusekkarTab:CreateDropdown({
     end
 })
 
+-- NEW PREDICTION SLIDER (1.0 to 2.5)
+DusekkarTab:CreateSlider({
+    Name = "Prediction Multiplier",
+    Range = {1, 2.5},
+    Increment = 0.1,
+    Suffix = "x",
+    CurrentValue = 1.0,
+    Flag = "DusekkarPrediction",
+    Callback = function(Value)
+        predictionMultiplier = Value
+        SendNotif("Prediction", "Set to " .. Value .. "x", 1)
+    end
+})
+
 DusekkarTab:CreateKeybind({
     Name = "Switch Target Mode",
     CurrentKeybind = "Q",
@@ -1454,10 +1475,15 @@ DusekkarTab:CreateParagraph({
               "• Target stays locked for FULL 2.5 seconds\n" ..
               "• Covers the 1.5s windup + firing time\n" ..
               "• Includes velocity prediction\n\n" ..
+              "NEW: Prediction Slider (1.0 - 2.5x)\n" ..
+              "• 1.0x = Normal prediction\n" ..
+              "• Higher values = Shoot further ahead\n" ..
+              "• Useful for fast-moving targets\n\n" ..
               "Instructions:\n" ..
               "1. Enable the toggle\n" ..
-              "2. Press Q to switch between Survivors/Killers\n" ..
-              "3. Press F to silently fire at target\n\n" ..
+              "2. Adjust prediction slider as needed\n" ..
+              "3. Press Q to switch between Survivors/Killers\n" ..
+              "4. Press F to silently fire at target\n\n" ..
               "SURVIVOR MODE: Targets survivor closest to your cursor\n" ..
               "KILLER MODE: Targets nearest killer"
 })
