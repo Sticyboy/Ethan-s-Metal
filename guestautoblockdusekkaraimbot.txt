@@ -690,6 +690,7 @@ local function checkSpecialKillerAutoParry()
         ["132596270805754"] = true,
         ["83851356262523"] = true,
         ["111910850942168"] = true,
+        ["115267992424648"] = true, -- Added new sound ID
         -- TwoTime sounds
         ["99820161736138"] = true,
         ["86710781315432"] = true,
