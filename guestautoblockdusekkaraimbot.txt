@@ -143,8 +143,8 @@ local originalGetMousePos = nil
 local mousePositionModule = nil
 local currentTarget = nil
 local predictionMultiplier = 1.0 -- Default value (1 = normal prediction)
-local predictionMin = 0.5  -- Minimum prediction factor
-local predictionMax = 2.5  -- Maximum prediction factor
+local predictionMin = 0.1  -- Minimum prediction factor
+local predictionMax = 5.0  -- Maximum prediction factor
 
 -- ===== SPECIAL KILLER DETECTION =====
 local isPlayingAsSpecialKiller = false
@@ -305,7 +305,7 @@ local function setupSilentAim()
         mousePositionModule = module
         originalGetMousePos = module.GetMousePos
         
-        -- Create hooked function
+        -- Create hooked function with improved prediction from first script
         local function hookedGetMousePos(self, ...)
             local args = {...}
             local p1 = args[1] -- Prediction amount (provided by plasma beam)
@@ -314,22 +314,30 @@ local function setupSilentAim()
             if silentAimActive and currentTarget then
                 local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
                 if targetHrp then
-                    -- With prediction based on the slider value
+                    -- Enhanced prediction based on the first script
                     if p1 then
                         local myChar = lp.Character
                         if myChar and myChar.PrimaryPart then
                             local distance = (targetHrp.Position - myChar.PrimaryPart.Position).Magnitude
-                            local velocity = targetHrp.AssemblyLinearVelocity
+                            local targetVelocity = targetHrp.AssemblyLinearVelocity
                             
-                            -- Apply prediction multiplier to the prediction amount
-                            -- Higher multiplier = more prediction (shoot further ahead)
-                            local predictionAmount = typeof(p1) ~= "number" and 50 or p1
-                            predictionAmount = predictionAmount * predictionMultiplier
+                            -- Get base prediction amount from plasma beam
+                            local basePredictionTime = typeof(p1) ~= "number" and 50 or p1
                             
-                            if velocity.Magnitude == 0 then
+                            -- Scale prediction based on distance (like in the first script)
+                            local scaledPredictionTime = math.clamp(
+                                basePredictionTime * (1 - math.min(distance / 100, 1)),
+                                basePredictionTime / 3,
+                                basePredictionTime * 3
+                            )
+                            
+                            -- Apply prediction multiplier from slider
+                            scaledPredictionTime = scaledPredictionTime * predictionMultiplier
+                            
+                            if targetVelocity.Magnitude == 0 then
                                 return targetHrp.Position
                             else
-                                return targetHrp.Position + velocity * (distance / predictionAmount)
+                                return targetHrp.Position + targetVelocity * (distance / scaledPredictionTime)
                             end
                         end
                     end
@@ -1414,10 +1422,10 @@ DusekkarTab:CreateDropdown({
     end
 })
 
--- NEW PREDICTION SLIDER (1.0 to 2.5)
+-- NEW PREDICTION SLIDER (0.1 to 5.0) - matching the first script
 DusekkarTab:CreateSlider({
-    Name = "Prediction Multiplier",
-    Range = {1, 2.5},
+    Name = "Prediction Slider",
+    Range = {0.1, 5},
     Increment = 0.1,
     Suffix = "x",
     CurrentValue = 1.0,
@@ -1475,10 +1483,11 @@ DusekkarTab:CreateParagraph({
               "• Target stays locked for FULL 2.5 seconds\n" ..
               "• Covers the 1.5s windup + firing time\n" ..
               "• Includes velocity prediction\n\n" ..
-              "NEW: Prediction Slider (1.0 - 2.5x)\n" ..
+              "NEW: Prediction Slider (0.1 - 5.0x)\n" ..
               "• 1.0x = Normal prediction\n" ..
               "• Higher values = Shoot further ahead\n" ..
-              "• Useful for fast-moving targets\n\n" ..
+              "• Lower values = Shoot closer to current position\n" ..
+              "• Distance-based scaling (closer = less prediction)\n\n" ..
               "Instructions:\n" ..
               "1. Enable the toggle\n" ..
               "2. Adjust prediction slider as needed\n" ..
