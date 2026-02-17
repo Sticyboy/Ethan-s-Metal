@@ -698,7 +698,7 @@ local function checkSpecialKillerAutoParry()
     
     local shouldUseAbility = false
     
-    -- Table of sound IDs that trigger special killer abilities (Chance sounds removed)
+    -- Table of sound IDs that trigger special killer abilities
     local triggerSoundIds = {
         -- Shedletsky sounds
         ["12222225"] = true,
@@ -709,10 +709,11 @@ local function checkSpecialKillerAutoParry()
         -- TwoTime sounds
         ["99820161736138"] = true,
         ["86710781315432"] = true,
-        -- Chance sounds REMOVED - now using animation detection
+        -- Chance specific sound (only this one)
+        ["139012439429121"] = true,
     }
     
-    -- Check Shedletsky sounds (uses detectionRange)
+    -- Check Shedletsky sounds (FIXED 20 range - NOT detectionRange)
     if (currentKillerType == "Slasher" and ragingPaceAutoParry) or 
        (currentKillerType == "JohnDoe" and error404AutoParry) then
         
@@ -721,8 +722,9 @@ local function checkSpecialKillerAutoParry()
         for _, shedletsky in ipairs(allShedletskies) do
             local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
             if shedletskyHrp then
+                -- USING FIXED 20, NOT detectionRange
                 local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
-                if distance <= detectionRange then
+                if distance <= 20 then
                     for _, sound in ipairs(shedletsky:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
@@ -766,7 +768,7 @@ local function checkSpecialKillerAutoParry()
         end
     end
     
-    -- Check Chance animations (FIXED 90 range - using ANIMATION ID instead of sounds)
+    -- Check Chance - BOTH AUDIO AND ANIMATION DETECTION (FIXED 90 range)
     if not shouldUseAbility and 
        ((currentKillerType == "Slasher" and ragingPaceAutoParry) or 
         (currentKillerType == "JohnDoe" and error404AutoParry)) then
@@ -779,21 +781,36 @@ local function checkSpecialKillerAutoParry()
                 -- USING FIXED 90, NOT detectionRange
                 local distance = (chanceHrp.Position - myRoot.Position).Magnitude
                 if distance <= 90 then
-                    -- Check Chance's animations instead of sounds
-                    local humanoid = chance:FindFirstChildOfClass("Humanoid")
-                    if humanoid then
-                        local animator = humanoid:FindFirstChildOfClass("Animator")
-                        if animator then
-                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local animId = tostring(track.Animation.AnimationId):match("%d+")
-                                -- Check for the specific animation ID: 133491532453922
-                                if animId == "133491532453922" then
-                                    shouldUseAbility = true
-                                    break
+                    
+                    -- Check Chance's sounds first (specific audio ID: 139012439429121)
+                    for _, sound in ipairs(chance:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and soundId == "139012439429121" then
+                                shouldUseAbility = true
+                                break
+                            end
+                        end
+                    end
+                    
+                    -- If sound not found, check Chance's animations (animation ID: 133491532453922)
+                    if not shouldUseAbility then
+                        local humanoid = chance:FindFirstChildOfClass("Humanoid")
+                        if humanoid then
+                            local animator = humanoid:FindFirstChildOfClass("Animator")
+                            if animator then
+                                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                    local animId = tostring(track.Animation.AnimationId):match("%d+")
+                                    -- Check for the specific animation ID
+                                    if animId == "133491532453922" then
+                                        shouldUseAbility = true
+                                        break
+                                    end
                                 end
                             end
                         end
                     end
+                    
                     if shouldUseAbility then break end
                 end
             end
@@ -1083,7 +1100,7 @@ local function updateDetectionRangeVisuals()
                         visualRange = 30
                         circleColor = Color3.fromRGB(0, 255, 255) -- Cyan for TwoTime
                     elseif survivor.Name == "Shedletsky" then
-                        visualRange = detectionRange -- Uses slider
+                        visualRange = 20 -- FIXED 20 range for Shedletsky
                         circleColor = Color3.fromRGB(0, 255, 0) -- Green for Shedletsky
                     elseif survivor.Name == "Guest1337" then
                         visualRange = detectionRange -- Uses slider
