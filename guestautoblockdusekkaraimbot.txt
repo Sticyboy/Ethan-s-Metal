@@ -146,6 +146,16 @@ local predictionMultiplier = 1.0 -- Default value (1 = normal prediction)
 local predictionMin = 0.1  -- Minimum prediction factor
 local predictionMax = 5.0  -- Maximum prediction factor
 
+-- ===== HDT (HITBOX DRAGGING TECH) VARIABLES =====
+local hitboxDraggingTech = false
+local _hitboxDraggingDebounce = false
+local HITBOX_DRAG_DURATION = 1.4
+local HITBOX_DETECT_RADIUS = 6
+local Dspeed = 5.6
+local Ddelay = 0
+local hdtActive = false
+local hdtConnection = nil
+
 -- ===== SPECIAL KILLER DETECTION =====
 local isPlayingAsSpecialKiller = false
 local currentKillerType = nil
@@ -285,6 +295,168 @@ local function fireGuiClone()
             testRemote:FireServer(unpack(args))
         end)
     end
+end
+
+-- ===== HDT (HITBOX DRAGGING TECH) FUNCTIONS =====
+-- Utility to safely get a killer HRP
+local function getKillerHRP(killerModel)
+    if not killerModel then return nil end
+    if killerModel:FindFirstChild("HumanoidRootPart") then
+        return killerModel:FindFirstChild("HumanoidRootPart")
+    end
+    if killerModel.PrimaryPart then
+        return killerModel.PrimaryPart
+    end
+    -- try finding any basepart descendant
+    return killerModel:FindFirstChildWhichIsA("BasePart", true)
+end
+
+-- Function to get the nearest killer model
+local function getNearestKillerModel()
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local closest, closestDist = nil, math.huge
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        if killer and killer:IsA("Model") then
+            local hrp = killer:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d = (hrp.Position - myRoot.Position).Magnitude
+                if d < closestDist then
+                    closest, closestDist = killer, d
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Function to check if we have a punch charge (1)
+local function hasPunchCharge()
+    local success, charges = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.Punch.Charges.Text
+    end)
+    if success and charges then
+        return charges == "1"
+    end
+    return false
+end
+
+-- Improved HDT function that aims towards killer and stops when punch charge is 1
+local function beginDragIntoKiller(killerModel)
+    -- Basic guards
+    if _hitboxDraggingDebounce then return end
+    if not killerModel or not killerModel.Parent then return end
+    if not hitboxDraggingTech then return end -- Only run if HDT is enabled
+    
+    local char = lp and lp.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return end
+
+    local targetHRP = getKillerHRP(killerModel)
+    if not targetHRP then
+        warn("beginDragIntoKiller: killer has no HRP/PrimaryPart")
+        return
+    end
+
+    _hitboxDraggingDebounce = true
+    hdtActive = true
+
+    -- INSTANTLY AIM TOWARDS THE KILLER (HORIZONTAL ONLY)
+    local killerPos = targetHRP.Position
+    local myPos = hrp.Position
+    
+    -- Calculate direction to killer (only horizontal plane)
+    local direction = (Vector3.new(killerPos.X, myPos.Y, killerPos.Z) - myPos).Unit
+    
+    -- Instantly set character rotation to face killer (without looking up/down)
+    hrp.CFrame = CFrame.lookAt(myPos, myPos + direction)
+
+    -- save old locomotion state so we can restore it
+    local oldWalk = humanoid.WalkSpeed
+    local oldJump = humanoid.JumpPower
+    local oldPlatformStand = humanoid.PlatformStand
+
+    -- block normal movement by zeroing walk/jump (works for mobile joystick too)
+    humanoid.WalkSpeed = 0
+    humanoid.JumpPower = 0
+    humanoid.PlatformStand = false  -- keep physics normal so BodyVelocity works
+
+    -- create BodyVelocity to push the HRP toward the killer smoothly
+    local bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(1e5, 0, 1e5)     -- allow horizontal movement, keep y free
+    bv.Velocity = Vector3.new(0,0,0)
+    bv.Parent = hrp
+
+    -- Connection to update movement and check for stop conditions
+    hdtConnection = RunService.Heartbeat:Connect(function(dt)
+        if not hdtActive then
+            if hdtConnection then
+                hdtConnection:Disconnect()
+                hdtConnection = nil
+            end
+            if bv and bv.Parent then pcall(function() bv:Destroy() end) end
+            humanoid.WalkSpeed = oldWalk
+            humanoid.JumpPower = oldJump
+            humanoid.PlatformStand = oldPlatformStand
+            _hitboxDraggingDebounce = false
+            return
+        end
+
+        -- abort if character/killer removed
+        if not (char and char.Parent) or not (killerModel and killerModel.Parent) then
+            hdtActive = false
+            return
+        end
+
+        -- refresh target HRP (killer may respawn)
+        targetHRP = getKillerHRP(killerModel)
+        if not targetHRP then
+            hdtActive = false
+            return
+        end
+
+        -- CONTINUOUSLY AIM TOWARDS THE KILLER while moving
+        local currentKillerPos = targetHRP.Position
+        local currentMyPos = hrp.Position
+        local currentDirection = (Vector3.new(currentKillerPos.X, currentMyPos.Y, currentKillerPos.Z) - currentMyPos).Unit
+        hrp.CFrame = CFrame.lookAt(currentMyPos, currentMyPos + currentDirection)
+
+        -- compute desired horizontal velocity toward the target
+        local toTarget = (targetHRP.Position - hrp.Position)
+        local dist = toTarget.Magnitude
+        
+        local horiz = Vector3.new(toTarget.X, 0, toTarget.Z)
+        if horiz.Magnitude > 0.01 then
+            local dir = horiz.Unit
+            bv.Velocity = Vector3.new(dir.X * Dspeed, bv.Velocity.Y, dir.Z * Dspeed)
+        else
+            bv.Velocity = Vector3.new(0, bv.Velocity.Y, 0)
+        end
+
+        -- STOP CONDITION 1: when very close to killer
+        local stopDist = 2.0
+        if dist <= stopDist then
+            hdtActive = false
+            return
+        end
+
+        -- STOP CONDITION 2: when punch charge becomes 1
+        if hasPunchCharge() then
+            hdtActive = false
+            return
+        end
+    end)
+
+    -- final cleanup safety (timeout)
+    task.delay(HITBOX_DRAG_DURATION, function()
+        if hdtActive then
+            hdtActive = false
+        end
+    end)
 end
 
 -- ===== SILENT AIM HOOK SETUP =====
@@ -677,6 +849,21 @@ local function getAllCharactersByName(name)
     return characters
 end
 
+-- ===== CHECK IF PLAYING AS GUEST1337 =====
+local function amIGuest1337()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Guest1337" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
 -- ===== SPECIAL KILLER AUTO PARRY =====
 local lastSpecialAbilityTime = 0
 local SPECIAL_ABILITY_COOLDOWN = 1.0
@@ -697,6 +884,7 @@ local function checkSpecialKillerAutoParry()
     if not myRoot then return end
     
     local shouldUseAbility = false
+    local targetKiller = nil
     
     -- Table of sound IDs that trigger special killer abilities
     local triggerSoundIds = {
@@ -730,6 +918,7 @@ local function checkSpecialKillerAutoParry()
                             local soundId = extractNumericSoundId(sound)
                             if soundId and triggerSoundIds[soundId] then
                                 shouldUseAbility = true
+                                targetKiller = shedletsky
                                 break
                             end
                         end
@@ -758,6 +947,7 @@ local function checkSpecialKillerAutoParry()
                             local soundId = extractNumericSoundId(sound)
                             if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
                                 shouldUseAbility = true
+                                targetKiller = twotime
                                 break
                             end
                         end
@@ -788,6 +978,7 @@ local function checkSpecialKillerAutoParry()
                             local soundId = extractNumericSoundId(sound)
                             if soundId and soundId == "139012439429121" then
                                 shouldUseAbility = true
+                                targetKiller = chance
                                 break
                             end
                         end
@@ -804,6 +995,7 @@ local function checkSpecialKillerAutoParry()
                                     -- Check for the specific animation ID
                                     if animId == "133491532453922" then
                                         shouldUseAbility = true
+                                        targetKiller = chance
                                         break
                                     end
                                 end
@@ -844,6 +1036,7 @@ local function checkSpecialKillerAutoParry()
                                     
                                     if slasherAnims[id] then
                                         shouldUseAbility = true
+                                        targetKiller = guest1337
                                         break
                                     end
                                 end
@@ -883,6 +1076,7 @@ local function checkSpecialKillerAutoParry()
                                     
                                     if guest1337BlockAnims[id] then
                                         shouldUseAbility = true
+                                        targetKiller = guest1337
                                         break
                                     end
                                 end
@@ -991,6 +1185,9 @@ local function checkForAttackSounds()
     
     if not KillersFolder then return end
     
+    -- Check if we're playing as Guest1337
+    local isGuest1337, guestChar = amIGuest1337()
+    
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
@@ -1022,18 +1219,32 @@ local function checkForAttackSounds()
                                                     _lastBlockMessageTime = tick()
                                                 end
                                                 lastBlockTime = now
+                                                
+                                                -- If playing as Guest1337 and HDT is enabled, drag hitbox towards killer
+                                                -- ONLY for Block type, not Charge or Clone
+                                                if isGuest1337 and hitboxDraggingTech and autoblocktype == "Block" then
+                                                    task.wait(Ddelay)
+                                                    task.spawn(function() beginDragIntoKiller(killer) end)
+                                                end
+                                                
                                                 return
                                             end
                                         elseif autoblocktype == "Charge" then
                                             if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
                                                 fireGuiCharge()
                                                 lastBlockTime = now
+                                                
+                                                -- HDT NOT triggered for Charge
+                                                
                                                 return
                                             end
                                         elseif autoblocktype == "7n7 Clone" then
                                             if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
                                                 fireGuiClone()
                                                 lastBlockTime = now
+                                                
+                                                -- HDT NOT triggered for Clone
+                                                
                                                 return
                                             end
                                         end
@@ -1386,6 +1597,45 @@ TechTab:CreateToggle({
     end
 })
 
+-- HDT (Hitbox Dragging Tech) Toggle
+TechTab:CreateToggle({
+    Name = "HDT (Hitbox Dragging Tech)",
+    CurrentValue = false,
+    Flag = "HitboxDraggingToggle",
+    Callback = function(Value)
+        hitboxDraggingTech = Value
+        if not Value and hdtActive then
+            hdtActive = false
+        end
+        SendNotif("HDT", Value and "Enabled - Drags hitbox towards killer (Block only, stops when punch gained)" or "Disabled", 2)
+    end
+})
+
+TechTab:CreateInput({
+    Name = "HDT speed",
+    PlaceholderText = "5.6",
+    RemoveTextAfterFocusLost = false,
+    Flag = "HDTspeed",
+    Callback = function(Text)
+        Dspeed = tonumber(Text) or 5.6
+    end
+})
+
+TechTab:CreateInput({
+    Name = "HDT delay",
+    PlaceholderText = "0",
+    RemoveTextAfterFocusLost = false,
+    Flag = "HDTdelay",
+    Callback = function(Text)
+        Ddelay = tonumber(Text) or 0
+    end
+})
+
+TechTab:CreateParagraph({
+    Title = "Hitbox Dragging tech",
+    Content = "Only triggers on Block (not Charge/Clone). Instantly aims at killer and drags you towards them. Stops automatically when you gain a punch charge."
+})
+
 TechTab:CreateButton({
     Name = "Fake Lag Tech",
     Callback = function()
@@ -1526,4 +1776,4 @@ local function cleanup()
     mainLoopConn:Disconnect()
 end
 
-print("wahoo wario time")
+print("wahoo wario time - HDT (Hitbox Dragging Tech) now aims at killer and stops when punch gained!")
