@@ -116,6 +116,22 @@ local autoBlockTriggerSounds = {
     ["94317217837143"] = true,
 }
 
+-- ===== KILLER-SPECIFIC HDT STOP TIMES =====
+local killerHDTStopTimes = {
+    ["Slasher"] = 0.25,
+    ["JohnDoe"] = 0.45,
+    ["c00lkidd"] = 0.15,
+    ["1x1x1x1"] = 0.45,
+    ["Noli"] = 0.4,
+    ["Sixer"] = 0.4,
+    ["Nosferatu"] = 0.35,
+}
+
+-- ===== KILLER-SPECIFIC DETECTION RANGES =====
+local killerDetectionRanges = {
+    ["Sixer"] = 20, -- Fixed range of 20 for Sixer
+}
+
 -- ===== STATE VARIABLES =====
 local autoBlockForGuest = false
 local ragingPaceAutoParry = false
@@ -343,6 +359,14 @@ local function hasPunchCharge()
     return false
 end
 
+-- Function to get killer-specific HDT stop time
+local function getKillerHDTStopTime(killerModel)
+    if not killerModel then return HITBOX_DRAG_DURATION end
+    
+    local killerName = killerModel.Name
+    return killerHDTStopTimes[killerName] or HITBOX_DRAG_DURATION
+end
+
 -- Improved HDT function that aims towards killer and stops when punch charge is 1
 local function beginDragIntoKiller(killerModel)
     -- Basic guards
@@ -390,6 +414,9 @@ local function beginDragIntoKiller(killerModel)
     bv.MaxForce = Vector3.new(1e5, 0, 1e5)     -- allow horizontal movement, keep y free
     bv.Velocity = Vector3.new(0,0,0)
     bv.Parent = hrp
+
+    -- Get killer-specific stop time
+    local killerStopTime = getKillerHDTStopTime(killerModel)
 
     -- Connection to update movement and check for stop conditions
     hdtConnection = RunService.Heartbeat:Connect(function(dt)
@@ -451,8 +478,8 @@ local function beginDragIntoKiller(killerModel)
         end
     end)
 
-    -- final cleanup safety (timeout)
-    task.delay(HITBOX_DRAG_DURATION, function()
+    -- final cleanup safety (killer-specific timeout)
+    task.delay(killerStopTime, function()
         if hdtActive then
             hdtActive = false
         end
@@ -668,12 +695,10 @@ local function getSurvivorClosestToCursor()
     return nearestByDistance
 end
 
--- Function to find the nearest killer
+-- Function to find the nearest killer with killer-specific range
 local function getNearestKiller()
     local myChar = lp.Character
-    if not myChar then return nil end
-    
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
     
     local nearestKiller = nil
@@ -691,8 +716,12 @@ local function getNearestKiller()
                 -- Check if killer is alive
                 local humanoid = killer:FindFirstChildOfClass("Humanoid")
                 if humanoid and humanoid.Health > 0 then
+                    -- Use killer-specific range if defined
+                    local effectiveRange = killerDetectionRanges[killer.Name] or detectionRange
                     local distance = (targetHrp.Position - myRoot.Position).Magnitude
-                    if distance < nearestDistance then
+                    
+                    -- Only consider killers within their effective range
+                    if distance <= effectiveRange and distance < nearestDistance then
                         nearestDistance = distance
                         nearestKiller = killer
                     end
@@ -984,7 +1013,7 @@ local function checkSpecialKillerAutoParry()
                         end
                     end
                     
-                    -- If sound not found, check Chance's animations (animation ID: 133491532453922)
+                    -- If sound not found, check Chance's animations
                     if not shouldUseAbility then
                         local humanoid = chance:FindFirstChildOfClass("Humanoid")
                         if humanoid then
@@ -992,8 +1021,10 @@ local function checkSpecialKillerAutoParry()
                             if animator then
                                 for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                     local animId = tostring(track.Animation.AnimationId):match("%d+")
-                                    -- Check for the specific animation ID
-                                    if animId == "133491532453922" then
+                                    -- Check for the specific animation IDs
+                                    if animId == "133491532453922" or 
+                                       animId == "86371356500204" or 
+                                       animId == "131189930305001" then
                                         shouldUseAbility = true
                                         targetKiller = chance
                                         break
@@ -1199,8 +1230,11 @@ local function checkForAttackSounds()
                     if soundId and autoBlockTriggerSounds[soundId] then
                         local killerHrp = killer:FindFirstChild("HumanoidRootPart")
                         if killerHrp then
+                            -- Use killer-specific range if defined
+                            local effectiveRange = killerDetectionRanges[killer.Name] or detectionRange
                             local distance = (killerHrp.Position - myRoot.Position).Magnitude
-                            if distance <= detectionRange then
+                            
+                            if distance <= effectiveRange then
                                 if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
                                     if shouldBlock() then
                                         if blockdelay > 0 then
@@ -1352,8 +1386,10 @@ local function updateDetectionRangeVisuals()
                     if usernameAttr and usernameAttr == lp.Name then
                         -- Skip this killer
                     else
+                        -- Use killer-specific range for visual
+                        local effectiveRange = killerDetectionRanges[killer.Name] or detectionRange
                         local distance = (killerHrp.Position - myRoot.Position).Magnitude
-                        local inRange = distance <= detectionRange
+                        local inRange = distance <= effectiveRange
                         
                         pcall(function()
                             local circle = Instance.new("CylinderHandleAdornment")
@@ -1363,7 +1399,7 @@ local function updateDetectionRangeVisuals()
                             circle.AlwaysOnTop = true
                             circle.ZIndex = 1
                             circle.Transparency = 0.6
-                            circle.Radius = detectionRange
+                            circle.Radius = effectiveRange
                             circle.Height = 0.12
                             
                             local yOffset = -(killerHrp.Size.Y / 2 + 0.05)
@@ -1633,7 +1669,7 @@ TechTab:CreateInput({
 
 TechTab:CreateParagraph({
     Title = "Hitbox Dragging tech",
-    Content = "Only triggers on Block (not Charge/Clone). Instantly aims at killer and drags you towards them. Stops automatically when you gain a punch charge."
+    Content = "Only triggers on Block (not Charge/Clone). Instantly aims at killer and drags you towards them. Stops automatically when you gain a punch charge or after killer-specific time."
 })
 
 TechTab:CreateButton({
@@ -1776,4 +1812,4 @@ local function cleanup()
     mainLoopConn:Disconnect()
 end
 
-print("wahoo wario time - HDT (Hitbox Dragging Tech) now aims at killer and stops when punch gained!")
+print("wahoo wario time - HDT now has killer-specific stop times and Sixer fixed range!")
