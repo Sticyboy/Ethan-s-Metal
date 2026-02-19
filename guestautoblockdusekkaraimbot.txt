@@ -151,6 +151,10 @@ local autoblocktype = "Block"
 local autoSwitchBlockCharge = false
 local originalBlockType = "Block"
 
+-- ===== AUDIO TIMER SYSTEM =====
+local audioStartTimes = {} -- Table to track when a sound started playing
+local audioTimers = {} -- Table to track timer connections for each sound
+
 -- ===== DUSEKKAR SILENT AIM VARIABLES =====
 local dusekkarEnabled = false
 local dusekkarTargetMode = "Survivors" -- "Survivors" or "Killers"
@@ -313,6 +317,18 @@ local function fireGuiClone()
     end
 end
 
+-- Function to check if the player is helpless (cannot block)
+local function isHelpless()
+    local success, helplessObj = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.Block:FindFirstChild("Helpless")
+    end)
+    
+    if success and helplessObj then
+        return true
+    end
+    return false
+end
+
 -- ===== HDT (HITBOX DRAGGING TECH) FUNCTIONS =====
 -- Utility to safely get a killer HRP
 local function getKillerHRP(killerModel)
@@ -365,6 +381,20 @@ local function getKillerHDTStopTime(killerModel)
     
     local killerName = killerModel.Name
     return killerHDTStopTimes[killerName] or HITBOX_DRAG_DURATION
+end
+
+-- Function to check if a sound is still within its killer's HDT window
+local function isWithinHDTWindow(sound, killerModel)
+    if not sound or not killerModel then return false end
+    
+    local startTime = audioStartTimes[sound]
+    if not startTime then return false end
+    
+    local now = tick()
+    local elapsed = now - startTime
+    local stopTime = getKillerHDTStopTime(killerModel)
+    
+    return elapsed <= stopTime
 end
 
 -- Improved HDT function that aims towards killer and stops when punch charge is 1
@@ -853,6 +883,42 @@ local function extractNumericSoundId(sound)
     return num
 end
 
+-- Function to track when a sound starts playing
+local function trackSoundStart(sound)
+    if not sound then return end
+    
+    -- Record start time
+    audioStartTimes[sound] = tick()
+    
+    -- Clean up when sound stops or is destroyed
+    local function cleanupSound()
+        audioStartTimes[sound] = nil
+        if audioTimers[sound] then
+            audioTimers[sound]:Disconnect()
+            audioTimers[sound] = nil
+        end
+    end
+    
+    -- Connect to sound stopping
+    local stoppedConn
+    stoppedConn = sound.Stopped:Connect(function()
+        cleanupSound()
+        if stoppedConn then stoppedConn:Disconnect() end
+    end)
+    
+    -- Connect to sound being destroyed
+    local destroyedConn
+    destroyedConn = sound.Destroying:Connect(function()
+        cleanupSound()
+        if destroyedConn then destroyedConn:Disconnect() end
+    end)
+    
+    audioTimers[sound] = {
+        stopped = stoppedConn,
+        destroyed = destroyedConn
+    }
+end
+
 -- ===== GET ALL CHARACTERS WITH SPECIFIC NAME =====
 local function getAllCharactersByName(name)
     local characters = {}
@@ -1063,6 +1129,7 @@ local function checkSpecialKillerAutoParry()
                                         ["72722244508749"] = true,
                                         ["140671644163156"] = true,
                                         ["100926346851492"] = true,
+                                        ["96959123077498"] = true, -- New animation ID added
                                     }
                                     
                                     if slasherAnims[id] then
@@ -1103,6 +1170,7 @@ local function checkSpecialKillerAutoParry()
                                         ["72722244508749"] = true,
                                         ["140671644163156"] = true,
                                         ["100926346851492"] = true,
+                                        ["96959123077498"] = true, -- New animation ID added
                                     }
                                     
                                     if guest1337BlockAnims[id] then
@@ -1202,7 +1270,7 @@ local function checkSpecialKillerStatus()
     return false
 end
 
--- ===== CHECK FOR ATTACK SOUNDS =====
+-- ===== CHECK FOR ATTACK SOUNDS WITH HDT TIMER CHECK AND HELPLESS CHECK =====
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
     if isPlayingAsSpecialKiller then return end
@@ -1228,6 +1296,17 @@ local function checkForAttackSounds()
                 if sound:IsA("Sound") and sound.IsPlaying then
                     local soundId = extractNumericSoundId(sound)
                     if soundId and autoBlockTriggerSounds[soundId] then
+                        
+                        -- Track when this sound started if we haven't already
+                        if not audioStartTimes[sound] then
+                            trackSoundStart(sound)
+                        end
+                        
+                        -- Check if this sound is still within the killer's HDT window
+                        if not isWithinHDTWindow(sound, killer) then
+                            continue -- Skip this sound, it's outside the HDT window
+                        end
+                        
                         local killerHrp = killer:FindFirstChild("HumanoidRootPart")
                         if killerHrp then
                             -- Use killer-specific range if defined
@@ -1242,6 +1321,12 @@ local function checkForAttackSounds()
                                         end
                                         
                                         refreshUIRefs()
+                                        
+                                        -- HELPLESS CHECK - Skip if player is helpless (cannot block)
+                                        if isHelpless() then
+                                            -- Skip block and charge when helpless
+                                            continue
+                                        end
                                         
                                         if autoblocktype == "Block" then
                                             if cachedCooldown and cachedCooldown.Text == "" then
@@ -1812,4 +1897,4 @@ local function cleanup()
     mainLoopConn:Disconnect()
 end
 
-print("wahoo wario time - HDT now has killer-specific stop times and Sixer fixed range!")
+print("wahoo wario time - Added Helpless check for Guest1337 auto block!")
