@@ -308,6 +308,18 @@ local function fireGuiClone()
     end
 end
 
+-- Function to check if the player is helpless (cannot block)
+local function isHelpless()
+    local success, helplessObj = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.Block:FindFirstChild("Helpless")
+    end)
+    
+    if success and helplessObj then
+        return true
+    end
+    return false
+end
+
 -- ===== HDT (HITBOX DRAGGING TECH) FUNCTIONS =====
 -- Utility to safely get a killer HRP
 local function getKillerHRP(killerModel)
@@ -1197,7 +1209,7 @@ local function checkSpecialKillerStatus()
     return false
 end
 
--- ===== CHECK FOR ATTACK SOUNDS =====
+-- ===== CHECK FOR ATTACK SOUNDS WITH HELPLESS CHECK =====
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
     if isPlayingAsSpecialKiller then return end
@@ -1234,6 +1246,12 @@ local function checkForAttackSounds()
                                         end
                                         
                                         refreshUIRefs()
+                                        
+                                        -- HELPLESS CHECK - Skip if player is helpless (cannot block)
+                                        if isHelpless() then
+                                            -- Skip block and charge when helpless
+                                            continue
+                                        end
                                         
                                         if autoblocktype == "Block" then
                                             if cachedCooldown and cachedCooldown.Text == "" then
