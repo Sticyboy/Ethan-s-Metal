@@ -163,8 +163,6 @@ local originalGetMousePos = nil
 local mousePositionModule = nil
 local currentTarget = nil
 local predictionMultiplier = 1.0 -- Default value (1 = normal prediction)
-local predictionMin = 0.1  -- Minimum prediction factor
-local predictionMax = 5.0  -- Maximum prediction factor
 
 -- ===== HDT (HITBOX DRAGGING TECH) VARIABLES =====
 local hitboxDraggingTech = false
@@ -534,48 +532,51 @@ local function setupSilentAim()
         mousePositionModule = module
         originalGetMousePos = module.GetMousePos
         
-        -- Create hooked function with improved prediction from first script
+        -- Create hooked function
         local function hookedGetMousePos(self, ...)
-            local args = {...}
-            local p1 = args[1] -- Prediction amount (provided by plasma beam)
+            -- Always return original if silent aim is not active
+            if not silentAimActive or not currentTarget then
+                return originalGetMousePos(self, ...)
+            end
             
-            -- Check if silent aim is active and we have a target
-            if silentAimActive and currentTarget then
-                local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
-                if targetHrp then
-                    -- Enhanced prediction based on the first script
-                    if p1 then
-                        local myChar = lp.Character
-                        if myChar and myChar.PrimaryPart then
-                            local distance = (targetHrp.Position - myChar.PrimaryPart.Position).Magnitude
-                            local targetVelocity = targetHrp.AssemblyLinearVelocity
-                            
-                            -- Get base prediction amount from plasma beam
-                            local basePredictionTime = typeof(p1) ~= "number" and 50 or p1
-                            
-                            -- Scale prediction based on distance (like in the first script)
-                            local scaledPredictionTime = math.clamp(
-                                basePredictionTime * (1 - math.min(distance / 100, 1)),
-                                basePredictionTime / 3,
-                                basePredictionTime * 3
-                            )
-                            
-                            -- Apply prediction multiplier from slider
-                            scaledPredictionTime = scaledPredictionTime * predictionMultiplier
-                            
-                            if targetVelocity.Magnitude == 0 then
-                                return targetHrp.Position
-                            else
-                                return targetHrp.Position + targetVelocity * (distance / scaledPredictionTime)
-                            end
-                        end
+            -- Get the target's HRP
+            local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
+            if not targetHrp then
+                return originalGetMousePos(self, ...)
+            end
+            
+            local args = {...}
+            local p1 = args[1] -- Prediction amount
+            
+            -- If prediction is provided, calculate predicted position
+            if p1 then
+                local myChar = lp.Character
+                if myChar and myChar.PrimaryPart then
+                    local distance = (targetHrp.Position - myChar.PrimaryPart.Position).Magnitude
+                    local targetVelocity = targetHrp.AssemblyLinearVelocity
+                    
+                    -- Get base prediction time
+                    local basePredictionTime = typeof(p1) ~= "number" and 50 or p1
+                    
+                    -- Scale prediction based on distance
+                    local scaledPredictionTime = math.clamp(
+                        basePredictionTime * (1 - math.min(distance / 100, 1)),
+                        basePredictionTime / 3,
+                        basePredictionTime * 3
+                    )
+                    
+                    -- Apply prediction multiplier
+                    scaledPredictionTime = scaledPredictionTime * predictionMultiplier
+                    
+                    if targetVelocity.Magnitude > 0 then
+                        -- Return predicted position
+                        return targetHrp.Position + targetVelocity * (distance / scaledPredictionTime)
                     end
-                    return targetHrp.Position
                 end
             end
             
-            -- Otherwise use original function
-            return originalGetMousePos(self, ...)
+            -- Default to current target position
+            return targetHrp.Position
         end
         
         -- Replace the function
@@ -651,15 +652,12 @@ local function getSurvivorClosestToCursor()
     local myChar = lp.Character
     if not myChar then return nil end
     
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-    
     -- Get mouse position
     local mousePosition = UserInputService:GetMouseLocation()
     
     local validTargets = {}
     
-    -- First, find all valid survivors
+    -- Find all valid survivors
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         -- Skip if this is me
         local usernameAttr = survivor:GetAttribute("Username")
@@ -712,7 +710,7 @@ local function getSurvivorClosestToCursor()
             if humanoid and humanoid.Health > 0 then
                 local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
                 if targetHrp then
-                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    local distance = (targetHrp.Position - myChar:FindFirstChild("HumanoidRootPart").Position).Magnitude
                     if distance < nearestDist then
                         nearestDist = distance
                         nearestByDistance = survivor
@@ -725,88 +723,133 @@ local function getSurvivorClosestToCursor()
     return nearestByDistance
 end
 
--- Function to find the nearest killer with killer-specific range
-local function getNearestKiller()
+-- Function to find killer closest to cursor (EXACT SAME SYSTEM as survivors)
+local function getKillerClosestToCursor()
     local myChar = lp.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
+    if not myChar then return nil end
     
-    local nearestKiller = nil
-    local nearestDistance = math.huge
+    -- Get mouse position
+    local mousePosition = UserInputService:GetMouseLocation()
     
+    local validTargets = {}
+    
+    -- Find all valid killers (no range limit, just like survivors)
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         -- Skip if this is me
         local usernameAttr = killer:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
             -- Skip this killer
         else
-            -- Target any killer model
-            local targetHrp = killer:FindFirstChild("HumanoidRootPart")
-            if targetHrp then
-                -- Check if killer is alive
-                local humanoid = killer:FindFirstChildOfClass("Humanoid")
-                if humanoid and humanoid.Health > 0 then
-                    -- Use killer-specific range if defined
-                    local effectiveRange = killerDetectionRanges[killer.Name] or detectionRange
-                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+            -- Check if killer is alive
+            local humanoid = killer:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = killer:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    -- Check if killer is on screen
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
                     
-                    -- Only consider killers within their effective range
-                    if distance <= effectiveRange and distance < nearestDistance then
-                        nearestDistance = distance
-                        nearestKiller = killer
+                    if onScreen then
+                        -- Calculate distance from cursor to this killer on screen
+                        local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                        local distanceToCursor = (screenVector - mousePosition).Magnitude
+                        
+                        table.insert(validTargets, {
+                            killer = killer,
+                            screenDistance = distanceToCursor
+                        })
                     end
                 end
             end
         end
     end
     
-    return nearestKiller
+    -- Sort by screen distance (closest to cursor)
+    table.sort(validTargets, function(a, b)
+        return a.screenDistance < b.screenDistance
+    end)
+    
+    -- Return the closest to cursor, or nil if none found
+    if #validTargets > 0 then
+        return validTargets[1].killer
+    end
+    
+    -- If no killers on screen, fall back to nearest by world distance
+    local nearestByDistance = nil
+    local nearestDist = math.huge
+    
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local usernameAttr = killer:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            -- Skip this killer
+        else
+            local humanoid = killer:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = killer:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    local distance = (targetHrp.Position - myChar:FindFirstChild("HumanoidRootPart").Position).Magnitude
+                    if distance < nearestDist then
+                        nearestDist = distance
+                        nearestByDistance = killer
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestByDistance
 end
 
 -- Function to use silent aim on target
 local function useSilentAim()
     if not dusekkarEnabled then
+        SendNotif("Dusekkar", "Enable the toggle first!", 1.5)
         return false
     end
     
     -- Check if I'm Dusekkar first
     if not amIDusekkar() then
+        SendNotif("Dusekkar", "You are not playing as Dusekkar!", 2)
         return false
     end
     
-    -- Find target based on mode
+    -- Find target based on mode - EXACT SAME SYSTEM for both
     local target = nil
     if dusekkarTargetMode == "Survivors" then
         target = getSurvivorClosestToCursor()
     else -- Killers mode
-        target = getNearestKiller()
+        target = getKillerClosestToCursor()
     end
     
     if not target then
+        SendNotif("Dusekkar", "No target found in " .. dusekkarTargetMode .. " mode", 1.5)
         return false
     end
     
     -- Check if plasma beam is on cooldown
     if isPlasmaBeamOnCooldown() then
+        SendNotif("Dusekkar", "Plasma Beam is on cooldown!", 1.5)
         return false
     end
     
-    -- Set current target for silent aim (this will persist for the windup)
+    -- Set current target for silent aim
     currentTarget = target
     silentAimActive = true
     
-    -- Fire the plasma beam (1.5 second windup starts now)
+    SendNotif("Dusekkar", "Targeting: " .. target.Name, 1)
+    
+    -- Fire the plasma beam
     local success = firePlasmaBeam()
     
     if success then
-        SendNotif("Dusekkar", "Firing at " .. target.Name, 1)
+        SendNotif("Dusekkar", "Fired at " .. target.Name, 1)
         
-        -- Keep the target active for 2.5 seconds (covers windup + firing + a little extra)
-        -- The plasma beam has a 1.5s windup, then fires
+        -- Keep the target active for 2.5 seconds to cover windup
         task.wait(2.5)
+    else
+        SendNotif("Dusekkar", "Failed to fire Plasma Beam", 1.5)
     end
     
-    -- Clear target after firing is complete
+    -- Clear target after firing
     silentAimActive = false
     currentTarget = nil
     
@@ -894,7 +937,13 @@ local function trackSoundStart(sound)
     local function cleanupSound()
         audioStartTimes[sound] = nil
         if audioTimers[sound] then
-            audioTimers[sound]:Disconnect()
+            -- Disconnect each connection individually
+            if audioTimers[sound].stopped then
+                audioTimers[sound].stopped:Disconnect()
+            end
+            if audioTimers[sound].destroyed then
+                audioTimers[sound].destroyed:Disconnect()
+            end
             audioTimers[sound] = nil
         end
     end
@@ -1809,7 +1858,7 @@ DusekkarTab:CreateDropdown({
     end
 })
 
--- NEW PREDICTION SLIDER (0.1 to 5.0) - matching the first script
+-- PREDICTION SLIDER
 DusekkarTab:CreateSlider({
     Name = "Prediction Slider",
     Range = {0.1, 5},
@@ -1853,6 +1902,7 @@ DusekkarTab:CreateKeybind({
     Flag = "DusekkarFireKey",
     Callback = function()
         if not dusekkarEnabled then
+            SendNotif("Dusekkar", "Enable the toggle first!", 1.5)
             return
         end
         useSilentAim()
@@ -1870,18 +1920,17 @@ DusekkarTab:CreateParagraph({
               "• Target stays locked for FULL 2.5 seconds\n" ..
               "• Covers the 1.5s windup + firing time\n" ..
               "• Includes velocity prediction\n\n" ..
-              "NEW: Prediction Slider (0.1 - 5.0x)\n" ..
+              "Prediction Slider (0.1 - 5.0x)\n" ..
               "• 1.0x = Normal prediction\n" ..
               "• Higher values = Shoot further ahead\n" ..
-              "• Lower values = Shoot closer to current position\n" ..
-              "• Distance-based scaling (closer = less prediction)\n\n" ..
+              "• Lower values = Shoot closer to current position\n\n" ..
+              "FIXED: Killers mode now uses EXACT SAME system as Survivors!\n" ..
+              "• No range limit - targets closest to cursor\n\n" ..
               "Instructions:\n" ..
               "1. Enable the toggle\n" ..
               "2. Adjust prediction slider as needed\n" ..
               "3. Press Q to switch between Survivors/Killers\n" ..
-              "4. Press F to silently fire at target\n\n" ..
-              "SURVIVOR MODE: Targets survivor closest to your cursor\n" ..
-              "KILLER MODE: Targets nearest killer"
+              "4. Press F to silently fire at target"
 })
 
 Rayfield:LoadConfiguration()
@@ -1894,7 +1943,24 @@ setupSilentAim()
 -- Cleanup on script end
 local function cleanup()
     restoreSilentAim()
-    mainLoopConn:Disconnect()
+    if mainLoopConn then
+        mainLoopConn:Disconnect()
+    end
+    
+    -- Clean up all audio timers
+    for sound, timers in pairs(audioTimers) do
+        if timers.stopped then
+            timers.stopped:Disconnect()
+        end
+        if timers.destroyed then
+            timers.destroyed:Disconnect()
+        end
+    end
+    audioTimers = {}
+    audioStartTimes = {}
 end
 
-print("wahoo wario time - Added Helpless check for Guest1337 auto block!")
+-- Register cleanup
+game:GetService("RunService"):BindToRenderStep("Cleanup", 200, cleanup)
+
+print("wahoo wario time - Fixed Dusekkar killer targeting (now uses EXACT same system as survivors)!")
