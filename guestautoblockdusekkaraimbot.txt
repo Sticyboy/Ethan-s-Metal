@@ -1534,18 +1534,22 @@ AutoBlockTab:CreateToggle({
     end
 })
 
+-- Change auto block type button with notifications
 AutoBlockTab:CreateButton({
     Name = "Change auto block type",
     Callback = function()
         if autoblocktype == "Block" then
             autoblocktype = "Charge"
             originalBlockType = "Charge"
+            SendNotif("Block Type", "Switched to Charge", 1.5)
         elseif autoblocktype == "Charge" then
             autoblocktype = "7n7 Clone"
             originalBlockType = "7n7 Clone"
+            SendNotif("Block Type", "Switched to 7n7 Clone", 1.5)
         elseif autoblocktype == "7n7 Clone" then
             autoblocktype = "Block"
             originalBlockType = "Block"
+            SendNotif("Block Type", "Switched to Block", 1.5)
         end
     end
 })
