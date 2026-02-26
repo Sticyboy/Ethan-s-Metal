@@ -260,7 +260,7 @@ local function fartsakenLoad()
 		DisableBuildWarnings = true,
 		DisableRayfieldPrompts = true,
 
-		KeySystem = true,
+		KeySystem = false,  -- CHANGED: Key system disabled (was true)
 		KeySettings = {
 			Title = "Fartsaken Key System",
 			Subtitle = "im such a meowzer like meow meow",
@@ -3443,39 +3443,5 @@ local function fartsakenLoad()
 	MakeButton()
 end
 
-if
-	game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
-	and game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("MainUI")
-then
-	local isSupportedVersion = false
-	local versionLabel = game:GetService("Players").LocalPlayer.PlayerGui.MainUI:FindFirstChild("Version")
-	if versionLabel and tonumber(versionLabel.Text:match("Version: (%d+)")) <= SupportedVersion then
-		isSupportedVersion = true
-	end
-	if not isSupportedVersion then
-		local bindable = Instance.new("BindableFunction")
-		bindable.OnInvoke = function(buttonPressed)
-			if buttonPressed == "Yes" then
-				game:GetService("StarterGui"):SetCore("SendNotification", {
-					Title = "Game Version Mismatch",
-					Text = "Game updated so some features might not work.",
-					Duration = 20,
-				})
-				fartsakenLoad()
-			end
-		end
-
-		game:GetService("StarterGui"):SetCore("SendNotification", {
-			Title = "Game Version Mismatch",
-			Text = "Game Has Updated, Are you sure you want to run the script?",
-			Duration = 999,
-			Button1 = "Yes",
-			Button2 = "Cancel",
-			Callback = bindable,
-		})
-	else
-		fartsakenLoad()
-	end
-else
-	fartsakenLoad()
-end
+-- Directly execute FartSaken without version check
+fartsakenLoad()
