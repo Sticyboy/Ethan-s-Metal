@@ -67,6 +67,7 @@ local autoBlockTriggerSounds = {
     ["84116622032112"] = true,
     ["108907358619313"] = true,
     ["127793641088496"] = true,
+    ["105204810054381"] = true,
     ["86174610237192"] = true,
     ["95079963655241"] = true,
     ["101199185291628"] = true,
@@ -145,6 +146,9 @@ local killerCirclesVisible = false
 local autoblocktype = "Block"
 local autoSwitchBlockCharge = false
 local originalBlockType = "Block"
+
+-- ===== TRACK SOUND PLAYBACK STATE =====
+local soundPlayingState = {} -- Stores whether each sound was playing last frame
 
 -- ===== DUSEKKAR SILENT AIM VARIABLES =====
 local dusekkarEnabled = false
@@ -1209,7 +1213,11 @@ local function checkSpecialKillerStatus()
     return false
 end
 
--- ===== CHECK FOR ATTACK SOUNDS WITH HELPLESS CHECK =====
+-- ===== TRACK SOUND STARTS =====
+local lastSoundTrigger = {} -- Stores the last time each sound type was triggered by each killer
+
+-- ===== OPTIMIZED CHECK FOR ATTACK SOUNDS =====
+-- Now only blocks when a sound JUST started playing
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
     if isPlayingAsSpecialKiller then return end
@@ -1226,20 +1234,35 @@ local function checkForAttackSounds()
     -- Check if we're playing as Guest1337
     local isGuest1337, guestChar = amIGuest1337()
     
+    -- Check each killer
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            -- Skip this killer
+            -- Skip self
         else
-            for _, sound in ipairs(killer:GetDescendants()) do
-                if sound:IsA("Sound") and sound.IsPlaying then
-                    local soundId = extractNumericSoundId(sound)
-                    if soundId and autoBlockTriggerSounds[soundId] then
-                        local killerHrp = killer:FindFirstChild("HumanoidRootPart")
-                        if killerHrp then
-                            local distance = (killerHrp.Position - myRoot.Position).Magnitude
-                            if distance <= detectionRange then
-                                if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
+            local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+            if killerHrp then
+                local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                local inRange = distance <= detectionRange
+                
+                -- Check all sounds for this killer
+                for _, sound in ipairs(killer:GetDescendants()) do
+                    if sound:IsA("Sound") and sound.IsPlaying then
+                        local soundId = extractNumericSoundId(sound)
+                        if soundId and autoBlockTriggerSounds[soundId] then
+                            
+                            -- Create a key combining killer and sound ID
+                            local triggerKey = killer.Name .. "_" .. soundId
+                            
+                            -- Check if this sound was recently triggered (within last 2 seconds)
+                            local lastTrigger = lastSoundTrigger[triggerKey] or 0
+                            
+                            -- If this is a new trigger (not seen in last 2 seconds)
+                            if now - lastTrigger > 2 then
+                                lastSoundTrigger[triggerKey] = now
+                                
+                                -- Only block if we're in range and facing conditions are met
+                                if inRange and ((not facingCheckEnabled) or isFacing(myRoot, killerHrp)) then
                                     if shouldBlock() then
                                         if blockdelay > 0 then
                                             task.wait(blockdelay)
@@ -1247,10 +1270,8 @@ local function checkForAttackSounds()
                                         
                                         refreshUIRefs()
                                         
-                                        -- HELPLESS CHECK - Skip if player is helpless (cannot block)
                                         if isHelpless() then
-                                            -- Skip block and charge when helpless
-                                            continue
+                                            break
                                         end
                                         
                                         if autoblocktype == "Block" then
@@ -1264,8 +1285,6 @@ local function checkForAttackSounds()
                                                 end
                                                 lastBlockTime = now
                                                 
-                                                -- If playing as Guest1337 and HDT is enabled, drag hitbox towards killer
-                                                -- ONLY for Block type, not Charge or Clone
                                                 if isGuest1337 and hitboxDraggingTech and autoblocktype == "Block" then
                                                     task.wait(Ddelay)
                                                     task.spawn(function() beginDragIntoKiller(killer) end)
@@ -1277,18 +1296,12 @@ local function checkForAttackSounds()
                                             if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
                                                 fireGuiCharge()
                                                 lastBlockTime = now
-                                                
-                                                -- HDT NOT triggered for Charge
-                                                
                                                 return
                                             end
                                         elseif autoblocktype == "7n7 Clone" then
                                             if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
                                                 fireGuiClone()
                                                 lastBlockTime = now
-                                                
-                                                -- HDT NOT triggered for Clone
-                                                
                                                 return
                                             end
                                         end
@@ -1824,4 +1837,4 @@ local function cleanup()
     mainLoopConn:Disconnect()
 end
 
-print("wahoo wario time - HDT (Hitbox Dragging Tech) now aims at killer and stops when punch gained!")
+print("wahoo wario time - Now only blocks when a sound JUST started playing!")
