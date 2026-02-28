@@ -130,6 +130,7 @@ local killerHDTStopTimes = {
 
 -- ===== STATE VARIABLES =====
 local autoBlockForGuest = false
+local autoBlockFor7n7 = false -- Separate toggle for 007n7 Clone
 local ragingPaceAutoParry = false
 local error404AutoParry = false
 local ragingPaceAutoPunish = false
@@ -143,9 +144,7 @@ local blockChance = 100
 local facingCheckEnabled = true
 local customFacingDot = -0.3
 local killerCirclesVisible = false
-local autoblocktype = "Block"
-local autoSwitchBlockCharge = false
-local originalBlockType = "Block"
+local guestBlockType = "Block" -- Only used for Guest1337 (Block or Charge)
 
 -- ===== TRACK SOUND PLAYBACK STATE =====
 local soundPlayingState = {} -- Stores whether each sound was playing last frame
@@ -818,36 +817,6 @@ local function isFacing(localRoot, targetRoot)
     return dot > customFacingDot
 end
 
--- ===== AUTO-SWITCH BLOCK/CHARGE =====
-local lastBlockCheckTime = 0
-local BLOCK_CHECK_INTERVAL = 0.2
-
-local function checkAndSwitchBlockType()
-    if not autoSwitchBlockCharge then return end
-    
-    local currentTime = tick()
-    if currentTime - lastBlockCheckTime < BLOCK_CHECK_INTERVAL then return end
-    lastBlockCheckTime = currentTime
-    
-    refreshUIRefs()
-    
-    if not cachedBlockBtn then return end
-    
-    local blockCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
-    if not blockCooldown then return end
-    
-    if blockCooldown.Text ~= "" and blockCooldown.Text ~= "0" then
-        if autoblocktype ~= "Charge" then
-            originalBlockType = autoblocktype
-            autoblocktype = "Charge"
-        end
-    else
-        if autoblocktype == "Charge" and originalBlockType ~= "Charge" then
-            autoblocktype = originalBlockType
-        end
-    end
-end
-
 -- ===== SOUND CHECKING =====
 local lastBlockTime = 0
 local BLOCK_COOLDOWN = 0.7
@@ -866,7 +835,7 @@ end
 local function getAllCharactersByName(name)
     local characters = {}
     
-    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" then
+    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 if survivor.Name == name then
@@ -892,6 +861,21 @@ local function amIGuest1337()
     if SurvivorsFolder then
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
             if survivor.Name == "Guest1337" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+-- ===== CHECK IF PLAYING AS 007N7 =====
+local function amI007n7()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "007n7" then
                 local usernameAttr = survivor:GetAttribute("Username")
                 if usernameAttr and usernameAttr == lp.Name then
                     return true, survivor
@@ -1219,7 +1203,7 @@ local lastSoundTrigger = {} -- Stores the last time each sound type was triggere
 -- ===== OPTIMIZED CHECK FOR ATTACK SOUNDS =====
 -- Now only blocks when a sound JUST started playing
 local function checkForAttackSounds()
-    if not autoBlockForGuest then return end
+    if (not autoBlockForGuest and not autoBlockFor7n7) then return end
     if isPlayingAsSpecialKiller then return end
     
     local now = tick()
@@ -1231,8 +1215,9 @@ local function checkForAttackSounds()
     
     if not KillersFolder then return end
     
-    -- Check if we're playing as Guest1337
+    -- Check if we're playing as Guest1337 or 007n7
     local isGuest1337, guestChar = amIGuest1337()
+    local is007n7, cloneChar = amI007n7()
     
     -- Check each killer
     for _, killer in ipairs(KillersFolder:GetChildren()) do
@@ -1274,31 +1259,37 @@ local function checkForAttackSounds()
                                             break
                                         end
                                         
-                                        if autoblocktype == "Block" then
-                                            if cachedCooldown and cachedCooldown.Text == "" then
-                                                fireGuiBlock()
-                                                if doubleblocktech then
-                                                    fireGuiPunch()
+                                        -- Check Guest1337 auto block (Block or Charge)
+                                        if autoBlockForGuest and isGuest1337 then
+                                            if guestBlockType == "Block" then
+                                                if cachedCooldown and cachedCooldown.Text == "" then
+                                                    fireGuiBlock()
+                                                    if doubleblocktech then
+                                                        fireGuiPunch()
+                                                    end
+                                                    if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
+                                                        _lastBlockMessageTime = tick()
+                                                    end
+                                                    lastBlockTime = now
+                                                    
+                                                    if hitboxDraggingTech then
+                                                        task.wait(Ddelay)
+                                                        task.spawn(function() beginDragIntoKiller(killer) end)
+                                                    end
+                                                    
+                                                    return
                                                 end
-                                                if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
-                                                    _lastBlockMessageTime = tick()
+                                            elseif guestBlockType == "Charge" then
+                                                if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
+                                                    fireGuiCharge()
+                                                    lastBlockTime = now
+                                                    return
                                                 end
-                                                lastBlockTime = now
-                                                
-                                                if isGuest1337 and hitboxDraggingTech and autoblocktype == "Block" then
-                                                    task.wait(Ddelay)
-                                                    task.spawn(function() beginDragIntoKiller(killer) end)
-                                                end
-                                                
-                                                return
                                             end
-                                        elseif autoblocktype == "Charge" then
-                                            if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
-                                                fireGuiCharge()
-                                                lastBlockTime = now
-                                                return
-                                            end
-                                        elseif autoblocktype == "7n7 Clone" then
+                                        end
+                                        
+                                        -- Check 007n7 auto block (Clone only)
+                                        if autoBlockFor7n7 and is007n7 then
                                             if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
                                                 fireGuiClone()
                                                 lastBlockTime = now
@@ -1373,6 +1364,9 @@ local function updateDetectionRangeVisuals()
                     elseif survivor.Name == "Guest1337" then
                         visualRange = detectionRange -- Uses slider
                         circleColor = Color3.fromRGB(255, 165, 0) -- Orange for Guest1337
+                    elseif survivor.Name == "007n7" then
+                        visualRange = detectionRange -- Uses slider
+                        circleColor = Color3.fromRGB(128, 0, 128) -- Purple for 007n7
                     end
                     
                     local distance = (survivorHrp.Position - myRoot.Position).Magnitude
@@ -1440,11 +1434,7 @@ end
 local mainLoopConn = RunService.Heartbeat:Connect(function()
     pcall(checkSpecialKillerStatus)
     
-    if autoSwitchBlockCharge and not isPlayingAsSpecialKiller then
-        pcall(checkAndSwitchBlockType)
-    end
-    
-    if autoBlockForGuest and not isPlayingAsSpecialKiller then
+    if autoBlockForGuest or autoBlockFor7n7 then
         pcall(checkForAttackSounds)
     end
     
@@ -1477,7 +1467,7 @@ local TechTab = Window:CreateTab("Techs", 4483362458)
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
 AutoBlockTab:CreateToggle({
-    Name = "1. Auto Block For Guest",
+    Name = "1. Auto Block For Guest (Block/Charge)",
     CurrentValue = false,
     Flag = "AutoBlockForGuest",
     Callback = function(Value)
@@ -1486,7 +1476,16 @@ AutoBlockTab:CreateToggle({
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "2. Raging Pace Auto Parry (Slasher)",
+    Name = "2. Auto 007n7 Clone",
+    CurrentValue = false,
+    Flag = "AutoBlockFor7n7",
+    Callback = function(Value)
+        autoBlockFor7n7 = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "3. Raging Pace Auto Parry (Slasher)",
     CurrentValue = false,
     Flag = "RagingPaceAutoParry",
     Callback = function(Value)
@@ -1495,7 +1494,7 @@ AutoBlockTab:CreateToggle({
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "3. Error 404 Auto Parry (JohnDoe)",
+    Name = "4. Error 404 Auto Parry (JohnDoe)",
     CurrentValue = false,
     Flag = "Error404AutoParry",
     Callback = function(Value)
@@ -1504,7 +1503,7 @@ AutoBlockTab:CreateToggle({
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "4. Raging Pace Auto Punish (Slasher)",
+    Name = "5. Raging Pace Auto Punish (Slasher)",
     CurrentValue = false,
     Flag = "RagingPaceAutoPunish",
     Callback = function(Value)
@@ -1513,7 +1512,7 @@ AutoBlockTab:CreateToggle({
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "5. Mass Infection Auto Punish (1x1x1x1)",
+    Name = "6. Mass Infection Auto Punish (1x1x1x1)",
     CurrentValue = false,
     Flag = "OnexOnexOnexOneAutoPunish",
     Callback = function(Value)
@@ -1533,36 +1532,16 @@ AutoBlockTab:CreateSlider({
     end
 })
 
-AutoBlockTab:CreateToggle({
-    Name = "Auto Switch Block/Charge",
-    CurrentValue = false,
-    Flag = "AutoSwitchToggle",
-    Callback = function(Value)
-        autoSwitchBlockCharge = Value
-        if not Value then
-            autoblocktype = originalBlockType
-        else
-            originalBlockType = autoblocktype
-        end
-    end
-})
-
--- Change auto block type button with notifications
+-- Change Guest1337 auto block type button
 AutoBlockTab:CreateButton({
-    Name = "Change auto block type",
+    Name = "Change Guest1337 auto block type",
     Callback = function()
-        if autoblocktype == "Block" then
-            autoblocktype = "Charge"
-            originalBlockType = "Charge"
-            SendNotif("Block Type", "Switched to Charge", 1.5)
-        elseif autoblocktype == "Charge" then
-            autoblocktype = "7n7 Clone"
-            originalBlockType = "7n7 Clone"
-            SendNotif("Block Type", "Switched to 7n7 Clone", 1.5)
-        elseif autoblocktype == "7n7 Clone" then
-            autoblocktype = "Block"
-            originalBlockType = "Block"
-            SendNotif("Block Type", "Switched to Block", 1.5)
+        if guestBlockType == "Block" then
+            guestBlockType = "Charge"
+            SendNotif("Guest1337 Block Type", "Switched to Charge", 1.5)
+        elseif guestBlockType == "Charge" then
+            guestBlockType = "Block"
+            SendNotif("Guest1337 Block Type", "Switched to Block", 1.5)
         end
     end
 })
@@ -1837,4 +1816,4 @@ local function cleanup()
     mainLoopConn:Disconnect()
 end
 
-print("wahoo wario time - Now only blocks when a sound JUST started playing!")
+print("wahoo wario time - Now with separate 007n7 Clone toggle!")
