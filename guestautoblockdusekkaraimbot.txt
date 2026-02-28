@@ -131,7 +131,7 @@ local killerHDTStopTimes = {
 
 -- ===== STATE VARIABLES =====
 local autoBlockForGuest = false
-local autoBlockFor7n7 = false -- Separate toggle for 007n7 Clone
+local autoBlockFor7n7 = false -- 007n7 auto clone state (toggled by keybind)
 local ragingPaceAutoParry = false
 local error404AutoParry = false
 local ragingPaceAutoPunish = false
@@ -1476,17 +1476,35 @@ AutoBlockTab:CreateToggle({
     end
 })
 
-AutoBlockTab:CreateToggle({
-    Name = "2. Auto 007n7 Clone",
-    CurrentValue = false,
-    Flag = "AutoBlockFor7n7",
-    Callback = function(Value)
-        autoBlockFor7n7 = Value
+-- Just a keybind for 007n7 - no toggle! Only works when playing as 007n7
+AutoBlockTab:CreateKeybind({
+    Name = "007n7 Toggle Keybind",
+    CurrentKeybind = "F",
+    HoldToInteract = false,
+    Flag = "SevenNSevenKeybind",
+    Callback = function()
+        -- Check if we're actually playing as 007n7
+        local is007n7 = amI007n7()
+        
+        if is007n7 then
+            -- Toggle the 007n7 auto clone on/off
+            autoBlockFor7n7 = not autoBlockFor7n7
+            
+            -- Send notification with the new state (only when playing as 007n7)
+            if autoBlockFor7n7 then
+                SendNotif("007n7", "Auto Clone ENABLED", 2)
+            else
+                SendNotif("007n7", "Auto Clone DISABLED", 2)
+            end
+        else
+            -- Do absolutely nothing if not playing as 007n7
+            -- No notifications, no toggling, just silence
+        end
     end
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "3. Raging Pace Auto Parry (Slasher)",
+    Name = "2. Raging Pace Auto Parry (Slasher)",
     CurrentValue = false,
     Flag = "RagingPaceAutoParry",
     Callback = function(Value)
@@ -1495,7 +1513,7 @@ AutoBlockTab:CreateToggle({
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "4. Error 404 Auto Parry (JohnDoe)",
+    Name = "3. Error 404 Auto Parry (JohnDoe)",
     CurrentValue = false,
     Flag = "Error404AutoParry",
     Callback = function(Value)
@@ -1504,7 +1522,7 @@ AutoBlockTab:CreateToggle({
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "5. Raging Pace Auto Punish (Slasher)",
+    Name = "4. Raging Pace Auto Punish (Slasher)",
     CurrentValue = false,
     Flag = "RagingPaceAutoPunish",
     Callback = function(Value)
@@ -1513,7 +1531,7 @@ AutoBlockTab:CreateToggle({
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "6. Mass Infection Auto Punish (1x1x1x1)",
+    Name = "5. Mass Infection Auto Punish (1x1x1x1)",
     CurrentValue = false,
     Flag = "OnexOnexOnexOneAutoPunish",
     Callback = function(Value)
@@ -1817,4 +1835,4 @@ local function cleanup()
     mainLoopConn:Disconnect()
 end
 
-print("wahoo wario time - Now with separate 007n7 Clone toggle!")
+print("wahoo wario time - 007n7 toggles with keybind only and only works when playing as 007n7!")
