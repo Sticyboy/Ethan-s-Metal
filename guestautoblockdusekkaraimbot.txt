@@ -67,7 +67,6 @@ local autoBlockTriggerSounds = {
     ["84116622032112"] = true,
     ["108907358619313"] = true,
     ["127793641088496"] = true,
-    ["105204810054381"] = true,
     ["86174610237192"] = true,
     ["95079963655241"] = true,
     ["101199185291628"] = true,
@@ -94,7 +93,6 @@ local autoBlockTriggerSounds = {
     ["119583605486352"] = true,
     ["79980897195554"] = true,
     ["71805956520207"] = true,
-    ["131123355704017"] = true,
     ["79391273191671"] = true,
     ["89004992452376"] = true,
     ["101553872555606"] = true,
@@ -131,7 +129,6 @@ local killerHDTStopTimes = {
 
 -- ===== STATE VARIABLES =====
 local autoBlockForGuest = false
-local autoBlockFor7n7 = false -- 007n7 auto clone state (toggled by keybind)
 local ragingPaceAutoParry = false
 local error404AutoParry = false
 local ragingPaceAutoPunish = false
@@ -145,27 +142,23 @@ local blockChance = 100
 local facingCheckEnabled = true
 local customFacingDot = -0.3
 local killerCirclesVisible = false
-local guestBlockType = "Block" -- Only used for Guest1337 (Block or Charge)
-
--- ===== TRACK SOUND PLAYBACK STATE =====
-local soundPlayingState = {} -- Stores whether each sound was playing last frame
+local autoblocktype = "Block"
+local autoSwitchBlockCharge = false
+local originalBlockType = "Block"
 
 -- ===== DUSEKKAR SILENT AIM VARIABLES =====
 local dusekkarEnabled = false
-local dusekkarTargetMode = "Survivors" -- "Survivors" or "Killers"
+local dusekkarTargetMode = "Survivors"
 local silentAimActive = false
 local originalGetMousePos = nil
 local mousePositionModule = nil
 local currentTarget = nil
-local predictionMultiplier = 1.0 -- Default value (1 = normal prediction)
-local predictionMin = 0.1  -- Minimum prediction factor
-local predictionMax = 5.0  -- Maximum prediction factor
+local predictionMultiplier = 1.0
 
--- ===== HDT (HITBOX DRAGGING TECH) VARIABLES =====
+-- ===== HDT VARIABLES =====
 local hitboxDraggingTech = false
 local _hitboxDraggingDebounce = false
 local HITBOX_DRAG_DURATION = 1.4
-local HITBOX_DETECT_RADIUS = 6
 local Dspeed = 5.6
 local Ddelay = 0
 local hdtActive = false
@@ -324,8 +317,7 @@ local function isHelpless()
     return false
 end
 
--- ===== HDT (HITBOX DRAGGING TECH) FUNCTIONS =====
--- Utility to safely get a killer HRP
+-- ===== HDT FUNCTIONS =====
 local function getKillerHRP(killerModel)
     if not killerModel then return nil end
     if killerModel:FindFirstChild("HumanoidRootPart") then
@@ -334,32 +326,9 @@ local function getKillerHRP(killerModel)
     if killerModel.PrimaryPart then
         return killerModel.PrimaryPart
     end
-    -- try finding any basepart descendant
     return killerModel:FindFirstChildWhichIsA("BasePart", true)
 end
 
--- Function to get the nearest killer model
-local function getNearestKillerModel()
-    local myChar = lp.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    local closest, closestDist = nil, math.huge
-    for _, killer in ipairs(KillersFolder:GetChildren()) do
-        if killer and killer:IsA("Model") then
-            local hrp = killer:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local d = (hrp.Position - myRoot.Position).Magnitude
-                if d < closestDist then
-                    closest, closestDist = killer, d
-                end
-            end
-        end
-    end
-    return closest
-end
-
--- Function to check if we have a punch charge (1)
 local function hasPunchCharge()
     local success, charges = pcall(function()
         return lp.PlayerGui.MainUI.AbilityContainer.Punch.Charges.Text
@@ -370,20 +339,16 @@ local function hasPunchCharge()
     return false
 end
 
--- Function to get killer-specific HDT stop time
 local function getKillerHDTStopTime(killerModel)
     if not killerModel then return HITBOX_DRAG_DURATION end
-    
     local killerName = killerModel.Name
     return killerHDTStopTimes[killerName] or HITBOX_DRAG_DURATION
 end
 
--- Improved HDT function that aims towards killer and stops when punch charge is 1
 local function beginDragIntoKiller(killerModel)
-    -- Basic guards
     if _hitboxDraggingDebounce then return end
     if not killerModel or not killerModel.Parent then return end
-    if not hitboxDraggingTech then return end -- Only run if HDT is enabled
+    if not hitboxDraggingTech then return end
     
     local char = lp and lp.Character
     if not char then return end
@@ -392,44 +357,31 @@ local function beginDragIntoKiller(killerModel)
     if not hrp or not humanoid then return end
 
     local targetHRP = getKillerHRP(killerModel)
-    if not targetHRP then
-        warn("beginDragIntoKiller: killer has no HRP/PrimaryPart")
-        return
-    end
+    if not targetHRP then return end
 
     _hitboxDraggingDebounce = true
     hdtActive = true
 
-    -- INSTANTLY AIM TOWARDS THE KILLER (HORIZONTAL ONLY)
     local killerPos = targetHRP.Position
     local myPos = hrp.Position
-    
-    -- Calculate direction to killer (only horizontal plane)
     local direction = (Vector3.new(killerPos.X, myPos.Y, killerPos.Z) - myPos).Unit
-    
-    -- Instantly set character rotation to face killer (without looking up/down)
     hrp.CFrame = CFrame.lookAt(myPos, myPos + direction)
 
-    -- save old locomotion state so we can restore it
     local oldWalk = humanoid.WalkSpeed
     local oldJump = humanoid.JumpPower
     local oldPlatformStand = humanoid.PlatformStand
 
-    -- block normal movement by zeroing walk/jump (works for mobile joystick too)
     humanoid.WalkSpeed = 0
     humanoid.JumpPower = 0
-    humanoid.PlatformStand = false  -- keep physics normal so BodyVelocity works
+    humanoid.PlatformStand = false
 
-    -- create BodyVelocity to push the HRP toward the killer smoothly
     local bv = Instance.new("BodyVelocity")
-    bv.MaxForce = Vector3.new(1e5, 0, 1e5)     -- allow horizontal movement, keep y free
+    bv.MaxForce = Vector3.new(1e5, 0, 1e5)
     bv.Velocity = Vector3.new(0,0,0)
     bv.Parent = hrp
 
-    -- Get killer-specific stop time
     local killerStopTime = getKillerHDTStopTime(killerModel)
 
-    -- Connection to update movement and check for stop conditions
     hdtConnection = RunService.Heartbeat:Connect(function(dt)
         if not hdtActive then
             if hdtConnection then
@@ -444,26 +396,22 @@ local function beginDragIntoKiller(killerModel)
             return
         end
 
-        -- abort if character/killer removed
         if not (char and char.Parent) or not (killerModel and killerModel.Parent) then
             hdtActive = false
             return
         end
 
-        -- refresh target HRP (killer may respawn)
         targetHRP = getKillerHRP(killerModel)
         if not targetHRP then
             hdtActive = false
             return
         end
 
-        -- CONTINUOUSLY AIM TOWARDS THE KILLER while moving
         local currentKillerPos = targetHRP.Position
         local currentMyPos = hrp.Position
         local currentDirection = (Vector3.new(currentKillerPos.X, currentMyPos.Y, currentKillerPos.Z) - currentMyPos).Unit
         hrp.CFrame = CFrame.lookAt(currentMyPos, currentMyPos + currentDirection)
 
-        -- compute desired horizontal velocity toward the target
         local toTarget = (targetHRP.Position - hrp.Position)
         local dist = toTarget.Magnitude
         
@@ -475,21 +423,12 @@ local function beginDragIntoKiller(killerModel)
             bv.Velocity = Vector3.new(0, bv.Velocity.Y, 0)
         end
 
-        -- STOP CONDITION 1: when very close to killer
-        local stopDist = 2.0
-        if dist <= stopDist then
-            hdtActive = false
-            return
-        end
-
-        -- STOP CONDITION 2: when punch charge becomes 1
-        if hasPunchCharge() then
+        if dist <= 2.0 or hasPunchCharge() then
             hdtActive = false
             return
         end
     end)
 
-    -- final cleanup safety (killer-specific timeout)
     task.delay(killerStopTime, function()
         if hdtActive then
             hdtActive = false
@@ -499,13 +438,11 @@ end
 
 -- ===== SILENT AIM HOOK SETUP =====
 local function setupSilentAim()
-    -- Try to require the mouse position module
     local success, module = pcall(function()
         return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
     end)
     
     if not success then
-        -- Try alternative path
         success, module = pcall(function()
             return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
         end)
@@ -515,33 +452,27 @@ local function setupSilentAim()
         mousePositionModule = module
         originalGetMousePos = module.GetMousePos
         
-        -- Create hooked function with improved prediction from first script
         local function hookedGetMousePos(self, ...)
             local args = {...}
-            local p1 = args[1] -- Prediction amount (provided by plasma beam)
+            local p1 = args[1]
             
-            -- Check if silent aim is active and we have a target
             if silentAimActive and currentTarget then
                 local targetHrp = currentTarget:FindFirstChild("HumanoidRootPart")
                 if targetHrp then
-                    -- Enhanced prediction based on the first script
                     if p1 then
                         local myChar = lp.Character
                         if myChar and myChar.PrimaryPart then
                             local distance = (targetHrp.Position - myChar.PrimaryPart.Position).Magnitude
                             local targetVelocity = targetHrp.AssemblyLinearVelocity
                             
-                            -- Get base prediction amount from plasma beam
                             local basePredictionTime = typeof(p1) ~= "number" and 50 or p1
                             
-                            -- Scale prediction based on distance (like in the first script)
                             local scaledPredictionTime = math.clamp(
                                 basePredictionTime * (1 - math.min(distance / 100, 1)),
                                 basePredictionTime / 3,
                                 basePredictionTime * 3
                             )
                             
-                            -- Apply prediction multiplier from slider
                             scaledPredictionTime = scaledPredictionTime * predictionMultiplier
                             
                             if targetVelocity.Magnitude == 0 then
@@ -555,11 +486,9 @@ local function setupSilentAim()
                 end
             end
             
-            -- Otherwise use original function
             return originalGetMousePos(self, ...)
         end
         
-        -- Replace the function
         module.GetMousePos = hookedGetMousePos
         return true
     end
@@ -572,10 +501,8 @@ local function restoreSilentAim()
     end
 end
 
--- ===== DUSEKKAR PLASMA BEAM FUNCTIONS =====
--- Check if I'm Dusekkar
+-- ===== DUSEKKAR FUNCTIONS =====
 local function amIDusekkar()
-    -- Look for my character in Survivors folder with Dusekkar name
     if SurvivorsFolder then
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
             if survivor.Name == "Dusekkar" then
@@ -589,23 +516,20 @@ local function amIDusekkar()
     return false
 end
 
--- Check if plasma beam is on cooldown
 local function isPlasmaBeamOnCooldown()
     local success, cooldownText = pcall(function()
         return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
     end)
     
     if success then
-        -- If cooldown text is not empty and not "0", it's on cooldown
         return cooldownText ~= "" and cooldownText ~= "0"
     end
-    return true -- Assume cooldown if we can't check
+    return true
 end
 
 local function firePlasmaBeam()
     if not testRemote then return false end
     
-    -- Check cooldown first
     if isPlasmaBeamOnCooldown() then
         return false
     end
@@ -627,7 +551,6 @@ local function firePlasmaBeam()
     return false
 end
 
--- Function to find survivor closest to cursor
 local function getSurvivorClosestToCursor()
     local myChar = lp.Character
     if not myChar then return nil end
@@ -635,28 +558,21 @@ local function getSurvivorClosestToCursor()
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
     
-    -- Get mouse position
     local mousePosition = UserInputService:GetMouseLocation()
     
     local validTargets = {}
     
-    -- First, find all valid survivors
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-        -- Skip if this is me
         local usernameAttr = survivor:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            -- Skip this survivor
         else
-            -- Check if survivor is alive
             local humanoid = survivor:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 then
                 local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
                 if targetHrp then
-                    -- Check if survivor is on screen
                     local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
                     
                     if onScreen then
-                        -- Calculate distance from cursor to this survivor on screen
                         local screenVector = Vector2.new(screenPos.X, screenPos.Y)
                         local distanceToCursor = (screenVector - mousePosition).Magnitude
                         
@@ -670,24 +586,20 @@ local function getSurvivorClosestToCursor()
         end
     end
     
-    -- Sort by screen distance (closest to cursor)
     table.sort(validTargets, function(a, b)
         return a.screenDistance < b.screenDistance
     end)
     
-    -- Return the closest to cursor, or nil if none found
     if #validTargets > 0 then
         return validTargets[1].survivor
     end
     
-    -- If no survivors on screen, fall back to nearest by world distance
     local nearestByDistance = nil
     local nearestDist = math.huge
     
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         local usernameAttr = survivor:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            -- Skip this survivor
         else
             local humanoid = survivor:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 then
@@ -706,7 +618,6 @@ local function getSurvivorClosestToCursor()
     return nearestByDistance
 end
 
--- Function to find the nearest killer
 local function getNearestKiller()
     local myChar = lp.Character
     if not myChar then return nil end
@@ -718,15 +629,11 @@ local function getNearestKiller()
     local nearestDistance = math.huge
     
     for _, killer in ipairs(KillersFolder:GetChildren()) do
-        -- Skip if this is me
         local usernameAttr = killer:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            -- Skip this killer
         else
-            -- Target any killer model
             local targetHrp = killer:FindFirstChild("HumanoidRootPart")
             if targetHrp then
-                -- Check if killer is alive
                 local humanoid = killer:FindFirstChildOfClass("Humanoid")
                 if humanoid and humanoid.Health > 0 then
                     local distance = (targetHrp.Position - myRoot.Position).Magnitude
@@ -742,50 +649,30 @@ local function getNearestKiller()
     return nearestKiller
 end
 
--- Function to use silent aim on target
 local function useSilentAim()
-    if not dusekkarEnabled then
-        return false
-    end
+    if not dusekkarEnabled then return false end
+    if not amIDusekkar() then return false end
     
-    -- Check if I'm Dusekkar first
-    if not amIDusekkar() then
-        return false
-    end
-    
-    -- Find target based on mode
     local target = nil
     if dusekkarTargetMode == "Survivors" then
         target = getSurvivorClosestToCursor()
-    else -- Killers mode
+    else
         target = getNearestKiller()
     end
     
-    if not target then
-        return false
-    end
+    if not target then return false end
+    if isPlasmaBeamOnCooldown() then return false end
     
-    -- Check if plasma beam is on cooldown
-    if isPlasmaBeamOnCooldown() then
-        return false
-    end
-    
-    -- Set current target for silent aim (this will persist for the windup)
     currentTarget = target
     silentAimActive = true
     
-    -- Fire the plasma beam (1.5 second windup starts now)
     local success = firePlasmaBeam()
     
     if success then
         SendNotif("Dusekkar", "Firing at " .. target.Name, 1)
-        
-        -- Keep the target active for 2.5 seconds (covers windup + firing + a little extra)
-        -- The plasma beam has a 1.5s windup, then fires
         task.wait(2.5)
     end
     
-    -- Clear target after firing is complete
     silentAimActive = false
     currentTarget = nil
     
@@ -818,6 +705,36 @@ local function isFacing(localRoot, targetRoot)
     return dot > customFacingDot
 end
 
+-- ===== AUTO-SWITCH BLOCK/CHARGE =====
+local lastBlockCheckTime = 0
+local BLOCK_CHECK_INTERVAL = 0.2
+
+local function checkAndSwitchBlockType()
+    if not autoSwitchBlockCharge then return end
+    
+    local currentTime = tick()
+    if currentTime - lastBlockCheckTime < BLOCK_CHECK_INTERVAL then return end
+    lastBlockCheckTime = currentTime
+    
+    refreshUIRefs()
+    
+    if not cachedBlockBtn then return end
+    
+    local blockCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
+    if not blockCooldown then return end
+    
+    if blockCooldown.Text ~= "" and blockCooldown.Text ~= "0" then
+        if autoblocktype ~= "Charge" then
+            originalBlockType = autoblocktype
+            autoblocktype = "Charge"
+        end
+    else
+        if autoblocktype == "Charge" and originalBlockType ~= "Charge" then
+            autoblocktype = originalBlockType
+        end
+    end
+end
+
 -- ===== SOUND CHECKING =====
 local lastBlockTime = 0
 local BLOCK_COOLDOWN = 0.7
@@ -836,7 +753,7 @@ end
 local function getAllCharactersByName(name)
     local characters = {}
     
-    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" then
+    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 if survivor.Name == name then
@@ -872,21 +789,6 @@ local function amIGuest1337()
     return false, nil
 end
 
--- ===== CHECK IF PLAYING AS 007N7 =====
-local function amI007n7()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "007n7" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
 -- ===== SPECIAL KILLER AUTO PARRY =====
 local lastSpecialAbilityTime = 0
 local SPECIAL_ABILITY_COOLDOWN = 1.0
@@ -909,22 +811,17 @@ local function checkSpecialKillerAutoParry()
     local shouldUseAbility = false
     local targetKiller = nil
     
-    -- Table of sound IDs that trigger special killer abilities
     local triggerSoundIds = {
-        -- Shedletsky sounds
         ["12222225"] = true,
         ["132596270805754"] = true,
         ["83851356262523"] = true,
         ["111910850942168"] = true,
         ["115267992424648"] = true,
-        -- TwoTime sounds
         ["99820161736138"] = true,
         ["86710781315432"] = true,
-        -- Chance specific sound (only this one)
         ["139012439429121"] = true,
     }
     
-    -- Check Shedletsky sounds (FIXED 20 range - NOT detectionRange)
     if (currentKillerType == "Slasher" and ragingPaceAutoParry) or 
        (currentKillerType == "JohnDoe" and error404AutoParry) then
         
@@ -933,7 +830,6 @@ local function checkSpecialKillerAutoParry()
         for _, shedletsky in ipairs(allShedletskies) do
             local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
             if shedletskyHrp then
-                -- USING FIXED 20, NOT detectionRange
                 local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
                 if distance <= 20 then
                     for _, sound in ipairs(shedletsky:GetDescendants()) do
@@ -952,7 +848,6 @@ local function checkSpecialKillerAutoParry()
         end
     end
     
-    -- Check TwoTime sounds (FIXED 30 range - COMPLETELY SEPARATE from detectionRange)
     if not shouldUseAbility and 
        ((currentKillerType == "Slasher" and ragingPaceAutoParry) or 
         (currentKillerType == "JohnDoe" and error404AutoParry)) then
@@ -962,7 +857,6 @@ local function checkSpecialKillerAutoParry()
         for _, twotime in ipairs(allTwoTimes) do
             local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
             if twotimeHrp then
-                -- USING FIXED 30, NOT detectionRange
                 local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
                 if distance <= 30 then
                     for _, sound in ipairs(twotime:GetDescendants()) do
@@ -981,7 +875,6 @@ local function checkSpecialKillerAutoParry()
         end
     end
     
-    -- Check Chance - BOTH AUDIO AND ANIMATION DETECTION (FIXED 90 range)
     if not shouldUseAbility and 
        ((currentKillerType == "Slasher" and ragingPaceAutoParry) or 
         (currentKillerType == "JohnDoe" and error404AutoParry)) then
@@ -991,11 +884,9 @@ local function checkSpecialKillerAutoParry()
         for _, chance in ipairs(allChances) do
             local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
             if chanceHrp then
-                -- USING FIXED 90, NOT detectionRange
                 local distance = (chanceHrp.Position - myRoot.Position).Magnitude
                 if distance <= 90 then
                     
-                    -- Check Chance's sounds first (specific audio ID: 139012439429121)
                     for _, sound in ipairs(chance:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
@@ -1007,7 +898,6 @@ local function checkSpecialKillerAutoParry()
                         end
                     end
                     
-                    -- If sound not found, check Chance's animations
                     if not shouldUseAbility then
                         local humanoid = chance:FindFirstChildOfClass("Humanoid")
                         if humanoid then
@@ -1015,7 +905,6 @@ local function checkSpecialKillerAutoParry()
                             if animator then
                                 for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                     local animId = tostring(track.Animation.AnimationId):match("%d+")
-                                    -- Check for the specific animation IDs
                                     if animId == "133491532453922" or 
                                        animId == "86371356500204" or 
                                        animId == "131189930305001" then
@@ -1034,7 +923,6 @@ local function checkSpecialKillerAutoParry()
         end
     end
     
-    -- Slasher Auto Punish (animations from Guest1337) - uses detectionRange
     if not shouldUseAbility and currentKillerType == "Slasher" and ragingPaceAutoPunish then
         local allGuest1337s = getAllCharactersByName("Guest1337")
         
@@ -1057,7 +945,7 @@ local function checkSpecialKillerAutoParry()
                                         ["72722244508749"] = true,
                                         ["140671644163156"] = true,
                                         ["100926346851492"] = true,
-                                        ["96959123077498"] = true, -- New animation ID added
+                                        ["96959123077498"] = true,
                                     }
                                     
                                     if slasherAnims[id] then
@@ -1075,7 +963,6 @@ local function checkSpecialKillerAutoParry()
         end
     end
     
-    -- 1x1x1x1 Auto Punish (animations from Guest1337) - uses detectionRange
     if not shouldUseAbility and currentKillerType == "1x1x1x1" and onexOnexOnexOneAutoPunish then
         local allGuest1337s = getAllCharactersByName("Guest1337")
         
@@ -1098,7 +985,7 @@ local function checkSpecialKillerAutoParry()
                                         ["72722244508749"] = true,
                                         ["140671644163156"] = true,
                                         ["100926346851492"] = true,
-                                        ["96959123077498"] = true, -- New animation ID added
+                                        ["96959123077498"] = true,
                                     }
                                     
                                     if guest1337BlockAnims[id] then
@@ -1198,13 +1085,9 @@ local function checkSpecialKillerStatus()
     return false
 end
 
--- ===== TRACK SOUND STARTS =====
-local lastSoundTrigger = {} -- Stores the last time each sound type was triggered by each killer
-
--- ===== OPTIMIZED CHECK FOR ATTACK SOUNDS =====
--- Now only blocks when a sound JUST started playing
+-- ===== SIMPLE 7N7-STYLE CHECK FOR ATTACK SOUNDS =====
 local function checkForAttackSounds()
-    if (not autoBlockForGuest and not autoBlockFor7n7) then return end
+    if not autoBlockForGuest then return end
     if isPlayingAsSpecialKiller then return end
     
     local now = tick()
@@ -1216,40 +1099,29 @@ local function checkForAttackSounds()
     
     if not KillersFolder then return end
     
-    -- Check if we're playing as Guest1337 or 007n7
+    -- Check if we're playing as Guest1337
     local isGuest1337, guestChar = amIGuest1337()
-    local is007n7, cloneChar = amI007n7()
     
-    -- Check each killer
+    -- Simple loop through all killers (like 7n7 clone does)
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
-            -- Skip self
+            -- Skip this killer
         else
             local killerHrp = killer:FindFirstChild("HumanoidRootPart")
             if killerHrp then
                 local distance = (killerHrp.Position - myRoot.Position).Magnitude
-                local inRange = distance <= detectionRange
                 
-                -- Check all sounds for this killer
-                for _, sound in ipairs(killer:GetDescendants()) do
-                    if sound:IsA("Sound") and sound.IsPlaying then
-                        local soundId = extractNumericSoundId(sound)
-                        if soundId and autoBlockTriggerSounds[soundId] then
-                            
-                            -- Create a key combining killer and sound ID
-                            local triggerKey = killer.Name .. "_" .. soundId
-                            
-                            -- Check if this sound was recently triggered (within last 2 seconds)
-                            local lastTrigger = lastSoundTrigger[triggerKey] or 0
-                            
-                            -- If this is a new trigger (not seen in last 2 seconds)
-                            if now - lastTrigger > 2 then
-                                lastSoundTrigger[triggerKey] = now
-                                
-                                -- Only block if we're in range and facing conditions are met
-                                if inRange and ((not facingCheckEnabled) or isFacing(myRoot, killerHrp)) then
-                                    if shouldBlock() then
+                -- Only check if in range
+                if distance <= detectionRange then
+                    if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
+                        if shouldBlock() then
+                            -- Simple sound check
+                            for _, sound in ipairs(killer:GetDescendants()) do
+                                if sound:IsA("Sound") and sound.IsPlaying then
+                                    local soundId = extractNumericSoundId(sound)
+                                    if soundId and autoBlockTriggerSounds[soundId] then
+                                        
                                         if blockdelay > 0 then
                                             task.wait(blockdelay)
                                         end
@@ -1260,37 +1132,31 @@ local function checkForAttackSounds()
                                             break
                                         end
                                         
-                                        -- Check Guest1337 auto block (Block or Charge)
-                                        if autoBlockForGuest and isGuest1337 then
-                                            if guestBlockType == "Block" then
-                                                if cachedCooldown and cachedCooldown.Text == "" then
-                                                    fireGuiBlock()
-                                                    if doubleblocktech then
-                                                        fireGuiPunch()
-                                                    end
-                                                    if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
-                                                        _lastBlockMessageTime = tick()
-                                                    end
-                                                    lastBlockTime = now
-                                                    
-                                                    if hitboxDraggingTech then
-                                                        task.wait(Ddelay)
-                                                        task.spawn(function() beginDragIntoKiller(killer) end)
-                                                    end
-                                                    
-                                                    return
+                                        if autoblocktype == "Block" then
+                                            if cachedCooldown and cachedCooldown.Text == "" then
+                                                fireGuiBlock()
+                                                if doubleblocktech then
+                                                    fireGuiPunch()
                                                 end
-                                            elseif guestBlockType == "Charge" then
-                                                if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
-                                                    fireGuiCharge()
-                                                    lastBlockTime = now
-                                                    return
+                                                if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
+                                                    _lastBlockMessageTime = tick()
                                                 end
+                                                lastBlockTime = now
+                                                
+                                                if isGuest1337 and hitboxDraggingTech and autoblocktype == "Block" then
+                                                    task.wait(Ddelay)
+                                                    task.spawn(function() beginDragIntoKiller(killer) end)
+                                                end
+                                                
+                                                return
                                             end
-                                        end
-                                        
-                                        -- Check 007n7 auto block (Clone only)
-                                        if autoBlockFor7n7 and is007n7 then
+                                        elseif autoblocktype == "Charge" then
+                                            if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
+                                                fireGuiCharge()
+                                                lastBlockTime = now
+                                                return
+                                            end
+                                        elseif autoblocktype == "7n7 Clone" then
                                             if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
                                                 fireGuiClone()
                                                 lastBlockTime = now
@@ -1342,32 +1208,27 @@ local function updateDetectionRangeVisuals()
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
     
-    -- If playing as special killer, show circles on survivors with appropriate ranges
     if isPlayingAsSpecialKiller and currentKillerType then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 local survivorHrp = survivor:FindFirstChild("HumanoidRootPart")
                 if survivorHrp and not survivorHrp:FindFirstChild("DetectionCircle") then
                     
-                    -- Determine the correct range based on survivor type
-                    local visualRange = detectionRange -- Default to slider value
-                    local circleColor = Color3.fromRGB(255, 255, 0) -- Default yellow
+                    local visualRange = detectionRange
+                    local circleColor = Color3.fromRGB(255, 255, 0)
                     
                     if survivor.Name == "Chance" then
                         visualRange = 90
-                        circleColor = Color3.fromRGB(255, 0, 255) -- Purple for Chance
+                        circleColor = Color3.fromRGB(255, 0, 255)
                     elseif survivor.Name == "TwoTime" then
                         visualRange = 30
-                        circleColor = Color3.fromRGB(0, 255, 255) -- Cyan for TwoTime
+                        circleColor = Color3.fromRGB(0, 255, 255)
                     elseif survivor.Name == "Shedletsky" then
-                        visualRange = 20 -- FIXED 20 range for Shedletsky
-                        circleColor = Color3.fromRGB(0, 255, 0) -- Green for Shedletsky
+                        visualRange = 20
+                        circleColor = Color3.fromRGB(0, 255, 0)
                     elseif survivor.Name == "Guest1337" then
-                        visualRange = detectionRange -- Uses slider
-                        circleColor = Color3.fromRGB(255, 165, 0) -- Orange for Guest1337
-                    elseif survivor.Name == "007n7" then
-                        visualRange = detectionRange -- Uses slider
-                        circleColor = Color3.fromRGB(128, 0, 128) -- Purple for 007n7
+                        visualRange = detectionRange
+                        circleColor = Color3.fromRGB(255, 165, 0)
                     end
                     
                     local distance = (survivorHrp.Position - myRoot.Position).Magnitude
@@ -1377,12 +1238,11 @@ local function updateDetectionRangeVisuals()
                         local circle = Instance.new("CylinderHandleAdornment")
                         circle.Name = "DetectionCircle"
                         circle.Adornee = survivorHrp
-                        -- Change color based on in-range status
-                        circle.Color3 = inRange and circleColor or Color3.fromRGB(128, 128, 128) -- Gray if out of range
+                        circle.Color3 = inRange and circleColor or Color3.fromRGB(128, 128, 128)
                         circle.AlwaysOnTop = true
                         circle.ZIndex = 1
                         circle.Transparency = 0.6
-                        circle.Radius = visualRange -- Use the specific range for this survivor
+                        circle.Radius = visualRange
                         circle.Height = 0.12
                         
                         local yOffset = -(survivorHrp.Size.Y / 2 + 0.05)
@@ -1395,14 +1255,12 @@ local function updateDetectionRangeVisuals()
             end
         end
     else
-        -- Regular mode - show circles on killers
         if KillersFolder then
             for _, killer in ipairs(KillersFolder:GetChildren()) do
                 local killerHrp = killer:FindFirstChild("HumanoidRootPart")
                 if killerHrp and not killerHrp:FindFirstChild("DetectionCircle") then
                     local usernameAttr = killer:GetAttribute("Username")
                     if usernameAttr and usernameAttr == lp.Name then
-                        -- Skip this killer
                     else
                         local distance = (killerHrp.Position - myRoot.Position).Magnitude
                         local inRange = distance <= detectionRange
@@ -1435,7 +1293,11 @@ end
 local mainLoopConn = RunService.Heartbeat:Connect(function()
     pcall(checkSpecialKillerStatus)
     
-    if autoBlockForGuest or autoBlockFor7n7 then
+    if autoSwitchBlockCharge and not isPlayingAsSpecialKiller then
+        pcall(checkAndSwitchBlockType)
+    end
+    
+    if autoBlockForGuest and not isPlayingAsSpecialKiller then
         pcall(checkForAttackSounds)
     end
     
@@ -1468,38 +1330,11 @@ local TechTab = Window:CreateTab("Techs", 4483362458)
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
 AutoBlockTab:CreateToggle({
-    Name = "1. Auto Block For Guest (Block/Charge)",
+    Name = "1. Auto Block For Guest",
     CurrentValue = false,
     Flag = "AutoBlockForGuest",
     Callback = function(Value)
         autoBlockForGuest = Value
-    end
-})
-
--- Just a keybind for 007n7 - no toggle! Only works when playing as 007n7
-AutoBlockTab:CreateKeybind({
-    Name = "007n7 Toggle Keybind",
-    CurrentKeybind = "F",
-    HoldToInteract = false,
-    Flag = "SevenNSevenKeybind",
-    Callback = function()
-        -- Check if we're actually playing as 007n7
-        local is007n7 = amI007n7()
-        
-        if is007n7 then
-            -- Toggle the 007n7 auto clone on/off
-            autoBlockFor7n7 = not autoBlockFor7n7
-            
-            -- Send notification with the new state (only when playing as 007n7)
-            if autoBlockFor7n7 then
-                SendNotif("007n7", "Auto Clone ENABLED", 2)
-            else
-                SendNotif("007n7", "Auto Clone DISABLED", 2)
-            end
-        else
-            -- Do absolutely nothing if not playing as 007n7
-            -- No notifications, no toggling, just silence
-        end
     end
 })
 
@@ -1551,16 +1386,35 @@ AutoBlockTab:CreateSlider({
     end
 })
 
--- Change Guest1337 auto block type button
+AutoBlockTab:CreateToggle({
+    Name = "Auto Switch Block/Charge",
+    CurrentValue = false,
+    Flag = "AutoSwitchToggle",
+    Callback = function(Value)
+        autoSwitchBlockCharge = Value
+        if not Value then
+            autoblocktype = originalBlockType
+        else
+            originalBlockType = autoblocktype
+        end
+    end
+})
+
 AutoBlockTab:CreateButton({
-    Name = "Change Guest1337 auto block type",
+    Name = "Change auto block type",
     Callback = function()
-        if guestBlockType == "Block" then
-            guestBlockType = "Charge"
-            SendNotif("Guest1337 Block Type", "Switched to Charge", 1.5)
-        elseif guestBlockType == "Charge" then
-            guestBlockType = "Block"
-            SendNotif("Guest1337 Block Type", "Switched to Block", 1.5)
+        if autoblocktype == "Block" then
+            autoblocktype = "Charge"
+            originalBlockType = "Charge"
+            SendNotif("Block Type", "Switched to Charge", 1.5)
+        elseif autoblocktype == "Charge" then
+            autoblocktype = "7n7 Clone"
+            originalBlockType = "7n7 Clone"
+            SendNotif("Block Type", "Switched to 7n7 Clone", 1.5)
+        elseif autoblocktype == "7n7 Clone" then
+            autoblocktype = "Block"
+            originalBlockType = "Block"
+            SendNotif("Block Type", "Switched to Block", 1.5)
         end
     end
 })
@@ -1656,7 +1510,6 @@ TechTab:CreateToggle({
     end
 })
 
--- HDT (Hitbox Dragging Tech) Toggle
 TechTab:CreateToggle({
     Name = "HDT (Hitbox Dragging Tech)",
     CurrentValue = false,
@@ -1720,7 +1573,6 @@ TechTab:CreateButton({
     end
 })
 
--- ===== DUSEKKAR SILENT AIM TAB =====
 DusekkarTab:CreateToggle({
     Name = "Enable Dusekkar Silent Aim",
     CurrentValue = false,
@@ -1728,7 +1580,6 @@ DusekkarTab:CreateToggle({
     Callback = function(Value)
         dusekkarEnabled = Value
         if not Value then
-            -- Restore original function when disabled
             restoreSilentAim()
             silentAimActive = false
             currentTarget = nil
@@ -1747,7 +1598,6 @@ DusekkarTab:CreateDropdown({
     end
 })
 
--- NEW PREDICTION SLIDER (0.1 to 5.0) - matching the first script
 DusekkarTab:CreateSlider({
     Name = "Prediction Slider",
     Range = {0.1, 5},
@@ -1767,19 +1617,16 @@ DusekkarTab:CreateKeybind({
     HoldToInteract = false,
     Flag = "DusekkarKeybind",
     Callback = function()
-        -- Only allow switching if playing as Dusekkar
         if not amIDusekkar() then
             return
         end
         
-        -- Toggle between Survivors and Killers
         if dusekkarTargetMode == "Survivors" then
             dusekkarTargetMode = "Killers"
         else
             dusekkarTargetMode = "Survivors"
         end
         
-        -- Show notification for mode switch
         SendNotif("Dusekkar", "Now targeting: " .. dusekkarTargetMode, 2)
     end
 })
@@ -1825,14 +1672,6 @@ DusekkarTab:CreateParagraph({
 Rayfield:LoadConfiguration()
 
 refreshUIRefs()
-
--- Setup silent aim hook when script starts
 setupSilentAim()
 
--- Cleanup on script end
-local function cleanup()
-    restoreSilentAim()
-    mainLoopConn:Disconnect()
-end
-
-print("wahoo wario time - 007n7 toggles with keybind only and only works when playing as 007n7!")
+print("wahoo wario time - Simple 7n7-style autoblock - no lag!")
