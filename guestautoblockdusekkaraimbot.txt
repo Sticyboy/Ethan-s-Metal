@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = Workspace.CurrentCamera
 local lp = Players.LocalPlayer
 local PlayerGui = lp:WaitForChild("PlayerGui")
+local TweenService = game:GetService("TweenService")
 
 -- Remotes with error handling
 local testRemote = nil
@@ -230,6 +231,106 @@ local detectionCircles = {}
 local survivorCircles = {}
 local _lastBlockMessageTime = 0
 local MESSAGE_BLOCK_COOLDOWN = 0.6
+
+-- ===== STATUS TEXTBOXES =====
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CharacterStatusGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- Function to create a textbox
+local function createTextBox(name, position)
+    local frame = Instance.new("Frame")
+    frame.Name = name .. "Frame"
+    frame.Size = UDim2.new(0, 200, 0, 30)
+    frame.Position = position
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    frame.Visible = false
+    frame.Parent = ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = frame
+    
+    local text = Instance.new("TextLabel")
+    text.Name = "Text"
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.BackgroundTransparency = 1
+    text.TextColor3 = Color3.fromRGB(255, 255, 255)
+    text.TextScaled = true
+    text.Font = Enum.Font.GothamBold
+    text.Text = name .. ": OFF"
+    text.Parent = frame
+    
+    return frame
+end
+
+-- Create the three textboxes (bottom right corner, stacked)
+local guestTextBox = createTextBox("Guest1337", UDim2.new(1, -210, 1, -100))
+local sevenNTextBox = createTextBox("7n7 Clone", UDim2.new(1, -210, 1, -65))
+local dusekkarTextBox = createTextBox("Dusekkar", UDim2.new(1, -210, 1, -30))
+
+-- Function to update textbox visibility and content
+local function updateTextBoxes()
+    -- Check what character we're playing as
+    local isGuest1337, _ = amIGuest1337()
+    local isSevenN = false
+    local isDusekkar = amIDusekkar()
+    
+    -- Check if playing as 7n7 (look for character named 7n7 in Survivors folder)
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "7n7" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    isSevenN = true
+                    break
+                end
+            end
+        end
+    end
+    
+    -- Update Guest1337 textbox
+    if isGuest1337 then
+        guestTextBox.Visible = true
+        local textLabel = guestTextBox:FindFirstChild("Text")
+        if textLabel then
+            textLabel.Text = "Guest1337: " .. (autoBlockForGuest and "ON" or "OFF")
+            textLabel.TextColor3 = autoBlockForGuest and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        end
+    else
+        guestTextBox.Visible = false
+    end
+    
+    -- Update 7n7 textbox
+    if isSevenN then
+        sevenNTextBox.Visible = true
+        local textLabel = sevenNTextBox:FindFirstChild("Text")
+        if textLabel then
+            -- Check if 7n7 clone ability is enabled (you can add a variable for this)
+            -- For now, we'll just show a placeholder
+            textLabel.Text = "7n7 Clone: " .. (autoblocktype == "7n7 Clone" and "ON" or "OFF")
+            textLabel.TextColor3 = (autoblocktype == "7n7 Clone") and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        end
+    else
+        sevenNTextBox.Visible = false
+    end
+    
+    -- Update Dusekkar textbox
+    if isDusekkar then
+        dusekkarTextBox.Visible = true
+        local textLabel = dusekkarTextBox:FindFirstChild("Text")
+        if textLabel then
+            textLabel.Text = "Dusekkar: " .. dusekkarTargetMode
+            textLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+        end
+    else
+        dusekkarTextBox.Visible = false
+    end
+end
 
 -- ===== BASIC FUNCTIONS =====
 local function refreshUIRefs()
@@ -753,7 +854,7 @@ end
 local function getAllCharactersByName(name)
     local characters = {}
     
-    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" then
+    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "7n7" then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 if survivor.Name == name then
@@ -1308,6 +1409,9 @@ local mainLoopConn = RunService.Heartbeat:Connect(function()
     if killerCirclesVisible then
         pcall(updateDetectionRangeVisuals)
     end
+    
+    -- Update status textboxes
+    pcall(updateTextBoxes)
 end)
 
 -- ===== UI =====
@@ -1329,12 +1433,14 @@ local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
 local TechTab = Window:CreateTab("Techs", 4483362458)
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
-AutoBlockTab:CreateToggle({
-    Name = "1. Auto Block For Guest",
-    CurrentValue = false,
-    Flag = "AutoBlockForGuest",
-    Callback = function(Value)
-        autoBlockForGuest = Value
+AutoBlockTab:CreateKeybind({
+    Name = "1. Guest Auto Block",
+    CurrentKeybind = "G",
+    HoldToInteract = false,
+    Flag = "GuestAutoBlockKey",
+    Callback = function()
+        autoBlockForGuest = not autoBlockForGuest
+        SendNotif("Guest Auto Block", autoBlockForGuest and "Enabled" or "Disabled", 1)
     end
 })
 
@@ -1674,4 +1780,4 @@ Rayfield:LoadConfiguration()
 refreshUIRefs()
 setupSilentAim()
 
-print("wahoo wario time - Simple 7n7-style autoblock - no lag!")
+print("wahoo wario time - Guest Auto Block is now a keybind with dynamic status textboxes!")
