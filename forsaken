@@ -1,0 +1,3861 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local Camera = Workspace.CurrentCamera
+local lp = Players.LocalPlayer
+local PlayerGui = lp:WaitForChild("PlayerGui")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- Remotes with error handling
+local testRemote = nil
+local success, result = pcall(function()
+    return ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent")
+end)
+if success then
+    testRemote = result
+else
+    -- Try alternative paths
+    success, result = pcall(function()
+        return ReplicatedStorage:FindFirstChild("Network"):WaitForChild("RemoteEvent")
+    end)
+    if success then
+        testRemote = result
+    else
+        testRemote = ReplicatedStorage:FindFirstChild("RemoteEvent") or Instance.new("RemoteEvent")
+    end
+end
+
+-- Killers and Survivors folders
+local KillersFolder = nil
+local SurvivorsFolder = nil
+
+local playersFolder = Workspace:FindFirstChild("Players")
+if playersFolder then
+    KillersFolder = playersFolder:FindFirstChild("Killers") or Instance.new("Folder")
+    KillersFolder.Name = "Killers"
+    SurvivorsFolder = playersFolder:FindFirstChild("Survivors") or Instance.new("Folder")
+    SurvivorsFolder.Name = "Survivors"
+else
+    KillersFolder = Instance.new("Folder")
+    KillersFolder.Name = "Killers"
+    SurvivorsFolder = Instance.new("Folder")
+    SurvivorsFolder.Name = "Survivors"
+end
+
+-- ===== SOUND IDs FOR AUTO BLOCK =====
+local autoBlockTriggerSounds = {
+    ["102228729296384"] = true,
+    ["124903763333174"] = true,
+    ["131123355704017"] = true,
+    ["128856426573270"] = true,
+    ["128367348686124"] = true,
+    ["104910828105172"] = true,
+    ["140242176732868"] = true,
+    ["112809109188560"] = true,
+    ["115026634746636"] = true,
+    ["84116622032112"] = true,
+    ["108907358619313"] = true,
+    ["127793641088496"] = true,
+    ["86174610237192"] = true,
+    ["95079963655241"] = true,
+    ["101199185291628"] = true,
+    ["119942598489800"] = true,
+    ["84307400688050"] = true,
+    ["113037804008732"] = true,
+    ["105200830849301"] = true,
+    ["75330693422988"] = true,
+    ["124397369810639"] = true,
+    ["107444859834748"] = true,
+    ["82221759983649"] = true,
+    ["76467993976301"] = true,
+    ["81702359653578"] = true,
+    ["128195973631079"] = true,
+    ["108610718831698"] = true,
+    ["112395455254818"] = true,
+    ["109431876587852"] = true,
+    ["109348678063422"] = true,
+    ["85853080745515"] = true,
+    ["86785901416030"] = true,
+    ["12222216"] = true,
+    ["105840448036441"] = true,
+    ["114742322778642"] = true,
+    ["119583605486352"] = true,
+    ["79980897195554"] = true,
+    ["71805956520207"] = true,
+    ["79391273191671"] = true,
+    ["89004992452376"] = true,
+    ["101553872555606"] = true,
+    ["72425554233832"] = true,
+    ["124903763333174"] = true,
+    ["98675142200448"] = true,
+    ["101698569375359"] = true,
+    ["106300477136129"] = true,
+    ["116581754553533"] = true,
+    ["117231507259853"] = true,
+    ["136323728355613"] = true,
+    ["119089145505438"] = true,
+    ["121954639447247"] = true,
+    ["125213046326879"] = true,
+    ["131406927389838"] = true,
+    ["117173212095661"] = true,
+    ["80516583309685"] = true,
+    ["132596270805754"] = true,
+    ["83851356262523"] = true,
+    ["111910850942168"] = true,
+    ["136728245733659"] = true,
+    ["94317217837143"] = true,
+}
+
+-- ===== KILLER-SPECIFIC HDT STOP TIMES =====
+local killerHDTStopTimes = {
+    ["Slasher"] = 0.25,
+    ["JohnDoe"] = 0.45,
+    ["c00lkidd"] = 0.15,
+    ["1x1x1x1"] = 0.45,
+    ["Noli"] = 0.4,
+    ["Sixer"] = 0.4,
+    ["Nosferatu"] = 0.35,
+}
+
+-- ===== SURVIVOR CHARACTERS THAT CAN TARGET KILLERS =====
+local survivorTargetKillers = {
+    ["Guest1337"] = true,
+    ["Shedletsky"] = true,
+    ["Chance"] = true,
+    ["TwoTime"] = true,
+}
+
+-- ===== KILLER CHARACTERS =====
+local killerCharacters = {
+    ["Slasher"] = true,
+    ["JohnDoe"] = true,
+    ["1x1x1x1"] = true,
+    ["c00lkidd"] = true,
+    ["Nosferatu"] = true,
+    ["Noli"] = true,
+    ["Sixer"] = true,
+}
+
+-- ===== STATE VARIABLES =====
+local autoBlockForGuest = false
+local autoCloneFor7n7 = false
+local ragingPaceAutoParry = false
+local error404AutoParry = false
+local ragingPaceAutoPunish = false
+local onexOnexOnexOneAutoPunish = false
+local doubleblocktech = false
+local blockdelay = 0
+local detectionRange = 18
+local messageWhenAutoBlockOn = false
+local messageWhenAutoBlock = ""
+local blockChance = 100
+local facingCheckEnabled = true
+local customFacingDot = -0.3
+local killerCirclesVisible = false
+local autoblocktype = "Block"
+local autoSwitchBlockCharge = false
+local originalBlockType = "Block"
+
+-- ===== ESP VARIABLES =====
+local espEnabled = false
+local survivorESPColor = Color3.fromRGB(0, 255, 0)  -- Green
+local killerESPColor = Color3.fromRGB(255, 100, 100) -- Red
+local generatorESPColor = Color3.fromRGB(173, 162, 236) -- Purple
+local itemESPColor = Color3.fromRGB(255, 255, 0) -- Yellow
+local espTextSize = 1.0 -- Default text size multiplier
+local espHighlights = {}
+local espBillboards = {}
+local generatorBillboards = {}
+local itemHighlights = {}
+
+local Items = { "Medkit", "BloxyCola" }
+
+-- ===== AIMBOT VARIABLES =====
+local aimbotEnabled = false
+local aimbotSmoothness = 0.1
+local aimbotMaxDistance = 50
+local aimbotFOV = 90
+local aimbotUseFOV = true  -- True = use FOV, False = use nearest target
+local aimbotFOVCircle = nil
+local aimbotCurrentTarget = nil
+local aimbotConnection = nil
+local aimbotActive = false
+local aimbotActiveTimer = nil
+local aimbotTargetCount = 0  -- Track how many targets are currently being aimed at
+
+-- ===== DUSEKKAR SILENT AIM VARIABLES =====
+local dusekkarEnabled = false
+local dusekkarTargetMode = "Survivors"
+local silentAimActive = false
+local originalGetMousePos = nil
+local mousePositionModule = nil
+local currentTarget = nil
+local dusekkarActive = false
+local dusekkarTimer = nil
+
+-- ===== KILLER SILENT AIM VARIABLES =====
+local killerSilentAimEnabled = false
+local killerSilentAimActive = false
+local killerSilentAimTimer = nil
+local killerSilentAimCooldown = false
+local lastNovaTime = 0
+local NOVA_COOLDOWN = 10 -- 10 seconds cooldown for Noli's nova
+
+-- ===== HDT VARIABLES =====
+local hitboxDraggingTech = false
+local _hitboxDraggingDebounce = false
+local HITBOX_DRAG_DURATION = 1.4
+local Dspeed = 5.6
+local Ddelay = 0
+local hdtActive = false
+local hdtConnection = nil
+
+-- ===== PREDICTION VARIABLES =====
+local BASE_PREDICTION_DISTANCE = 4  -- Default prediction distance (when multiplier = 1)
+local aimbotPredictionMultiplier = 1       -- Range: 1 to 3
+local SPHERE_SMOOTHNESS = 0.25
+local MOVE_THRESHOLD = 0.15
+
+-- Store prediction sphere for current target only
+local currentTargetSphere = nil
+local currentSphereConnection = nil
+
+-- Store position history for each character
+local positionHistory = {}
+local HISTORY_SIZE = 5  -- Number of positions to keep for averaging
+
+-- ===== SMOOTH SHIFTLOCK MODULE =====
+local SmoothShiftLock = nil
+local shiftlockLoaded = false
+
+local function loadSmoothShiftLock()
+    local success, module = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Game"):FindFirstChild("SmoothShiftLock"))
+    end)
+    
+    if not success then
+        success, module = pcall(function()
+            return require(ReplicatedStorage.Systems.Player.Game.SmoothShiftLock)
+        end)
+    end
+    
+    if success and module then
+        SmoothShiftLock = module
+        shiftlockLoaded = true
+        print("SmoothShiftLock module loaded successfully")
+    else
+        print("Failed to load SmoothShiftLock module")
+    end
+end
+
+-- Load the module
+loadSmoothShiftLock()
+
+-- ===== SHIFTLOCK CONTROL =====
+local function setShiftLock(enabled)
+    if enabled then
+        -- Use SmoothShiftLock module if available
+        if shiftlockLoaded and SmoothShiftLock and not SmoothShiftLock.Enabled then
+            pcall(function()
+                SmoothShiftLock:ToggleShiftLock()
+            end)
+        else
+            -- Fallback to VirtualInputManager
+            pcall(function()
+                -- Get shiftlock keybind from player settings
+                local shiftlockKeybindEnum = lp.PlayerData.Settings.Keybinds.ShiftLock.Value
+                local shiftlockKeyCode = Enum.KeyCode[shiftlockKeybindEnum]
+                
+                if shiftlockKeyCode then
+                    VirtualInputManager:SendKeyEvent(true, shiftlockKeyCode, false, game)
+                    VirtualInputManager:SendKeyEvent(false, shiftlockKeyCode, false, game)
+                end
+            end)
+        end
+    end
+    -- Note: We don't disable shiftlock - it stays on permanently once enabled
+end
+
+-- ===== SPECIAL KILLER DETECTION =====
+local isPlayingAsSpecialKiller = false
+local currentKillerType = nil
+local originalFacingCheckState = true
+
+local KILLER_CONFIGS = {
+    Slasher = {
+        soundId = "12222225",
+        abilityRemote = function()
+            if testRemote then
+                local args = {
+                    "UseActorAbility",
+                    {
+                        buffer.fromstring("\003\n\000\000\000RagingPace")
+                    }
+                }
+                local success, err = pcall(function()
+                    testRemote:FireServer(unpack(args))
+                end)
+            end
+        end,
+        abilityName = "RagingPace"
+    },
+    JohnDoe = {
+        soundId = "12222225",
+        abilityRemote = function()
+            if testRemote then
+                local args = {
+                    "UseActorAbility",
+                    {
+                        buffer.fromstring("\003\b\000\000\000404Error")
+                    }
+                }
+                local success, err = pcall(function()
+                    testRemote:FireServer(unpack(args))
+                end)
+            end
+        end,
+        abilityName = "404Error"
+    },
+    ["1x1x1x1"] = {
+        abilityRemote = function()
+            if testRemote then
+                local args = {
+                    "UseActorAbility",
+                    {
+                        buffer.fromstring("\003\r\000\000\000MassInfection")
+                    }
+                }
+                local success, err = pcall(function()
+                    testRemote:FireServer(unpack(args))
+                end)
+            end
+        end,
+        abilityName = "MassInfection"
+    }
+}
+
+-- ===== PERFORMANCE CACHES =====
+local detectionRangeSq = detectionRange * detectionRange
+local cachedPunchBtn, cachedBlockBtn, cachedChargeBtn, cachedCloneBtn
+local cachedCooldown
+local detectionCircles = {}
+local survivorCircles = {}
+local _lastBlockMessageTime = 0
+local MESSAGE_BLOCK_COOLDOWN = 0.6
+
+-- ===== UTILITY FUNCTIONS =====
+local function SendNotif(title, text, duration)
+    local success, err = pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title or "Auto Block",
+            Text = text or "Notification",
+            Duration = duration or 4
+        })
+    end)
+end
+
+-- ===== CHARACTER IDENTIFICATION FUNCTIONS =====
+local function getMyCharacterInfo()
+    -- Check if playing as Elliot (special case - targets survivors)
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Elliot" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "Elliot", true -- isElliot
+                end
+            end
+        end
+    end
+    
+    -- Check if playing as Guest1337
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Guest1337" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "Guest1337", false
+                end
+            end
+        end
+    end
+    
+    -- Check if playing as Shedletsky
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Shedletsky" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "Shedletsky", false
+                end
+            end
+        end
+    end
+    
+    -- Check if playing as Chance
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Chance" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "Chance", false
+                end
+            end
+        end
+    end
+    
+    -- Check if playing as TwoTime
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "TwoTime" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "TwoTime", false
+                end
+            end
+        end
+    end
+    
+    -- Check if playing as 7n7
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "007n7" or survivor.Name == "7n7" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "7n7", false
+                end
+            end
+        end
+    end
+    
+    -- Check if playing as Dusekkar
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Dusekkar" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "Dusekkar", false
+                end
+            end
+        end
+    end
+    
+    -- Check killers
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            local usernameAttr = killer:GetAttribute("Username")
+            if usernameAttr and usernameAttr == lp.Name then
+                return "Killer", killer.Name, false
+            end
+        end
+    end
+    
+    return nil, nil, false
+end
+
+-- ===== POSITION-BASED MOVEMENT DETECTION =====
+local function updatePositionHistory(character, position)
+    if not character or not position then return end
+    
+    if not positionHistory[character] then
+        positionHistory[character] = {}
+    end
+    
+    local history = positionHistory[character]
+    table.insert(history, position)
+    
+    -- Keep only the most recent positions
+    if #history > HISTORY_SIZE then
+        table.remove(history, 1)
+    end
+end
+
+-- Calculate movement direction from position history
+local function getMovementDirectionFromHistory(character)
+    if not character or not positionHistory[character] then
+        return Vector3.new(0,0,0)
+    end
+    
+    local history = positionHistory[character]
+    if #history < 2 then
+        return Vector3.new(0,0,0)
+    end
+    
+    -- Get the oldest and newest positions to calculate overall movement
+    local oldestPos = history[1]
+    local newestPos = history[#history]
+    
+    -- Calculate movement vector
+    local movement = newestPos - oldestPos
+    local magnitude = movement.Magnitude
+    
+    -- Also check recent movement for direction changes
+    local recentMovement = Vector3.new(0,0,0)
+    if #history >= 3 then
+        recentMovement = history[#history] - history[#history-1]
+    end
+    
+    -- Use the larger movement to determine direction
+    if magnitude > MOVE_THRESHOLD then
+        -- Use overall movement for consistent direction
+        return movement.Unit
+    elseif recentMovement.Magnitude > MOVE_THRESHOLD then
+        -- Use recent movement for quick direction changes
+        return recentMovement.Unit
+    end
+    
+    return Vector3.new(0,0,0)
+end
+
+-- Calculate instantaneous velocity from position changes
+local function getInstantaneousDirection(character, currentPos)
+    if not character or not currentPos then return Vector3.new(0,0,0) end
+    
+    if not positionHistory[character] or #positionHistory[character] < 2 then
+        return Vector3.new(0,0,0)
+    end
+    
+    local history = positionHistory[character]
+    local lastPos = history[#history]
+    
+    -- Calculate direction from last position to current position
+    local movement = currentPos - lastPos
+    if movement.Magnitude > MOVE_THRESHOLD then
+        return movement.Unit
+    end
+    
+    return Vector3.new(0,0,0)
+end
+
+-- ===== PREDICTION FUNCTION (PURELY POSITION-BASED) =====
+local function getPredictedPosition(character)
+    if not character then return nil end
+    
+    local root = character:FindFirstChild("HumanoidRootPart") or 
+                 character:FindFirstChild("Head") or 
+                 character:FindFirstChild("Torso")
+    if not root then return nil end
+    
+    local currentPos = root.Position
+    
+    -- Update position history
+    updatePositionHistory(character, currentPos)
+    
+    -- Get movement direction from history
+    local moveDir = getMovementDirectionFromHistory(character)
+    
+    -- Also check instantaneous direction for immediate response
+    local instantDir = getInstantaneousDirection(character, currentPos)
+    
+    -- Use instantaneous direction if available and significant, otherwise use historical
+    local finalDir = instantDir
+    if instantDir.Magnitude <= MOVE_THRESHOLD then
+        finalDir = moveDir
+    end
+    
+    -- Calculate current prediction distance based on multiplier
+    local currentPredictionDistance = BASE_PREDICTION_DISTANCE * aimbotPredictionMultiplier
+    
+    if finalDir.Magnitude > MOVE_THRESHOLD then
+        -- Predict forward in the direction of movement
+        return currentPos + (finalDir * currentPredictionDistance)
+    else
+        -- Stay on target when not moving
+        return currentPos
+    end
+end
+
+-- ===== PREDICTION SPHERE SYSTEM =====
+local function createTargetSphere(targetCharacter, sphereColor)
+    -- Destroy existing target sphere
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
+    end
+    
+    if not targetCharacter then return nil end
+    
+    -- Wait for HumanoidRootPart
+    local root = targetCharacter:FindFirstChild("HumanoidRootPart") or 
+                 targetCharacter:FindFirstChild("Head") or 
+                 targetCharacter:FindFirstChild("Torso")
+    if not root then return nil end
+
+    local sphere = Instance.new("Part")
+    sphere.Shape = Enum.PartType.Ball
+    sphere.Size = Vector3.new(2, 2, 2)
+    sphere.Material = Enum.Material.Neon
+    sphere.Color = sphereColor or Color3.fromRGB(255, 0, 0)  -- Red for aimbot, blue for dusekkar
+    sphere.Anchored = true
+    sphere.CanCollide = false
+    sphere.Name = "TargetSphere"
+    sphere.Parent = workspace
+    sphere.Position = root.Position
+
+    -- Initialize position history
+    updatePositionHistory(targetCharacter, root.Position)
+
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        -- Check if character still exists and is still the current target
+        if not targetCharacter or not targetCharacter.Parent or not sphere.Parent then
+            sphere:Destroy()
+            if connection then
+                connection:Disconnect()
+            end
+            currentTargetSphere = nil
+            currentSphereConnection = nil
+            return
+        end
+
+        -- Check if target is still alive
+        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            sphere:Destroy()
+            if connection then
+                connection:Disconnect()
+            end
+            currentTargetSphere = nil
+            currentSphereConnection = nil
+            return
+        end
+
+        -- Re-get root part
+        root = targetCharacter:FindFirstChild("HumanoidRootPart") or 
+               targetCharacter:FindFirstChild("Head") or 
+               targetCharacter:FindFirstChild("Torso")
+        if not root then
+            sphere:Destroy()
+            if connection then
+                connection:Disconnect()
+            end
+            currentTargetSphere = nil
+            currentSphereConnection = nil
+            return
+        end
+
+        local currentPos = root.Position
+        
+        -- Update position history
+        updatePositionHistory(targetCharacter, currentPos)
+        
+        -- Get movement direction
+        local moveDir = getMovementDirectionFromHistory(targetCharacter)
+        local instantDir = getInstantaneousDirection(targetCharacter, currentPos)
+        
+        -- Use the stronger direction signal
+        local finalDir = instantDir
+        if instantDir.Magnitude <= MOVE_THRESHOLD then
+            finalDir = moveDir
+        end
+        
+        -- Calculate current prediction distance based on multiplier
+        local currentPredictionDistance = BASE_PREDICTION_DISTANCE * aimbotPredictionMultiplier
+
+        local targetPosition
+
+        if finalDir.Magnitude > MOVE_THRESHOLD then
+            -- Predict forward in the direction of movement
+            targetPosition = currentPos + (finalDir * currentPredictionDistance)
+        else
+            -- Stay on target when not moving
+            targetPosition = currentPos
+        end
+
+        sphere.Position = sphere.Position:Lerp(targetPosition, SPHERE_SMOOTHNESS)
+    end)
+
+    currentTargetSphere = sphere
+    currentSphereConnection = connection
+    return sphere, connection
+end
+
+-- ===== ESP FUNCTIONS =====
+local function clearESP()
+    -- Clear player highlights
+    for _, highlight in pairs(espHighlights) do
+        pcall(function() highlight:Destroy() end)
+    end
+    espHighlights = {}
+    
+    -- Clear player billboards
+    for _, billboard in pairs(espBillboards) do
+        pcall(function() billboard:Destroy() end)
+    end
+    espBillboards = {}
+    
+    -- Clear generator billboards
+    for _, billboard in pairs(generatorBillboards) do
+        pcall(function() billboard:Destroy() end)
+    end
+    generatorBillboards = {}
+    
+    -- Clear item highlights
+    for _, highlight in pairs(itemHighlights) do
+        pcall(function() highlight:Destroy() end)
+    end
+    itemHighlights = {}
+end
+
+local function addPlayerESP(object, color, isKiller)
+    if not object then return end
+    
+    local humanoid = object:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    local head = object:FindFirstChild("Head")
+    if not head then return end
+    
+    -- Add highlight (will be toggled based on health)
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_Highlight"
+    highlight.Parent = object
+    highlight.FillColor = color
+    highlight.FillTransparency = 0.7
+    highlight.OutlineColor = color
+    highlight.OutlineTransparency = 0.6
+    -- Initially visible if health > 0
+    highlight.Enabled = humanoid.Health > 0
+    table.insert(espHighlights, highlight)
+    
+    -- Calculate text size based on multiplier
+    local baseWidth = 150
+    local baseHeight = 80
+    local adjustedWidth = baseWidth * espTextSize
+    local adjustedHeight = baseHeight * espTextSize
+    
+    -- Create main BillboardGui for all text
+    local mainGui = Instance.new("BillboardGui")
+    mainGui.Name = "ESP_Main"
+    mainGui.Parent = head
+    mainGui.Size = UDim2.new(0, adjustedWidth, 0, adjustedHeight)
+    mainGui.StudsOffset = Vector3.new(0, 3 * espTextSize, 0)
+    mainGui.AlwaysOnTop = true
+    -- Text only visible if health > 0
+    mainGui.Enabled = humanoid.Health > 0
+    
+    -- Get username from attribute
+    local username = object:GetAttribute("Username") or object.Name
+    
+    -- Username label (top)
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Parent = mainGui
+    nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = username
+    nameLabel.TextColor3 = color
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextScaled = true
+    
+    -- Character name label (middle)
+    local charLabel = Instance.new("TextLabel")
+    charLabel.Parent = mainGui
+    charLabel.Size = UDim2.new(1, 0, 0.3, 0)
+    charLabel.Position = UDim2.new(0, 0, 0.4, 0)
+    charLabel.BackgroundTransparency = 1
+    charLabel.Text = object.Name
+    charLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    charLabel.TextStrokeTransparency = 0
+    charLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    charLabel.Font = Enum.Font.Gotham
+    charLabel.TextScaled = true
+    
+    -- Health text label (bottom)
+    local healthLabel = Instance.new("TextLabel")
+    healthLabel.Parent = mainGui
+    healthLabel.Size = UDim2.new(1, 0, 0.3, 0)
+    healthLabel.Position = UDim2.new(0, 0, 0.7, 0)
+    healthLabel.BackgroundTransparency = 1
+    healthLabel.Text = string.format("HP: %.0f/%.0f", humanoid.Health, humanoid.MaxHealth)
+    healthLabel.TextColor3 = isKiller and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 255, 100)
+    healthLabel.TextStrokeTransparency = 0
+    healthLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    healthLabel.Font = Enum.Font.GothamBold
+    healthLabel.TextScaled = true
+    
+    -- Update health text and visibility when health changes
+    local connection
+    connection = humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+        if healthLabel and healthLabel.Parent then
+            healthLabel.Text = string.format("HP: %.0f/%.0f", humanoid.Health, humanoid.MaxHealth)
+            
+            -- Toggle highlight and billboard based on health
+            if highlight and highlight.Parent then
+                highlight.Enabled = humanoid.Health > 0
+            end
+            if mainGui and mainGui.Parent then
+                mainGui.Enabled = humanoid.Health > 0
+            end
+        else
+            if connection then
+                connection:Disconnect()
+            end
+        end
+    end)
+    
+    table.insert(espBillboards, mainGui)
+end
+
+local function addGeneratorESP(generator)
+    if not generator then return end
+    
+    -- Add highlight to generator
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "Generator_Highlight"
+    highlight.Parent = generator
+    highlight.FillColor = generatorESPColor
+    highlight.FillTransparency = 0.7
+    highlight.OutlineColor = generatorESPColor
+    highlight.OutlineTransparency = 0.6
+    table.insert(itemHighlights, highlight) -- Reusing itemHighlights table for simplicity
+    
+    -- Create billboard for progress
+    if generator:FindFirstChild("Progress") then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "Generator_Billboard"
+        local parentPart = generator:FindFirstChild("Main") or generator:FindFirstChildWhichIsA("BasePart") or generator
+        if parentPart then
+            -- Calculate text size based on multiplier
+            local adjustedWidth = 100 * espTextSize
+            local adjustedHeight = 40 * espTextSize
+            
+            billboard.Parent = parentPart
+            billboard.Size = UDim2.new(0, adjustedWidth, 0, adjustedHeight)
+            billboard.StudsOffset = Vector3.new(0, 3 * espTextSize, 0)
+            billboard.AlwaysOnTop = true
+            
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Parent = billboard
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = string.format("Generator: %d%%", generator.Progress.Value)
+            textLabel.TextColor3 = generatorESPColor
+            textLabel.TextStrokeTransparency = 0
+            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.TextScaled = true
+            
+            -- Update progress text
+            local connection
+            connection = generator.Progress.Changed:Connect(function()
+                if textLabel and textLabel.Parent then
+                    textLabel.Text = string.format("Generator: %d%%", generator.Progress.Value)
+                else
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+            end)
+            
+            table.insert(generatorBillboards, billboard)
+        end
+    end
+end
+
+local function addItemESP(item)
+    if not item then return end
+    
+    -- Check if it's actually an item model (has parts)
+    local hasParts = false
+    for _, part in ipairs(item:GetChildren()) do
+        if part:IsA("BasePart") then
+            hasParts = true
+            break
+        end
+    end
+    
+    if not hasParts then return end
+    
+    -- Add highlight to all parts of the item
+    for _, part in ipairs(item:GetChildren()) do
+        if part:IsA("BasePart") then
+            -- Check if part already has a highlight
+            local existingHighlight = part:FindFirstChildOfClass("Highlight")
+            if not existingHighlight then
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "Item_Highlight"
+                highlight.Parent = part
+                highlight.FillColor = itemESPColor
+                highlight.FillTransparency = 0.7
+                highlight.OutlineColor = itemESPColor
+                highlight.OutlineTransparency = 0.6
+                table.insert(itemHighlights, highlight)
+            end
+        end
+    end
+    
+    -- Add billboard with item name
+    local primaryPart = item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+    if primaryPart then
+        -- Check if part already has a billboard
+        local existingBillboard = primaryPart:FindFirstChild("Item_Billboard")
+        if not existingBillboard then
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "Item_Billboard"
+            
+            -- Calculate text size based on multiplier
+            local adjustedWidth = 80 * espTextSize
+            local adjustedHeight = 30 * espTextSize
+            
+            billboard.Parent = primaryPart
+            billboard.Size = UDim2.new(0, adjustedWidth, 0, adjustedHeight)
+            billboard.StudsOffset = Vector3.new(0, 2 * espTextSize, 0)
+            billboard.AlwaysOnTop = true
+            billboard.ResetOnSpawn = false
+            
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Parent = billboard
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = item.Name
+            textLabel.TextColor3 = itemESPColor
+            textLabel.TextStrokeTransparency = 0
+            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.TextScaled = true
+            textLabel.ResetOnSpawn = false
+            
+            table.insert(generatorBillboards, billboard) -- Reusing generatorBillboards table
+        end
+    end
+end
+
+local function scanForItemsInAllLocations()
+    -- Scan Workspace root for dropped items (when survivor drops item)
+    for _, itemName in ipairs(Items) do
+        local item = Workspace:FindFirstChild(itemName)
+        if item and item:IsA("Model") then
+            addItemESP(item)
+        end
+    end
+    
+    -- Scan Map.Ingame.Map for items (when survivor dies with item)
+    local mapFolder = Workspace:FindFirstChild("Map")
+    if mapFolder then
+        local ingameFolder = mapFolder:FindFirstChild("Ingame")
+        if ingameFolder then
+            local gameMap = ingameFolder:FindFirstChild("Map")
+            if gameMap then
+                for _, itemName in ipairs(Items) do
+                    for _, obj in ipairs(gameMap:GetChildren()) do
+                        if obj:IsA("Model") and obj.Name == itemName then
+                            addItemESP(obj)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Also scan in Players folders in case items are attached to players (rare, but just in case)
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            for _, itemName in ipairs(Items) do
+                local item = killer:FindFirstChild(itemName)
+                if item and item:IsA("Model") then
+                    addItemESP(item)
+                end
+            end
+        end
+    end
+    
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            for _, itemName in ipairs(Items) do
+                local item = survivor:FindFirstChild(itemName)
+                if item and item:IsA("Model") then
+                    addItemESP(item)
+                end
+            end
+        end
+    end
+end
+
+local function scanForGenerators()
+    -- Find Map folder
+    local mapFolder = Workspace:FindFirstChild("Map")
+    if not mapFolder then return end
+    
+    local ingameFolder = mapFolder:FindFirstChild("Ingame")
+    if not ingameFolder then return end
+    
+    local gameMap = ingameFolder:FindFirstChild("Map")
+    if not gameMap then return end
+    
+    -- Scan for generators
+    for _, obj in ipairs(gameMap:GetChildren()) do
+        if obj.Name == "Generator" then
+            addGeneratorESP(obj)
+        end
+    end
+end
+
+local function updateESP()
+    clearESP()
+    
+    if not espEnabled then return end
+    
+    -- Add ESP for killers
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            local usernameAttr = killer:GetAttribute("Username")
+            if usernameAttr and usernameAttr ~= lp.Name then
+                addPlayerESP(killer, killerESPColor, true)
+            end
+        end
+    end
+    
+    -- Add ESP for survivors
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            local usernameAttr = survivor:GetAttribute("Username")
+            if usernameAttr and usernameAttr ~= lp.Name then
+                addPlayerESP(survivor, survivorESPColor, false)
+            end
+        end
+    end
+    
+    -- Add ESP for generators
+    scanForGenerators()
+    
+    -- Add ESP for items in all possible locations
+    scanForItemsInAllLocations()
+end
+
+-- Add continuous item scanning for moving items
+local itemScanConnection = nil
+local function startItemScanning()
+    if itemScanConnection then
+        itemScanConnection:Disconnect()
+    end
+    
+    itemScanConnection = RunService.Heartbeat:Connect(function()
+        if espEnabled then
+            -- Only scan occasionally to avoid performance issues
+            if tick() % 2 < 0.1 then -- Scan every ~2 seconds
+                scanForItemsInAllLocations()
+            end
+        end
+    end)
+end
+
+-- Start item scanning
+startItemScanning()
+
+-- ===== CHARACTER DETECTION FUNCTIONS =====
+local function amIGuest1337()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Guest1337" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIShedletsky()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Shedletsky" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIChance()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Chance" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amITwoTime()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "TwoTime" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amI7n7()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "007n7" or survivor.Name == "7n7" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIDusekkar()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Dusekkar" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function amISlasher()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Slasher" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIJohnDoe()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "JohnDoe" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amI1x1x1x1()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "1x1x1x1" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIc00lkidd()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "c00lkidd" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amINoli()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Noli" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+-- ===== BASIC FUNCTIONS =====
+local function refreshUIRefs()
+    local main = PlayerGui:FindFirstChild("MainUI")
+    if main then
+        local ability = main:FindFirstChild("AbilityContainer")
+        if ability then
+            cachedPunchBtn = ability:FindFirstChild("Punch")
+            cachedBlockBtn = ability:FindFirstChild("Block")
+            cachedChargeBtn = ability:FindFirstChild("Charge")
+            cachedCloneBtn = ability:FindFirstChild("Clone")
+            
+            if cachedBlockBtn then
+                cachedCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
+            end
+        end
+    end
+end
+
+local function fireGuiBlock()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Block")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+local function fireGuiPunch()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Punch")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+local function fireGuiCharge()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\006\000\000\000Charge")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+local function fireGuiClone()
+    if testRemote then
+        local args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Clone")
+            }
+        }
+        pcall(function()
+            testRemote:FireServer(unpack(args))
+        end)
+    end
+end
+
+-- Function to check if the player is helpless (cannot block)
+local function isHelpless()
+    local success, helplessObj = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.Block:FindFirstChild("Helpless")
+    end)
+    
+    if success and helplessObj then
+        return true
+    end
+    return false
+end
+
+-- ===== HDT FUNCTIONS =====
+local function getKillerHRP(killerModel)
+    if not killerModel then return nil end
+    if killerModel:FindFirstChild("HumanoidRootPart") then
+        return killerModel:FindFirstChild("HumanoidRootPart")
+    end
+    if killerModel.PrimaryPart then
+        return killerModel.PrimaryPart
+    end
+    return killerModel:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function hasPunchCharge()
+    local success, charges = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.Punch.Charges.Text
+    end)
+    if success and charges then
+        return charges == "1"
+    end
+    return false
+end
+
+local function getKillerHDTStopTime(killerModel)
+    if not killerModel then return HITBOX_DRAG_DURATION end
+    local killerName = killerModel.Name
+    return killerHDTStopTimes[killerName] or HITBOX_DRAG_DURATION
+end
+
+local function beginDragIntoKiller(killerModel)
+    if _hitboxDraggingDebounce then return end
+    if not killerModel or not killerModel.Parent then return end
+    if not hitboxDraggingTech then return end
+    
+    local char = lp and lp.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return end
+
+    local targetHRP = getKillerHRP(killerModel)
+    if not targetHRP then return end
+
+    _hitboxDraggingDebounce = true
+    hdtActive = true
+
+    local killerPos = targetHRP.Position
+    local myPos = hrp.Position
+    local direction = (Vector3.new(killerPos.X, myPos.Y, killerPos.Z) - myPos).Unit
+    hrp.CFrame = CFrame.lookAt(myPos, myPos + direction)
+
+    local oldWalk = humanoid.WalkSpeed
+    local oldJump = humanoid.JumpPower
+    local oldPlatformStand = humanoid.PlatformStand
+
+    humanoid.WalkSpeed = 0
+    humanoid.JumpPower = 0
+    humanoid.PlatformStand = false
+
+    local bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(1e5, 0, 1e5)
+    bv.Velocity = Vector3.new(0,0,0)
+    bv.Parent = hrp
+
+    local killerStopTime = getKillerHDTStopTime(killerModel)
+
+    hdtConnection = RunService.Heartbeat:Connect(function(dt)
+        if not hdtActive then
+            if hdtConnection then
+                hdtConnection:Disconnect()
+                hdtConnection = nil
+            end
+            if bv and bv.Parent then pcall(function() bv:Destroy() end) end
+            humanoid.WalkSpeed = oldWalk
+            humanoid.JumpPower = oldJump
+            humanoid.PlatformStand = oldPlatformStand
+            _hitboxDraggingDebounce = false
+            return
+        end
+
+        if not (char and char.Parent) or not (killerModel and killerModel.Parent) then
+            hdtActive = false
+            return
+        end
+
+        targetHRP = getKillerHRP(killerModel)
+        if not targetHRP then
+            hdtActive = false
+            return
+        end
+
+        local currentKillerPos = targetHRP.Position
+        local currentMyPos = hrp.Position
+        local currentDirection = (Vector3.new(currentKillerPos.X, currentMyPos.Y, currentKillerPos.Z) - currentMyPos).Unit
+        hrp.CFrame = CFrame.lookAt(currentMyPos, currentMyPos + currentDirection)
+
+        local toTarget = (targetHRP.Position - hrp.Position)
+        local dist = toTarget.Magnitude
+        
+        local horiz = Vector3.new(toTarget.X, 0, toTarget.Z)
+        if horiz.Magnitude > 0.01 then
+            local dir = horiz.Unit
+            bv.Velocity = Vector3.new(dir.X * Dspeed, bv.Velocity.Y, dir.Z * Dspeed)
+        else
+            bv.Velocity = Vector3.new(0, bv.Velocity.Y, 0)
+        end
+
+        if dist <= 2.0 or hasPunchCharge() then
+            hdtActive = false
+            return
+        end
+    end)
+
+    task.delay(killerStopTime, function()
+        if hdtActive then
+            hdtActive = false
+        end
+    end)
+end
+
+-- ===== SILENT AIM HOOK SETUP =====
+local function setupSilentAim()
+    local success, module = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
+    end)
+    
+    if not success then
+        success, module = pcall(function()
+            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
+        end)
+    end
+    
+    if success and module then
+        mousePositionModule = module
+        originalGetMousePos = module.GetMousePos
+        
+        local function hookedGetMousePos(self, ...)
+            local args = {...}
+            local p1 = args[1]
+            
+            if silentAimActive and currentTargetSphere then
+                -- Target the prediction sphere's position instead of the actual character
+                return currentTargetSphere.Position
+            end
+            
+            return originalGetMousePos(self, ...)
+        end
+        
+        module.GetMousePos = hookedGetMousePos
+        return true
+    end
+    return false
+end
+
+local function restoreSilentAim()
+    if mousePositionModule and originalGetMousePos then
+        mousePositionModule.GetMousePos = originalGetMousePos
+    end
+end
+
+-- ===== DUSEKKAR FUNCTIONS =====
+local function isPlasmaBeamOnCooldown()
+    local success, cooldownText = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
+    end)
+    
+    if success then
+        return cooldownText ~= "" and cooldownText ~= "0"
+    end
+    return true
+end
+
+local function firePlasmaBeam()
+    if not testRemote then return false end
+    
+    if isPlasmaBeamOnCooldown() then
+        return false
+    end
+    
+    local args = {
+        "UseActorAbility",
+        {
+            buffer.fromstring("\003\n\000\000\000PlasmaBeam")
+        }
+    }
+    
+    local success = pcall(function()
+        testRemote:FireServer(unpack(args))
+    end)
+    
+    if success then
+        return true
+    end
+    return false
+end
+
+local function getSurvivorClosestToCursor()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    local mousePosition = UserInputService:GetMouseLocation()
+    
+    local validTargets = {}
+    
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+        else
+            local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
+                    
+                    if onScreen then
+                        local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                        local distanceToCursor = (screenVector - mousePosition).Magnitude
+                        
+                        table.insert(validTargets, {
+                            survivor = survivor,
+                            screenDistance = distanceToCursor
+                        })
+                    end
+                end
+            end
+        end
+    end
+    
+    table.sort(validTargets, function(a, b)
+        return a.screenDistance < b.screenDistance
+    end)
+    
+    if #validTargets > 0 then
+        return validTargets[1].survivor
+    end
+    
+    local nearestByDistance = nil
+    local nearestDist = math.huge
+    
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+        else
+            local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDist then
+                        nearestDist = distance
+                        nearestByDistance = survivor
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestByDistance
+end
+
+local function getNearestKiller()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    local nearestKiller = nil
+    local nearestDistance = math.huge
+    
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local usernameAttr = killer:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+        else
+            local targetHrp = killer:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                local humanoid = killer:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestKiller = killer
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestKiller
+end
+
+local function stopDusekkar()
+    dusekkarActive = false
+    currentTarget = nil
+    silentAimActive = false
+    
+    -- Destroy target sphere
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
+    end
+    
+    if dusekkarTimer then
+        task.cancel(dusekkarTimer)
+        dusekkarTimer = nil
+    end
+end
+
+local function useSilentAim()
+    if not dusekkarEnabled then 
+        return false 
+    end
+    
+    if not amIDusekkar() then 
+        return false 
+    end
+    
+    local target = nil
+    if dusekkarTargetMode == "Survivors" then
+        target = getSurvivorClosestToCursor()
+        if target then
+            SendNotif("Dusekkar", "Targeting survivor: " .. target.Name, 1.5)
+        end
+    else
+        target = getNearestKiller()
+        if target then
+            SendNotif("Dusekkar", "Targeting killer: " .. target.Name, 1.5)
+        end
+    end
+    
+    if not target then 
+        return false 
+    end
+    
+    if isPlasmaBeamOnCooldown() then 
+        return false 
+    end
+    
+    currentTarget = target
+    silentAimActive = true
+    dusekkarActive = true
+    
+    -- Create prediction sphere for the target (blue for dusekkar)
+    createTargetSphere(target, Color3.fromRGB(0, 170, 255))
+    
+    local success = firePlasmaBeam()
+    
+    if success then
+        -- Sphere will stay for 2.5 seconds (plasma beam duration)
+        if dusekkarTimer then
+            task.cancel(dusekkarTimer)
+        end
+        
+        dusekkarTimer = task.delay(2.5, function()
+            stopDusekkar()
+        end)
+        
+        return true
+    else
+        stopDusekkar()
+        return false
+    end
+end
+
+-- ===== KILLER SILENT AIM FUNCTIONS =====
+local function fireCorruptNature()
+    if not testRemote then return false end
+    
+    local args = {
+        "UseActorAbility",
+        {
+            buffer.fromstring("\003\r\000\000\000CorruptNature")
+        }
+    }
+    
+    local success = pcall(function()
+        testRemote:FireServer(unpack(args))
+    end)
+    
+    return success
+end
+
+local function fireNova()
+    if not testRemote then return false end
+    
+    local args = {
+        "UseActorAbility",
+        {
+            buffer.fromstring("\003\004\000\000\000Nova")
+        }
+    }
+    
+    local success = pcall(function()
+        testRemote:FireServer(unpack(args))
+    end)
+    
+    return success
+end
+
+local function stopKillerSilentAim()
+    killerSilentAimActive = false
+    silentAimActive = false
+    currentTarget = nil
+    
+    -- Destroy target sphere
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
+    end
+    
+    if killerSilentAimTimer then
+        task.cancel(killerSilentAimTimer)
+        killerSilentAimTimer = nil
+    end
+end
+
+local function useKillerSilentAim(duration, abilityName, target)
+    if not killerSilentAimEnabled then 
+        return false 
+    end
+    
+    if not target then 
+        return false 
+    end
+    
+    -- Check cooldown for Noli's nova
+    if abilityName == "Nova" then
+        local now = tick()
+        if now - lastNovaTime < NOVA_COOLDOWN then
+            local remaining = math.ceil(NOVA_COOLDOWN - (now - lastNovaTime))
+            SendNotif("Nova", "Cooldown: " .. remaining .. "s remaining", 1)
+            return false
+        end
+        lastNovaTime = now
+    end
+    
+    currentTarget = target
+    silentAimActive = true
+    killerSilentAimActive = true
+    
+    -- Create prediction sphere for the target (purple for killer silent aim)
+    createTargetSphere(target, Color3.fromRGB(255, 0, 255)) -- Purple
+    
+    local success = false
+    if abilityName == "CorruptNature" then
+        success = fireCorruptNature()
+    elseif abilityName == "Nova" then
+        success = fireNova()
+    end
+    
+    if success then
+        SendNotif(abilityName, "Firing at " .. target.Name, duration)
+        
+        if killerSilentAimTimer then
+            task.cancel(killerSilentAimTimer)
+        end
+        
+        killerSilentAimTimer = task.delay(duration, function()
+            stopKillerSilentAim()
+        end)
+        
+        return true
+    else
+        stopKillerSilentAim()
+        return false
+    end
+end
+
+local function getNearestSurvivor()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    local nearestSurvivor = nil
+    local nearestDistance = math.huge
+    
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+        else
+            local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestSurvivor = survivor
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestSurvivor
+end
+
+-- ===== CHANCE-BASED BLOCKING =====
+local function shouldBlock()
+    if blockChance >= 100 then return true end
+    if blockChance <= 0 then return false end
+    return math.random(1, 100) <= blockChance
+end
+
+-- ===== FACING CHECK =====
+local function isFacing(localRoot, targetRoot)
+    if not facingCheckEnabled then return true end
+    
+    local dx = localRoot.Position.X - targetRoot.Position.X
+    local dy = localRoot.Position.Y - targetRoot.Position.Y
+    local dz = localRoot.Position.Z - targetRoot.Position.Z
+    
+    local mag = math.sqrt(dx*dx + dy*dy + dz*dz)
+    if mag == 0 then return true end
+    local invMag = 1 / mag
+    
+    local ux, uy, uz = dx * invMag, dy * invMag, dz * invMag
+    local lv = targetRoot.CFrame.LookVector
+    local dot = lv.X * ux + lv.Y * uy + lv.Z * uz
+    
+    return dot > customFacingDot
+end
+
+-- ===== AUTO-SWITCH BLOCK/CHARGE =====
+local lastBlockCheckTime = 0
+local BLOCK_CHECK_INTERVAL = 0.2
+
+local function checkAndSwitchBlockType()
+    if not autoSwitchBlockCharge then return end
+    
+    local currentTime = tick()
+    if currentTime - lastBlockCheckTime < BLOCK_CHECK_INTERVAL then return end
+    lastBlockCheckTime = currentTime
+    
+    refreshUIRefs()
+    
+    if not cachedBlockBtn then return end
+    
+    local blockCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
+    if not blockCooldown then return end
+    
+    if blockCooldown.Text ~= "" and blockCooldown.Text ~= "0" then
+        if autoblocktype ~= "Charge" then
+            originalBlockType = autoblocktype
+            autoblocktype = "Charge"
+        end
+    else
+        if autoblocktype == "Charge" and originalBlockType ~= "Charge" then
+            autoblocktype = originalBlockType
+        end
+    end
+end
+
+-- ===== SOUND CHECKING =====
+local lastBlockTime = 0
+local BLOCK_COOLDOWN = 0.7
+local lastCloneTime = 0
+local CLONE_COOLDOWN = 0.7
+
+local function extractNumericSoundId(sound)
+    if not sound then return nil end
+    local sid = tostring(sound.SoundId)
+    
+    local num = sid:match("rbxassetid://(%d+)") or
+                sid:match("://(%d+)") or
+                sid:match("^(%d+)$")
+    return num
+end
+
+-- ===== GET ALL CHARACTERS WITH SPECIFIC NAME =====
+local function getAllCharactersByName(name)
+    local characters = {}
+    
+    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" or name == "7n7" then
+        if SurvivorsFolder then
+            for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+                if survivor.Name == name then
+                    table.insert(characters, survivor)
+                end
+            end
+        end
+    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "c00lkidd" or name == "Noli" then
+        if KillersFolder then
+            for _, killer in ipairs(KillersFolder:GetChildren()) do
+                if killer.Name == name then
+                    table.insert(characters, killer)
+                end
+            end
+        end
+    end
+    
+    return characters
+end
+
+-- ===== SPECIAL KILLER AUTO PARRY =====
+local lastSpecialAbilityTime = 0
+local SPECIAL_ABILITY_COOLDOWN = 1.0
+
+local function checkSpecialKillerAutoParry()
+    if not isPlayingAsSpecialKiller or not currentKillerType then return end
+    
+    local now = tick()
+    if now - lastSpecialAbilityTime < SPECIAL_ABILITY_COOLDOWN then return end
+    
+    local config = KILLER_CONFIGS[currentKillerType]
+    if not config then return end
+    
+    local myChar = lp.Character
+    if not myChar then return end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    local shouldUseAbility = false
+    local targetKiller = nil
+    
+    local triggerSoundIds = {
+        ["12222225"] = true,
+        ["132596270805754"] = true,
+        ["83851356262523"] = true,
+        ["111910850942168"] = true,
+        ["115267992424648"] = true,
+        ["99820161736138"] = true,
+        ["86710781315432"] = true,
+        ["139012439429121"] = true,
+    }
+    
+    if (currentKillerType == "Slasher" and ragingPaceAutoParry) or 
+       (currentKillerType == "JohnDoe" and error404AutoParry) then
+        
+        local allShedletskies = getAllCharactersByName("Shedletsky")
+        
+        for _, shedletsky in ipairs(allShedletskies) do
+            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
+            if shedletskyHrp then
+                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
+                if distance <= 20 then
+                    for _, sound in ipairs(shedletsky:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and triggerSoundIds[soundId] then
+                                shouldUseAbility = true
+                                targetKiller = shedletsky
+                                break
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    if not shouldUseAbility and 
+       ((currentKillerType == "Slasher" and ragingPaceAutoParry) or 
+        (currentKillerType == "JohnDoe" and error404AutoParry)) then
+        
+        local allTwoTimes = getAllCharactersByName("TwoTime")
+        
+        for _, twotime in ipairs(allTwoTimes) do
+            local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
+            if twotimeHrp then
+                local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 30 then
+                    for _, sound in ipairs(twotime:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
+                                shouldUseAbility = true
+                                targetKiller = twotime
+                                break
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    if not shouldUseAbility and 
+       ((currentKillerType == "Slasher" and ragingPaceAutoParry) or 
+        (currentKillerType == "JohnDoe" and error404AutoParry)) then
+        
+        local allChances = getAllCharactersByName("Chance")
+        
+        for _, chance in ipairs(allChances) do
+            local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
+            if chanceHrp then
+                local distance = (chanceHrp.Position - myRoot.Position).Magnitude
+                if distance <= 90 then
+                    
+                    for _, sound in ipairs(chance:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and soundId == "139012439429121" then
+                                shouldUseAbility = true
+                                targetKiller = chance
+                                break
+                            end
+                        end
+                    end
+                    
+                    if not shouldUseAbility then
+                        local humanoid = chance:FindFirstChildOfClass("Humanoid")
+                        if humanoid then
+                            local animator = humanoid:FindFirstChildOfClass("Animator")
+                            if animator then
+                                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                    local animId = tostring(track.Animation.AnimationId):match("%d+")
+                                    if animId == "133491532453922" or 
+                                       animId == "86371356500204" or 
+                                       animId == "131189930305001" then
+                                        shouldUseAbility = true
+                                        targetKiller = chance
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    if not shouldUseAbility and currentKillerType == "Slasher" and ragingPaceAutoPunish then
+        local allGuest1337s = getAllCharactersByName("Guest1337")
+        
+        for _, guest1337 in ipairs(allGuest1337s) do
+            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
+            if guest1337Hrp then
+                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local id = tostring(track.Animation.AnimationId):match("%d+")
+                                if id then
+                                    local slasherAnims = {
+                                        ["95802026624883"] = true,
+                                        ["82036084568393"] = true,
+                                        ["120748030255574"] = true,
+                                        ["72722244508749"] = true,
+                                        ["140671644163156"] = true,
+                                        ["100926346851492"] = true,
+                                        ["96959123077498"] = true,
+                                    }
+                                    
+                                    if slasherAnims[id] then
+                                        shouldUseAbility = true
+                                        targetKiller = guest1337
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    if not shouldUseAbility and currentKillerType == "1x1x1x1" and onexOnexOnexOneAutoPunish then
+        local allGuest1337s = getAllCharactersByName("Guest1337")
+        
+        for _, guest1337 in ipairs(allGuest1337s) do
+            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
+            if guest1337Hrp then
+                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local id = tostring(track.Animation.AnimationId):match("%d+")
+                                if id then
+                                    local guest1337BlockAnims = {
+                                        ["95802026624883"] = true,
+                                        ["82036084568393"] = true,
+                                        ["120748030255574"] = true,
+                                        ["72722244508749"] = true,
+                                        ["140671644163156"] = true,
+                                        ["100926346851492"] = true,
+                                        ["96959123077498"] = true,
+                                    }
+                                    
+                                    if guest1337BlockAnims[id] then
+                                        shouldUseAbility = true
+                                        targetKiller = guest1337
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if shouldUseAbility then break end
+                end
+            end
+        end
+    end
+    
+    if shouldUseAbility then
+        if blockdelay > 0 then
+            task.wait(blockdelay)
+        end
+        
+        local success = pcall(function()
+            config.abilityRemote()
+        end)
+        
+        if success then
+            lastSpecialAbilityTime = now
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- ===== SPECIAL KILLER DETECTION =====
+local function checkSpecialKillerStatus()
+    local character = lp.Character
+    if not character then 
+        if isPlayingAsSpecialKiller then
+            isPlayingAsSpecialKiller = false
+            currentKillerType = nil
+            facingCheckEnabled = originalFacingCheckState
+        end
+        return false
+    end
+    
+    local allSlashers = getAllCharactersByName("Slasher")
+    local allJohnDoes = getAllCharactersByName("JohnDoe")
+    local allOnexOnexOnexOnes = getAllCharactersByName("1x1x1x1")
+    local allc00lkidds = getAllCharactersByName("c00lkidd")
+    local allNolis = getAllCharactersByName("Noli")
+    
+    for _, slasher in ipairs(allSlashers) do
+        local usernameAttr = slasher:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "Slasher" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "Slasher"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, johnDoe in ipairs(allJohnDoes) do
+        local usernameAttr = johnDoe:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "JohnDoe" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "JohnDoe"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, onexone in ipairs(allOnexOnexOnexOnes) do
+        local usernameAttr = onexone:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "1x1x1x1" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "1x1x1x1"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, c00lkidd in ipairs(allc00lkidds) do
+        local usernameAttr = c00lkidd:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "c00lkidd" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "c00lkidd"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, noli in ipairs(allNolis) do
+        local usernameAttr = noli:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "Noli" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "Noli"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    if isPlayingAsSpecialKiller then
+        isPlayingAsSpecialKiller = false
+        currentKillerType = nil
+        facingCheckEnabled = originalFacingCheckState
+    end
+    
+    return false
+end
+
+-- ===== GUEST1337 AUTO BLOCK FUNCTION =====
+local function checkForAttackSounds()
+    if not autoBlockForGuest then return end
+    if isPlayingAsSpecialKiller then return end
+    
+    local now = tick()
+    if now - lastBlockTime < BLOCK_COOLDOWN then return end
+    
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    if not KillersFolder then return end
+    
+    -- Check if we're playing as Guest1337
+    local isGuest1337, guestChar = amIGuest1337()
+    if not isGuest1337 then return end -- Only run if actually Guest1337
+    
+    -- Simple loop through all killers
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local usernameAttr = killer:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            -- Skip this killer
+        else
+            local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+            if killerHrp then
+                local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                
+                -- Only check if in range
+                if distance <= detectionRange then
+                    if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
+                        if shouldBlock() then
+                            -- Simple sound check
+                            for _, sound in ipairs(killer:GetDescendants()) do
+                                if sound:IsA("Sound") and sound.IsPlaying then
+                                    local soundId = extractNumericSoundId(sound)
+                                    if soundId and autoBlockTriggerSounds[soundId] then
+                                        
+                                        if blockdelay > 0 then
+                                            task.wait(blockdelay)
+                                        end
+                                        
+                                        refreshUIRefs()
+                                        
+                                        if isHelpless() then
+                                            break
+                                        end
+                                        
+                                        if autoblocktype == "Block" then
+                                            if cachedCooldown and cachedCooldown.Text == "" then
+                                                fireGuiBlock()
+                                                if doubleblocktech then
+                                                    fireGuiPunch()
+                                                end
+                                                if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
+                                                    _lastBlockMessageTime = tick()
+                                                end
+                                                lastBlockTime = now
+                                                
+                                                if hitboxDraggingTech and autoblocktype == "Block" then
+                                                    task.wait(Ddelay)
+                                                    task.spawn(function() beginDragIntoKiller(killer) end)
+                                                end
+                                                
+                                                return
+                                            end
+                                        elseif autoblocktype == "Charge" then
+                                            if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
+                                                fireGuiCharge()
+                                                lastBlockTime = now
+                                                return
+                                            end
+                                        elseif autoblocktype == "7n7 Clone" then
+                                            if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
+                                                fireGuiClone()
+                                                lastCloneTime = now
+                                                return
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ===== 7N7 AUTO CLONE FUNCTION =====
+local function checkForCloneTrigger()
+    if not autoCloneFor7n7 then return end
+    if isPlayingAsSpecialKiller then return end
+    
+    local now = tick()
+    if now - lastCloneTime < CLONE_COOLDOWN then return end
+    
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    if not KillersFolder then return end
+    
+    -- Check if we're playing as 7n7
+    local is7n7, sevenNChar = amI7n7()
+    if not is7n7 then return end -- Only run if actually 7n7
+    
+    -- Simple loop through all killers
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local usernameAttr = killer:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            -- Skip this killer
+        else
+            local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+            if killerHrp then
+                local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                
+                -- Only check if in range
+                if distance <= detectionRange then
+                    if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
+                        -- Simple sound check for clone trigger
+                        for _, sound in ipairs(killer:GetDescendants()) do
+                            if sound:IsA("Sound") and sound.IsPlaying then
+                                local soundId = extractNumericSoundId(sound)
+                                if soundId and autoBlockTriggerSounds[soundId] then
+                                    
+                                    if blockdelay > 0 then
+                                        task.wait(blockdelay)
+                                    end
+                                    
+                                    refreshUIRefs()
+                                    
+                                    -- Fire clone if available
+                                    if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
+                                        fireGuiClone()
+                                        lastCloneTime = now
+                                        return
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ===== VISUAL RANGE =====
+local lastVisualUpdate = 0
+local VISUAL_UPDATE_COOLDOWN = 0.5
+
+local function safeDestroyCircle(circle)
+    if not circle then return end
+    pcall(function()
+        if circle.Parent then
+            circle:Destroy()
+        end
+    end)
+end
+
+local function updateDetectionRangeVisuals()
+    local now = tick()
+    if now - lastVisualUpdate < VISUAL_UPDATE_COOLDOWN then return end
+    lastVisualUpdate = now
+    
+    for _, circle in pairs(detectionCircles) do
+        safeDestroyCircle(circle)
+    end
+    detectionCircles = {}
+    
+    for _, circle in pairs(survivorCircles) do
+        safeDestroyCircle(circle)
+    end
+    survivorCircles = {}
+    
+    if not killerCirclesVisible then return end
+    
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    if isPlayingAsSpecialKiller and currentKillerType then
+        if SurvivorsFolder then
+            for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+                local survivorHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if survivorHrp and not survivorHrp:FindFirstChild("DetectionCircle") then
+                    
+                    local visualRange = detectionRange
+                    local circleColor = Color3.fromRGB(255, 255, 0)
+                    
+                    if survivor.Name == "Chance" then
+                        visualRange = 90
+                        circleColor = Color3.fromRGB(255, 0, 255)
+                    elseif survivor.Name == "TwoTime" then
+                        visualRange = 30
+                        circleColor = Color3.fromRGB(0, 255, 255)
+                    elseif survivor.Name == "Shedletsky" then
+                        visualRange = 20
+                        circleColor = Color3.fromRGB(0, 255, 0)
+                    elseif survivor.Name == "Guest1337" then
+                        visualRange = detectionRange
+                        circleColor = Color3.fromRGB(255, 165, 0)
+                    end
+                    
+                    local distance = (survivorHrp.Position - myRoot.Position).Magnitude
+                    local inRange = distance <= visualRange
+                    
+                    pcall(function()
+                        local circle = Instance.new("CylinderHandleAdornment")
+                        circle.Name = "DetectionCircle"
+                        circle.Adornee = survivorHrp
+                        circle.Color3 = inRange and circleColor or Color3.fromRGB(128, 128, 128)
+                        circle.AlwaysOnTop = true
+                        circle.ZIndex = 1
+                        circle.Transparency = 0.6
+                        circle.Radius = visualRange
+                        circle.Height = 0.12
+                        
+                        local yOffset = -(survivorHrp.Size.Y / 2 + 0.05)
+                        circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
+                        
+                        circle.Parent = survivorHrp
+                        survivorCircles[survivor] = circle
+                    end)
+                end
+            end
+        end
+    else
+        if KillersFolder then
+            for _, killer in ipairs(KillersFolder:GetChildren()) do
+                local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+                if killerHrp and not killerHrp:FindFirstChild("DetectionCircle") then
+                    local usernameAttr = killer:GetAttribute("Username")
+                    if usernameAttr and usernameAttr == lp.Name then
+                    else
+                        local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                        local inRange = distance <= detectionRange
+                        
+                        pcall(function()
+                            local circle = Instance.new("CylinderHandleAdornment")
+                            circle.Name = "DetectionCircle"
+                            circle.Adornee = killerHrp
+                            circle.Color3 = inRange and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 165, 0)
+                            circle.AlwaysOnTop = true
+                            circle.ZIndex = 1
+                            circle.Transparency = 0.6
+                            circle.Radius = detectionRange
+                            circle.Height = 0.12
+                            
+                            local yOffset = -(killerHrp.Size.Y / 2 + 0.05)
+                            circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
+                            
+                            circle.Parent = killerHrp
+                            detectionCircles[killer] = circle
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ===== AIMBOT FUNCTIONS =====
+local function stopAimbot()
+    aimbotActive = false
+    aimbotCurrentTarget = nil
+    aimbotTargetCount = math.max(0, aimbotTargetCount - 1)
+    
+    -- Destroy target sphere
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
+    end
+    
+    if aimbotActiveTimer then
+        task.cancel(aimbotActiveTimer)
+        aimbotActiveTimer = nil
+    end
+end
+
+local function getKillersAndSurvivors()
+    local characters = {}
+    
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            table.insert(characters, killer)
+        end
+    end
+    
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            table.insert(characters, survivor)
+        end
+    end
+    
+    return characters
+end
+
+local function getValidTargets()
+    local targets = {}
+    local myChar = lp.Character
+    if not myChar then return targets end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return targets end
+    
+    -- Get my team
+    local myTeam, myCharacter = getMyCharacterInfo()
+    
+    -- Determine target folder (opposite team)
+    local targetFolder = nil
+    if myTeam == "Killer" then
+        targetFolder = SurvivorsFolder
+    elseif myTeam == "Survivor" then
+        targetFolder = KillersFolder
+    else
+        -- If we can't determine team, target everyone in both folders
+        return getValidTargetsFromBothFolders()
+    end
+    
+    if not targetFolder then return targets end
+    
+    local viewportSize = Camera.ViewportSize
+    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+    
+    for _, obj in ipairs(targetFolder:GetChildren()) do
+        -- Skip self
+        local usernameAttr = obj:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            -- Skip this iteration
+        else
+            -- Check if alive
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                -- Get target part
+                local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
+                if targetPart then
+                    -- Distance check
+                    local distance = (targetPart.Position - myRoot.Position).Magnitude
+                    if distance <= aimbotMaxDistance then
+                        -- Screen position check (only if using FOV)
+                        if aimbotUseFOV then
+                            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                            if onScreen then
+                                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                                local distanceFromCenter = (screenVector - screenCenter).Magnitude
+                                
+                                if distanceFromCenter <= aimbotFOV then
+                                    table.insert(targets, {
+                                        obj = obj,
+                                        part = targetPart,
+                                        distance = distance,
+                                        screenDistance = distanceFromCenter
+                                    })
+                                end
+                            end
+                        else
+                            -- If not using FOV, just add all valid targets within distance
+                            table.insert(targets, {
+                                obj = obj,
+                                part = targetPart,
+                                distance = distance,
+                                screenDistance = 0
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if aimbotUseFOV then
+        -- Sort by screen distance (closest to center)
+        table.sort(targets, function(a, b)
+            return a.screenDistance < b.screenDistance
+        end)
+    else
+        -- Sort by actual distance (nearest)
+        table.sort(targets, function(a, b)
+            return a.distance < b.distance
+        end)
+    end
+    
+    return targets
+end
+
+-- Fallback function if team can't be determined
+local function getValidTargets()
+    local targets = {}
+    local myChar = lp.Character
+    if not myChar then return targets end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return targets end
+    
+    -- Get my team
+    local myTeam, myCharacter = getMyCharacterInfo()
+    
+    -- Determine target folder (opposite team)
+    local targetFolder = nil
+    if myTeam == "Killer" then
+        targetFolder = SurvivorsFolder
+    elseif myTeam == "Survivor" then
+        targetFolder = KillersFolder
+    else
+        -- If we can't determine team, target everyone in both folders
+        return getValidTargetsFromBothFolders()
+    end
+    
+    if not targetFolder then return targets end
+    
+    local viewportSize = Camera.ViewportSize
+    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+    
+    for _, obj in ipairs(targetFolder:GetChildren()) do
+        -- Skip self
+        local usernameAttr = obj:GetAttribute("Username")
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            -- Check if alive
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                -- Get target part
+                local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
+                if targetPart then
+                    -- Distance check
+                    local distance = (targetPart.Position - myRoot.Position).Magnitude
+                    if distance <= aimbotMaxDistance then
+                        -- Screen position check (only if using FOV)
+                        if aimbotUseFOV then
+                            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                            if onScreen then
+                                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                                local distanceFromCenter = (screenVector - screenCenter).Magnitude
+                                
+                                if distanceFromCenter <= aimbotFOV then
+                                    table.insert(targets, {
+                                        obj = obj,
+                                        part = targetPart,
+                                        distance = distance,
+                                        screenDistance = distanceFromCenter
+                                    })
+                                end
+                            end
+                        else
+                            -- If not using FOV, just add all valid targets within distance
+                            table.insert(targets, {
+                                obj = obj,
+                                part = targetPart,
+                                distance = distance,
+                                screenDistance = 0
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if aimbotUseFOV then
+        -- Sort by screen distance (closest to center)
+        table.sort(targets, function(a, b)
+            return a.screenDistance < b.screenDistance
+        end)
+    else
+        -- Sort by actual distance (nearest)
+        table.sort(targets, function(a, b)
+            return a.distance < b.distance
+        end)
+    end
+    
+    return targets
+end
+
+local function getValidTargetsFromBothFolders()
+    local targets = {}
+    local myChar = lp.Character
+    if not myChar then return targets end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return targets end
+    
+    -- Collect all characters from both folders
+    local allCharacters = {}
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            table.insert(allCharacters, killer)
+        end
+    end
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            table.insert(allCharacters, survivor)
+        end
+    end
+    
+    local viewportSize = Camera.ViewportSize
+    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+    
+    for _, obj in ipairs(allCharacters) do
+        -- Skip self
+        local usernameAttr = obj:GetAttribute("Username")
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            -- Check if alive
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
+                if targetPart then
+                    local distance = (targetPart.Position - myRoot.Position).Magnitude
+                    if distance <= aimbotMaxDistance then
+                        if aimbotUseFOV then
+                            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                            if onScreen then
+                                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                                local distanceFromCenter = (screenVector - screenCenter).Magnitude
+                                
+                                if distanceFromCenter <= aimbotFOV then
+                                    table.insert(targets, {
+                                        obj = obj,
+                                        part = targetPart,
+                                        distance = distance,
+                                        screenDistance = distanceFromCenter
+                                    })
+                                end
+                            end
+                        else
+                            table.insert(targets, {
+                                obj = obj,
+                                part = targetPart,
+                                distance = distance,
+                                screenDistance = 0
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if aimbotUseFOV then
+        table.sort(targets, function(a, b)
+            return a.screenDistance < b.screenDistance
+        end)
+    else
+        table.sort(targets, function(a, b)
+            return a.distance < b.distance
+        end)
+    end
+    
+    return targets
+end
+
+local function startAimbotForDuration(duration)
+    if not aimbotEnabled then return end
+    
+    -- Check if we already have a target
+    if aimbotActive then
+        -- If we're already targeting someone, don't start another
+        return
+    end
+    
+    local targets = getValidTargets()
+    
+    if #targets == 0 then 
+        return 
+    end
+    
+    local target = targets[1]
+    aimbotCurrentTarget = target.obj
+    aimbotActive = true
+    aimbotTargetCount = aimbotTargetCount + 1
+    
+    -- Turn on shiftlock (permanent)
+    setShiftLock(true)
+    
+    -- Create sphere for the target (red for aimbot)
+    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0))
+    
+    if aimbotActiveTimer then
+        task.cancel(aimbotActiveTimer)
+        aimbotActiveTimer = nil
+    end
+    
+    aimbotActiveTimer = task.delay(duration, function()
+        stopAimbot()
+    end)
+end
+
+local function updateAimbot()
+    if not aimbotEnabled then
+        if aimbotConnection then
+            aimbotConnection:Disconnect()
+            aimbotConnection = nil
+        end
+        stopAimbot()
+        return
+    end
+    
+    if aimbotConnection then return end
+    
+    aimbotConnection = RunService.RenderStepped:Connect(function()
+        if not aimbotEnabled or not aimbotActive or not aimbotCurrentTarget then
+            return
+        end
+        
+        local myChar = lp.Character
+        if not myChar then return end
+        
+        local humanoid = aimbotCurrentTarget:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            stopAimbot()
+            return
+        end
+        
+        -- Get predicted position using position-based prediction
+        local targetPos = getPredictedPosition(aimbotCurrentTarget)
+        if not targetPos then
+            stopAimbot()
+            return
+        end
+        
+        local camera = Camera
+        local cameraPos = camera.CFrame.Position
+        
+        local targetCFrame = CFrame.lookAt(cameraPos, targetPos)
+        local currentCFrame = camera.CFrame
+        
+        local currentLook = currentCFrame.LookVector
+        local targetLook = targetCFrame.LookVector
+        
+        local smoothLook = currentLook:Lerp(targetLook, aimbotSmoothness)
+        local newCFrame = CFrame.new(cameraPos, cameraPos + smoothLook)
+        
+        camera.CFrame = newCFrame
+    end)
+end
+
+local function createFOVCircle()
+    if aimbotFOVCircle then
+        pcall(function() aimbotFOVCircle:Destroy() end)
+        aimbotFOVCircle = nil
+    end
+    
+    -- Only create FOV circle if both aimbot is enabled AND Use FOV is enabled
+    if not aimbotEnabled or not aimbotUseFOV then return end
+    
+    local circle = Drawing.new("Circle")
+    circle.Transparency = 1
+    circle.Thickness = 2
+    circle.NumSides = 60
+    circle.Radius = aimbotFOV
+    circle.Color = Color3.fromRGB(255, 255, 255)
+    circle.Visible = true
+    circle.Filled = false
+    circle.Visible = aimbotEnabled and aimbotUseFOV
+    
+    aimbotFOVCircle = circle
+    
+    -- Update circle position to center of screen
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if aimbotEnabled and aimbotUseFOV and aimbotFOVCircle then
+            local viewportSize = Camera.ViewportSize
+            aimbotFOVCircle.Position = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+            aimbotFOVCircle.Radius = aimbotFOV
+            aimbotFOVCircle.Visible = true
+        elseif aimbotFOVCircle then
+            aimbotFOVCircle.Visible = false
+        end
+    end)
+end
+
+-- Input hook
+local function setupInputHook()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        local myTeam, myCharacter = getMyCharacterInfo()
+        local isKiller = (myTeam == "Killer")
+        local isSurvivor = (myTeam == "Survivor")
+        
+        -- Check specific survivor types
+        local isShedletsky = (myTeam == "Survivor" and myCharacter == "Shedletsky")
+        local isChance = (myTeam == "Survivor" and myCharacter == "Chance")
+        local isTwoTime = (myTeam == "Survivor" and myCharacter == "TwoTime")
+        
+        -- Check specific killer types
+        local isSlasher = (myTeam == "Killer" and myCharacter == "Slasher")
+        local isJohnDoe = (myTeam == "Killer" and myCharacter == "JohnDoe")
+        local is1x1x1x1 = (myTeam == "Killer" and myCharacter == "1x1x1x1")
+        local isc00lkidd = (myTeam == "Killer" and myCharacter == "c00lkidd")
+        local isNoli = (myTeam == "Killer" and myCharacter == "Noli")
+        local isGuest1337 = (myTeam == "Survivor" and myCharacter == "Guest1337")
+        
+        -- Left click for killers (0.65s)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if not aimbotEnabled then return end
+            if not isKiller then
+                return
+            end
+            startAimbotForDuration(0.65)
+        end
+        
+        -- Keyboard keys
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            -- Q key abilities
+            if input.KeyCode == Enum.KeyCode.Q then
+                -- Normal aimbot abilities
+                if aimbotEnabled then
+                    -- JohnDoe Q (Corrupt Energy) - 4.5 seconds
+                    if isJohnDoe then
+                        startAimbotForDuration(4.5)
+                    -- Shedletsky Q - 1.1 seconds
+                    elseif isShedletsky then
+                        startAimbotForDuration(1.1)
+                    -- TwoTime Q - 0.4 seconds
+                    elseif isTwoTime then
+                        startAimbotForDuration(0.4)
+                    -- 1x1x1x1 Q - 2.1 seconds
+                    elseif is1x1x1x1 then
+                        startAimbotForDuration(2.1)
+                    -- Noli Q - 4 seconds (normal aimbot, not silent aim)
+                    elseif isNoli then
+                        startAimbotForDuration(4.0)
+                    -- Slasher Q - 0.95 seconds
+                    elseif isSlasher then
+                        startAimbotForDuration(0.95)
+                    end
+                end
+                
+                -- Killer silent aim abilities (c00lkidd Q)
+                if killerSilentAimEnabled and isc00lkidd then
+                    local target = getNearestSurvivor()
+                    if target then
+                        useKillerSilentAim(0.1, "CorruptNature", target) -- 0.1 seconds for instant windup
+                    else
+                        SendNotif("CorruptNature", "No survivors found", 1)
+                    end
+                end
+            end
+            
+            -- E key abilities
+            if input.KeyCode == Enum.KeyCode.E then
+                -- Normal aimbot abilities
+                if aimbotEnabled then
+                    -- Chance E - 1.1 seconds
+                    if isChance then
+                        startAimbotForDuration(1.1)
+                    -- 1x1x1x1 E - 1.2 seconds
+                    elseif is1x1x1x1 then
+                        startAimbotForDuration(1.2)
+                    -- c00lkidd E - 0.8 seconds (normal aimbot)
+                    elseif isc00lkidd then
+                        startAimbotForDuration(0.8)
+                    -- Slasher E - 0.5 seconds
+                    elseif isSlasher then
+                        startAimbotForDuration(0.5)
+                    end
+                end
+                
+                -- Killer silent aim abilities (Noli E)
+                if killerSilentAimEnabled and isNoli then
+                    local target = getNearestSurvivor()
+                    if target then
+                        useKillerSilentAim(0.8, "Nova", target) -- 0.8 seconds for 0.7s windup
+                    else
+                        SendNotif("Nova", "No survivors found", 1)
+                    end
+                end
+            end
+            
+            -- R key for Guest1337 (0.95s)
+            if input.KeyCode == Enum.KeyCode.R then
+                if not aimbotEnabled then return end
+                if not isGuest1337 then
+                    return
+                end
+                startAimbotForDuration(0.95)
+            end
+        end
+    end)
+end
+
+-- Setup listeners for new characters (for position tracking)
+local function setupCharacterListeners()
+    if SurvivorsFolder then
+        SurvivorsFolder.ChildAdded:Connect(function(newSurvivor)
+            -- Just initialize position history, no sphere
+            local root = newSurvivor:WaitForChild("HumanoidRootPart", 5)
+            if root then
+                updatePositionHistory(newSurvivor, root.Position)
+            end
+        end)
+    end
+    
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(newKiller)
+            -- Just initialize position history, no sphere
+            local root = newKiller:WaitForChild("HumanoidRootPart", 5)
+            if root then
+                updatePositionHistory(newKiller, root.Position)
+            end
+        end)
+    end
+    
+    -- Clean up position history when characters are removed
+    local function watchCharacterRemoval(folder)
+        if folder then
+            folder.ChildRemoved:Connect(function(character)
+                if positionHistory[character] then
+                    positionHistory[character] = nil
+                end
+                -- Also clean up target sphere if it was the current target
+                if aimbotCurrentTarget == character then
+                    stopAimbot()
+                end
+                if currentTarget == character then
+                    stopDusekkar()
+                end
+            end)
+        end
+    end
+    
+    watchCharacterRemoval(KillersFolder)
+    watchCharacterRemoval(SurvivorsFolder)
+end
+
+-- ===== MAIN LOOP =====
+local mainLoopConn = RunService.Heartbeat:Connect(function()
+    pcall(checkSpecialKillerStatus)
+    
+    if autoSwitchBlockCharge and not isPlayingAsSpecialKiller then
+        pcall(checkAndSwitchBlockType)
+    end
+    
+    if autoBlockForGuest and not isPlayingAsSpecialKiller then
+        pcall(checkForAttackSounds)
+    end
+    
+    if autoCloneFor7n7 and not isPlayingAsSpecialKiller then
+        pcall(checkForCloneTrigger)
+    end
+    
+    if isPlayingAsSpecialKiller then
+        pcall(checkSpecialKillerAutoParry)
+    end
+    
+    if killerCirclesVisible then
+        pcall(updateDetectionRangeVisuals)
+    end
+end)
+
+-- ===== UI =====
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local Window = Rayfield:CreateWindow({
+    Name = "time for say gex",
+    LoadingTitle = "loading gaming chair",
+    LoadingSubtitle = "allat features (matthew gay included)",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "AutoBlockHub",
+        FileName = "Settings"
+    },
+    Discord = {Enabled = false},
+    KeySystem = false
+})
+
+local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
+local TechTab = Window:CreateTab("Techs", 4483362458)
+local VisualsTab = Window:CreateTab("Visuals", 4483362458)
+local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
+local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
+
+-- Visuals Tab ESP Section
+local VisualsSection = VisualsTab:CreateSection("ESP Settings")
+
+local ESPToggle = VisualsTab:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = false,
+    Flag = "ESPToggle",
+    Callback = function(Value)
+        espEnabled = Value
+        if Value then
+            updateESP()
+            SendNotif("ESP", "Enabled", 1)
+        else
+            clearESP()
+            SendNotif("ESP", "Disabled", 1)
+        end
+    end
+})
+
+local TextSizeSlider = VisualsTab:CreateSlider({
+    Name = "Text Size Multiplier",
+    Range = {0.5, 2.0},
+    Increment = 0.1,
+    Suffix = "x",
+    CurrentValue = 1.0,
+    Flag = "ESPTextSize",
+    Callback = function(Value)
+        espTextSize = Value
+        if espEnabled then
+            updateESP()
+            SendNotif("Text Size", "Set to " .. Value .. "x", 1)
+        end
+    end
+})
+
+local SurvivorColorPicker = VisualsTab:CreateColorPicker({
+    Name = "Survivor ESP Color",
+    Color = survivorESPColor,
+    Flag = "SurvivorESPColor",
+    Callback = function(Value)
+        survivorESPColor = Value
+        if espEnabled then
+            updateESP()
+        end
+    end
+})
+
+local KillerColorPicker = VisualsTab:CreateColorPicker({
+    Name = "Killer ESP Color",
+    Color = killerESPColor,
+    Flag = "KillerESPColor",
+    Callback = function(Value)
+        killerESPColor = Value
+        if espEnabled then
+            updateESP()
+        end
+    end
+})
+
+local GeneratorColorPicker = VisualsTab:CreateColorPicker({
+    Name = "Generator ESP Color",
+    Color = generatorESPColor,
+    Flag = "GeneratorESPColor",
+    Callback = function(Value)
+        generatorESPColor = Value
+        if espEnabled then
+            updateESP()
+        end
+    end
+})
+
+local ItemColorPicker = VisualsTab:CreateColorPicker({
+    Name = "Item ESP Color (Medkit/BloxyCola)",
+    Color = itemESPColor,
+    Flag = "ItemESPColor",
+    Callback = function(Value)
+        itemESPColor = Value
+        if espEnabled then
+            updateESP()
+        end
+    end
+})
+
+local RefreshESPButton = VisualsTab:CreateButton({
+    Name = "Refresh ESP",
+    Callback = function()
+        if espEnabled then
+            updateESP()
+            SendNotif("ESP", "Refreshed", 1)
+        end
+    end
+})
+
+VisualsTab:CreateParagraph({
+    Title = "ESP Features",
+    Content = "• PLAYERS: Highlights & text disappear when dead\n• PLAYERS: Username (top) + Character name (middle)\n• PLAYERS: Health text (bottom) updates in real-time\n• GENERATORS: Highlight + Progress percentage\n• ITEMS: Highlights items in ALL locations\n• Green = Survivors | Red = Killers\n• Purple = Generators | Yellow = Items\n• Text Size Slider: Adjust all text size (0.5x - 2.0x)\n• Continuous scanning for moved items\n• Auto-updates when objects spawn/move"
+})
+
+-- Guest Auto Block Keybind
+AutoBlockTab:CreateKeybind({
+    Name = "1. Guest Auto Block",
+    CurrentKeybind = "G",
+    HoldToInteract = false,
+    Flag = "GuestAutoBlockKey",
+    Callback = function()
+        local isGuest1337 = amIGuest1337()
+        if isGuest1337 then
+            autoBlockForGuest = not autoBlockForGuest
+            SendNotif("Guest Auto Block", autoBlockForGuest and "Enabled" or "Disabled", 1)
+        end
+    end
+})
+
+-- 7n7 Auto Clone Keybind
+AutoBlockTab:CreateKeybind({
+    Name = "2. 7n7 Auto Clone",
+    CurrentKeybind = "H",
+    HoldToInteract = false,
+    Flag = "SevenNAutoCloneKey",
+    Callback = function()
+        local is7n7 = amI7n7()
+        if is7n7 then
+            autoCloneFor7n7 = not autoCloneFor7n7
+            SendNotif("7n7 Auto Clone", autoCloneFor7n7 and "Enabled" or "Disabled", 1)
+        end
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "3. Raging Pace Auto Parry (Slasher)",
+    CurrentValue = false,
+    Flag = "RagingPaceAutoParry",
+    Callback = function(Value)
+        ragingPaceAutoParry = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "4. Error 404 Auto Parry (JohnDoe)",
+    CurrentValue = false,
+    Flag = "Error404AutoParry",
+    Callback = function(Value)
+        error404AutoParry = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "5. Raging Pace Auto Punish (Slasher)",
+    CurrentValue = false,
+    Flag = "RagingPaceAutoPunish",
+    Callback = function(Value)
+        ragingPaceAutoPunish = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "6. Mass Infection Auto Punish (1x1x1x1)",
+    CurrentValue = false,
+    Flag = "OnexOnexOnexOneAutoPunish",
+    Callback = function(Value)
+        onexOnexOnexOneAutoPunish = Value
+    end
+})
+
+AutoBlockTab:CreateSlider({
+    Name = "Block Chance",
+    Range = {0, 100},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 100,
+    Flag = "BlockChance",
+    Callback = function(Value)
+        blockChance = Value
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Auto Switch Block/Charge",
+    CurrentValue = false,
+    Flag = "AutoSwitchToggle",
+    Callback = function(Value)
+        autoSwitchBlockCharge = Value
+        if not Value then
+            autoblocktype = originalBlockType
+        else
+            originalBlockType = autoblocktype
+        end
+    end
+})
+
+AutoBlockTab:CreateButton({
+    Name = "Change auto block type",
+    Callback = function()
+        if autoblocktype == "Block" then
+            autoblocktype = "Charge"
+            originalBlockType = "Charge"
+            SendNotif("Block Type", "Switched to Charge", 1.5)
+        elseif autoblocktype == "Charge" then
+            autoblocktype = "7n7 Clone"
+            originalBlockType = "7n7 Clone"
+            SendNotif("Block Type", "Switched to 7n7 Clone", 1.5)
+        elseif autoblocktype == "7n7 Clone" then
+            autoblocktype = "Block"
+            originalBlockType = "Block"
+            SendNotif("Block Type", "Switched to Block", 1.5)
+        end
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Message When Blocking",
+    CurrentValue = false,
+    Flag = "MessageWhenBlockToggle",
+    Callback = function(Value)
+        messageWhenAutoBlockOn = Value
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Block Delay",
+    PlaceholderText = "0",
+    RemoveTextAfterFocusLost = false,
+    Flag = "blockdelaynumber",
+    Callback = function(Text)
+        blockdelay = tonumber(Text) or 0
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Message when blocking",
+    PlaceholderText = "im gonna block ya",
+    RemoveTextAfterFocusLost = false,
+    Flag = "MessageWhenBlockText",
+    Callback = function(Text)
+        messageWhenAutoBlock = Text
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Enable Facing Check",
+    CurrentValue = true,
+    Flag = "FacingCheckToggle",
+    Callback = function(Value)
+        facingCheckEnabled = Value
+        if not isPlayingAsSpecialKiller then
+            originalFacingCheckState = Value
+        end
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Facing Check angle (DOT)",
+    PlaceholderText = "-0.3",
+    RemoveTextAfterFocusLost = false,
+    Flag = "Facingcheckdot",
+    Callback = function(Text)
+        customFacingDot = tonumber(Text) or -0.3
+    end
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Detection Range",
+    PlaceholderText = "18",
+    RemoveTextAfterFocusLost = false,
+    Flag = "DetectionRange",
+    Callback = function(Text)
+        detectionRange = tonumber(Text) or 18
+        detectionRangeSq = detectionRange * detectionRange
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Range Visual",
+    CurrentValue = false,
+    Flag = "KillerCircleToggle",
+    Callback = function(Value)
+        killerCirclesVisible = Value
+        if not Value then
+            for _, circle in pairs(detectionCircles) do
+                safeDestroyCircle(circle)
+            end
+            detectionCircles = {}
+            
+            for _, circle in pairs(survivorCircles) do
+                safeDestroyCircle(circle)
+            end
+            survivorCircles = {}
+        end
+    end
+})
+
+TechTab:CreateToggle({
+    Name = "Double Punch Tech",
+    CurrentValue = false,
+    Flag = "doubleblockTechtoggle",
+    Callback = function(Value)
+        doubleblocktech = Value
+    end
+})
+
+TechTab:CreateToggle({
+    Name = "HDT (Hitbox Dragging Tech)",
+    CurrentValue = false,
+    Flag = "HitboxDraggingToggle",
+    Callback = function(Value)
+        hitboxDraggingTech = Value
+        if not Value and hdtActive then
+            hdtActive = false
+        end
+        SendNotif("HDT", Value and "Enabled - Drags hitbox towards killer (Block only, stops when punch gained)" or "Disabled", 2)
+    end
+})
+
+TechTab:CreateInput({
+    Name = "HDT speed",
+    PlaceholderText = "5.6",
+    RemoveTextAfterFocusLost = false,
+    Flag = "HDTspeed",
+    Callback = function(Text)
+        Dspeed = tonumber(Text) or 5.6
+    end
+})
+
+TechTab:CreateInput({
+    Name = "HDT delay",
+    PlaceholderText = "0",
+    RemoveTextAfterFocusLost = false,
+    Flag = "HDTdelay",
+    Callback = function(Text)
+        Ddelay = tonumber(Text) or 0
+    end
+})
+
+TechTab:CreateParagraph({
+    Title = "Hitbox Dragging tech",
+    Content = "Only triggers on Block (not Charge/Clone). Instantly aims at killer and drags you towards them. Stops automatically when you gain a punch charge."
+})
+
+TechTab:CreateButton({
+    Name = "Fake Lag Tech",
+    Callback = function()
+        local char = lp.Character
+        if not char then return end
+        
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+        
+        local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+        
+        for _, t in ipairs(animator:GetPlayingAnimationTracks()) do
+            local id = tostring(t.Animation.AnimationId):match("%d+")
+            if id == "136252471123500" then
+                t:Stop()
+            end
+        end
+        
+        local anim = Instance.new("Animation")
+        anim.AnimationId = "rbxassetid://136252471123500"
+        local track = animator:LoadAnimation(anim)
+        track:Play()
+    end
+})
+
+-- Aimbot Tab
+local AimbotSection = AimbotTab:CreateSection("Aimbot Settings")
+
+local AimbotToggle = AimbotTab:CreateToggle({
+    Name = "Enable Aimbot",
+    CurrentValue = false,
+    Flag = "AimbotToggle",
+    Callback = function(Value)
+        aimbotEnabled = Value
+        if Value then
+            updateAimbot()
+            if aimbotUseFOV then
+                createFOVCircle()
+            end
+            SendNotif("Aimbot", "Enabled - Left click to target (All Killers)", 2)
+        else
+            if aimbotConnection then
+                aimbotConnection:Disconnect()
+                aimbotConnection = nil
+            end
+            if aimbotFOVCircle then
+                pcall(function() aimbotFOVCircle:Destroy() end)
+                aimbotFOVCircle = nil
+            end
+            stopAimbot()
+            positionHistory = {}
+            SendNotif("Aimbot", "Disabled", 1)
+        end
+    end
+})
+
+local AimbotSmoothness = AimbotTab:CreateSlider({
+    Name = "Aimbot Smoothness",
+    Range = {0.01, 0.5},
+    Increment = 0.01,
+    Suffix = "",
+    CurrentValue = 0.1,
+    Flag = "AimbotSmoothness",
+    Callback = function(Value)
+        aimbotSmoothness = Value
+    end
+})
+
+local PredictionMultiplierSlider = AimbotTab:CreateSlider({
+    Name = "Prediction Distance Multiplier",
+    Range = {1, 3},
+    Increment = 0.1,
+    Suffix = "x",
+    CurrentValue = 1,
+    Flag = "PredictionMultiplier",
+    Callback = function(Value)
+        aimbotPredictionMultiplier = Value
+        SendNotif("Prediction", "Multiplier set to " .. Value .. "x", 1)
+    end
+})
+
+local AimbotMaxDistance = AimbotTab:CreateSlider({
+    Name = "Max Distance",
+    Range = {10, 200},
+    Increment = 5,
+    Suffix = "studs",
+    CurrentValue = 50,
+    Flag = "AimbotMaxDistance",
+    Callback = function(Value)
+        aimbotMaxDistance = Value
+    end
+})
+
+-- Combined FOV toggle (ON = FOV with circle, OFF = nearest target)
+local FOVModeToggle = AimbotTab:CreateToggle({
+    Name = "FOV Mode (ON) / Nearest Mode (OFF)",
+    CurrentValue = true,
+    Flag = "FOVModeToggle",
+    Callback = function(Value)
+        aimbotUseFOV = Value
+        if aimbotEnabled then
+            if Value then
+                createFOVCircle()
+                SendNotif("Target Mode", "Using FOV circle for target selection", 2)
+            else
+                if aimbotFOVCircle then
+                    pcall(function() aimbotFOVCircle:Destroy() end)
+                    aimbotFOVCircle = nil
+                end
+                SendNotif("Target Mode", "Using nearest target (ignores FOV)", 2)
+            end
+        end
+    end
+})
+
+local AimbotFOV = AimbotTab:CreateSlider({
+    Name = "Field of View Size",
+    Range = {30, 360},
+    Increment = 5,
+    Suffix = "degrees",
+    CurrentValue = 90,
+    Flag = "AimbotFOV",
+    Callback = function(Value)
+        aimbotFOV = Value
+        if aimbotEnabled and aimbotUseFOV then
+            createFOVCircle()
+        end
+    end
+})
+
+AimbotTab:CreateParagraph({
+    Title = "Aimbot Features",
+    Content = "• LEFT CLICK: 0.65s (ALL KILLERS)\n" ..
+              "• KILLERS:\n" ..
+              "  - Slasher Q: 0.95s | E: 0.5s\n" ..
+              "  - JohnDoe Q (Corrupt Energy): 4.5s\n" ..
+              "  - 1x1x1x1 Q: 2.1s | E: 1.2s\n" ..
+              "  - c00lkidd E: 0.8s\n" ..
+              "  - Noli Q: 4.0s\n" ..
+              "• SURVIVORS:\n" ..
+              "  - Guest1337 R: 0.95s\n" ..
+              "  - Shedletsky Q: 1.1s\n" ..
+              "  - Chance E: 1.1s\n" ..
+              "  - TwoTime Q: 0.4s\n" ..
+              "• MAX 1 TARGET AT A TIME\n" ..
+              "• SHIFTLOCK ENABLED (Permanent once activated)\n" ..
+              "• Target Selection: FOV Mode (with circle) or Nearest Mode\n" ..
+              "• PREDICTION: Red sphere appears ONLY when targeting\n" ..
+              "• POSITION-BASED prediction - tracks actual position changes\n" ..
+              "• Sphere moves EXACTLY in the direction the target moves\n" ..
+              "• Smooth sphere movement (Lerp)\n" ..
+              "• Fixed camera aiming - aims at predicted position\n" ..
+              "• FOV circle appears only in FOV Mode"
+})
+
+-- Character info button
+local CharacterInfoButton = AimbotTab:CreateButton({
+    Name = "Show My Character Info",
+    Callback = function()
+        local team, character = getMyCharacterInfo()
+        local info = string.format("Team: %s\nCharacter: %s", 
+            tostring(team), 
+            tostring(character))
+        SendNotif("Character Info", info, 5)
+    end
+})
+
+-- Dusekkar Tab
+local DusekkarSection = DusekkarTab:CreateSection("Dusekkar Silent Aim")
+
+local DusekkarToggle = DusekkarTab:CreateToggle({
+    Name = "Enable Dusekkar Silent Aim",
+    CurrentValue = false,
+    Flag = "DusekkarToggle",
+    Callback = function(Value)
+        dusekkarEnabled = Value
+        if Value then
+            SendNotif("Dusekkar", "Enabled - Press F to fire", 2)
+        else
+            restoreSilentAim()
+            silentAimActive = false
+            currentTarget = nil
+            SendNotif("Dusekkar", "Disabled", 1)
+        end
+    end
+})
+
+DusekkarTab:CreateDropdown({
+    Name = "Target Mode",
+    Options = {"Survivors", "Killers"},
+    CurrentOption = "Survivors",
+    Flag = "DusekkarTargetMode",
+    Callback = function(Option)
+        dusekkarTargetMode = Option
+        SendNotif("Dusekkar", "Now targeting: " .. Option, 1)
+    end
+})
+
+DusekkarTab:CreateKeybind({
+    Name = "Switch Target Mode",
+    CurrentKeybind = "Q",
+    HoldToInteract = false,
+    Flag = "DusekkarKeybind",
+    Callback = function()
+        if not amIDusekkar() then
+            return
+        end
+        
+        if dusekkarTargetMode == "Survivors" then
+            dusekkarTargetMode = "Killers"
+        else
+            dusekkarTargetMode = "Survivors"
+        end
+        
+        SendNotif("Dusekkar", "Now targeting: " .. dusekkarTargetMode, 2)
+    end
+})
+
+DusekkarTab:CreateKeybind({
+    Name = "Fire Plasma Beam (Silent)",
+    CurrentKeybind = "F",
+    HoldToInteract = false,
+    Flag = "DusekkarFireKey",
+    Callback = function()
+        if not dusekkarEnabled then
+            return
+        end
+        useSilentAim()
+    end
+})
+
+DusekkarTab:CreateParagraph({
+    Title = "Dusekkar Silent Aim Features",
+    Content = "• PURE SILENT AIM: NO camera movement, NO shiftlock\n• Blue prediction sphere appears when firing\n• TARGETS THE BLUE SPHERE (predicted position)\n• Prediction uses same multiplier as main aimbot\n• Sphere stays for full 2.5 seconds (plasma beam duration)\n• SURVIVOR MODE: Targets survivor closest to cursor\n• KILLER MODE: Targets nearest killer\n• Press Q to switch modes\n• Press F to fire at target"
+})
+
+-- Killer Silent Aim Tab (under Dusekkar Tab)
+local KillerSilentSection = DusekkarTab:CreateSection("Killer Silent Aim")
+
+local KillerSilentToggle = DusekkarTab:CreateToggle({
+    Name = "Silent Aim for Killers",
+    CurrentValue = false,
+    Flag = "KillerSilentToggle",
+    Callback = function(Value)
+        killerSilentAimEnabled = Value
+        if Value then
+            SendNotif("Killer Silent Aim", "Enabled for c00lkidd (Q) and Noli (E)", 2)
+        else
+            SendNotif("Killer Silent Aim", "Disabled", 1)
+        end
+    end
+})
+
+DusekkarTab:CreateParagraph({
+    Title = "Killer Silent Aim Features",
+    Content = "• c00lkidd - Q (Corrupt Nature): 0.1s silent aim\n" ..
+              "• Noli - E (Nova): 0.8s silent aim (10s cooldown)\n" ..
+              "• Uses same prediction multiplier as main aimbot\n" ..
+              "• Purple sphere appears when firing\n" ..
+              "• Only targets survivors\n" ..
+              "• No switching modes needed"
+})
+
+-- Set up ESP update listeners
+local function setupESPListeners()
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(child)
+            if espEnabled then
+                task.wait(0.1)
+                local usernameAttr = child:GetAttribute("Username")
+                if usernameAttr and usernameAttr ~= lp.Name then
+                    addPlayerESP(child, killerESPColor, true)
+                end
+            end
+        end)
+        
+        KillersFolder.ChildRemoved:Connect(function(child)
+            if espEnabled then
+                clearESP()
+                updateESP()
+            end
+        end)
+    end
+    
+    if SurvivorsFolder then
+        SurvivorsFolder.ChildAdded:Connect(function(child)
+            if espEnabled then
+                task.wait(0.1)
+                local usernameAttr = child:GetAttribute("Username")
+                if usernameAttr and usernameAttr ~= lp.Name then
+                    addPlayerESP(child, survivorESPColor, false)
+                end
+            end
+        end)
+        
+        SurvivorsFolder.ChildRemoved:Connect(function(child)
+            if espEnabled then
+                clearESP()
+                updateESP()
+            end
+        end)
+    end
+    
+    -- Listen for map changes (for generators)
+    Workspace.ChildAdded:Connect(function(child)
+        if child.Name == "Map" and espEnabled then
+            task.wait(0.5)
+            scanForGenerators()
+        end
+    end)
+    
+    -- Listen for items being dropped or moved in Workspace root
+    Workspace.ChildAdded:Connect(function(child)
+        if espEnabled then
+            for _, itemName in ipairs(Items) do
+                if child.Name == itemName and child:IsA("Model") then
+                    task.wait(0.1)
+                    addItemESP(child)
+                    break
+                end
+            end
+        end
+    end)
+    
+    -- Listen for items in Map.Ingame.Map
+    local function watchMapFolder()
+        local mapFolder = Workspace:FindFirstChild("Map")
+        if mapFolder then
+            mapFolder.ChildAdded:Connect(function(child)
+                if child.Name == "Ingame" and espEnabled then
+                    task.wait(0.5)
+                    scanForGenerators()
+                    
+                    -- Also check for items in the new Ingame
+                    task.wait(0.1)
+                    scanForItemsInAllLocations()
+                end
+            end)
+            
+            local ingameFolder = mapFolder:FindFirstChild("Ingame")
+            if ingameFolder then
+                ingameFolder.ChildAdded:Connect(function(child)
+                    if child.Name == "Map" and espEnabled then
+                        task.wait(0.5)
+                        scanForGenerators()
+                    end
+                end)
+                
+                -- Watch for items being added to Map.Ingame.Map
+                local gameMap = ingameFolder:FindFirstChild("Map")
+                if gameMap then
+                    gameMap.ChildAdded:Connect(function(child)
+                        if espEnabled then
+                            for _, itemName in ipairs(Items) do
+                                if child.Name == itemName and child:IsA("Model") then
+                                    task.wait(0.1)
+                                    addItemESP(child)
+                                    break
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end
+    
+    watchMapFolder()
+    
+    -- Watch for items being dropped from players
+    local function watchPlayerItems(folder)
+        folder.ChildAdded:Connect(function(player)
+            if espEnabled then
+                -- Watch for items being added to player
+                player.ChildAdded:Connect(function(child)
+                    if espEnabled then
+                        for _, itemName in ipairs(Items) do
+                            if child.Name == itemName and child:IsA("Model") then
+                                task.wait(0.1)
+                                addItemESP(child)
+                                break
+                            end
+                        end
+                    end
+                end)
+            end
+        end)
+    end
+    
+    if KillersFolder then
+        watchPlayerItems(KillersFolder)
+    end
+    
+    if SurvivorsFolder then
+        watchPlayerItems(SurvivorsFolder)
+    end
+end
+
+-- Initialize ESP listeners
+setupESPListeners()
+
+-- Initialize aimbot input hook
+task.spawn(setupInputHook)
+
+-- Setup character listeners for position tracking
+setupCharacterListeners()
+
+-- Initialize silent aim
+setupSilentAim()
+
+Rayfield:LoadConfiguration()
+
+refreshUIRefs()
+
+print("wahoo wario time - All new killers and survivors added!")
+print("Red sphere for aimbot (max 1 target), Blue sphere for Dusekkar")
+print("Purple sphere for Killer Silent Aim (c00lkidd/Noli)")
+print("Dusekkar now targets the BLUE SPHERE (predicted position)!")
+print("Killer Silent Aim uses the same prediction multiplier!")
+print("Aimbot uses SmoothShiftLock module for permanent shiftlock!")
+print("Simplified Dusekkar notifications - only mode switch and target name")
