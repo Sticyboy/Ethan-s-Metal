@@ -1,0 +1,55 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+
+print("Status Effect Removals script started - looping every 0.1 seconds")
+
+while true do
+    -- Remove Health Glitch
+    pcall(function()
+        local tempUI = lp:FindFirstChild("PlayerGui"):FindFirstChild("TemporaryUI")
+        if tempUI then
+            local frame = tempUI:FindFirstChild("Frame")
+            if frame then
+                frame:Destroy()
+            end
+        end
+    end)
+    
+    -- Remove Hallucination (Noli)
+    pcall(function()
+        local hallucinationModule = ReplicatedStorage:FindFirstChild("Modules")
+            and ReplicatedStorage.Modules:FindFirstChild("StatusEffects")
+            and ReplicatedStorage.Modules.StatusEffects:FindFirstChild("KillerExclusive")
+            and ReplicatedStorage.Modules.StatusEffects.KillerExclusive:FindFirstChild("Hallucination")
+        
+        if hallucinationModule then
+            hallucinationModule:Destroy()
+        end
+    end)
+    
+    -- Remove Subspaced
+    pcall(function()
+        local subspacedModule = ReplicatedStorage:FindFirstChild("Modules")
+            and ReplicatedStorage.Modules:FindFirstChild("StatusEffects")
+            and ReplicatedStorage.Modules.StatusEffects:FindFirstChild("SurvivorExclusive")
+            and ReplicatedStorage.Modules.StatusEffects.SurvivorExclusive:FindFirstChild("Subspaced")
+        
+        if subspacedModule then
+            subspacedModule:Destroy()
+        end
+    end)
+    
+    -- Remove Blindness
+    pcall(function()
+        local blindnessModule = ReplicatedStorage:FindFirstChild("Modules")
+            and ReplicatedStorage.Modules:FindFirstChild("StatusEffects")
+            and ReplicatedStorage.Modules.StatusEffects:FindFirstChild("Blindness")
+        
+        if blindnessModule then
+            blindnessModule:Destroy()
+        end
+    end)
+    
+    task.wait(0.1)
+end
