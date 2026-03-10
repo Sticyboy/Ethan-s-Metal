@@ -1,0 +1,42 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+
+-- Load Sprinting module
+local Sprinting = nil
+local function loadSprintingModule()
+    local success, module = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Character"):FindFirstChild("Game"):FindFirstChild("Sprinting"))
+    end)
+    
+    if not success then
+        success, module = pcall(function()
+            return require(ReplicatedStorage.Systems.Character.Game.Sprinting)
+        end)
+    end
+    
+    if success and module then
+        Sprinting = module
+        return true
+    end
+    return false
+end
+
+-- Enable infinite stamina
+local function enableInfiniteStamina()
+    if not Sprinting then
+        loadSprintingModule()
+    end
+    
+    if Sprinting then
+        Sprinting.StaminaLossDisabled = function() end
+    end
+end
+
+-- Loop to keep it enabled
+print("Infinite Stamina script started - looping every 0.1 seconds")
+while true do
+    pcall(enableInfiniteStamina)
+    task.wait(0.1)
+end
