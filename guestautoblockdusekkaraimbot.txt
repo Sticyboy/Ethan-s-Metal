@@ -1313,6 +1313,15 @@ local function extractNumericSoundId(sound)
     return num
 end
 
+local function extractNumericAnimationId(animationId)
+    if not animationId then return nil end
+    local id = tostring(animationId)
+    local num = id:match("rbxassetid://(%d+)") or
+                id:match("://(%d+)") or
+                id:match("^(%d+)$")
+    return num
+end
+
 -- ===== GET ALL CHARACTERS WITH SPECIFIC NAME =====
 local function getAllCharactersByName(name)
     local characters = {}
@@ -1361,6 +1370,7 @@ local function checkSpecialKillerActions()
         ["99820161736138"] = true, -- TwoTime ability
         ["86710781315432"] = true, -- TwoTime ability
         ["139012439429121"] = true, -- Chance ability
+        ["5569523548"] = true,      -- Shedletsky audio (rbxassetid://5569523548)
     }
     
     -- Guest1337 block animation IDs
@@ -1372,6 +1382,15 @@ local function checkSpecialKillerActions()
         ["140671644163156"] = true,
         ["100926346851492"] = true,
         ["96959123077498"] = true,
+        ["87259391926321"] = true,  -- New Guest1337 animation
+    }
+    
+    -- Chance animation IDs
+    local chanceAnimIds = {
+        ["133491532453922"] = true,
+        ["86371356500204"] = true,
+        ["131189930305001"] = true,
+        ["73697316043485"] = true,  -- New Chance animation
     }
     
     -- Check for Raging Pace Auto Punish (Slasher vs Guest1337 block)
@@ -1388,7 +1407,7 @@ local function checkSpecialKillerActions()
                         local animator = hum:FindFirstChildOfClass("Animator")
                         if animator then
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local id = tostring(track.Animation.AnimationId):match("%d+")
+                                local id = extractNumericAnimationId(track.Animation.AnimationId)
                                 if id and guest1337BlockAnims[id] then
                                     -- Guest1337 is blocking, use Raging Pace
                                     if blockdelay > 0 then
@@ -1422,7 +1441,7 @@ local function checkSpecialKillerActions()
                         local animator = hum:FindFirstChildOfClass("Animator")
                         if animator then
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local id = tostring(track.Animation.AnimationId):match("%d+")
+                                local id = extractNumericAnimationId(track.Animation.AnimationId)
                                 if id and guest1337BlockAnims[id] then
                                     -- Guest1337 is blocking, use Mass Infection
                                     if blockdelay > 0 then
@@ -1535,10 +1554,8 @@ local function checkSpecialKillerActions()
                         local animator = hum:FindFirstChildOfClass("Animator")
                         if animator then
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local animId = tostring(track.Animation.AnimationId):match("%d+")
-                                if animId == "133491532453922" or 
-                                   animId == "86371356500204" or 
-                                   animId == "131189930305001" then
+                                local animId = extractNumericAnimationId(track.Animation.AnimationId)
+                                if animId and chanceAnimIds[animId] then
                                     -- Chance using ability animation, use Raging Pace
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
@@ -1650,10 +1667,8 @@ local function checkSpecialKillerActions()
                         local animator = hum:FindFirstChildOfClass("Animator")
                         if animator then
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local animId = tostring(track.Animation.AnimationId):match("%d+")
-                                if animId == "133491532453922" or 
-                                   animId == "86371356500204" or 
-                                   animId == "131189930305001" then
+                                local animId = extractNumericAnimationId(track.Animation.AnimationId)
+                                if animId and chanceAnimIds[animId] then
                                     -- Chance using ability animation, use 404Error
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
@@ -3003,7 +3018,7 @@ print("Noli E: 0.8s with 0.5 smoothness (10s cooldown, no notifications)")
 print("Dusekkar now targets the BLUE SPHERE (predicted position)!")
 print("Aimbot uses improved shiftlock (only enables if not already on)")
 print("Prediction multiplier shared between aimbot and Dusekkar")
-print("SPECIAL KILLER ABILITIES FIXED:")
-print("- Slasher Raging Pace: Parries Shedletsky/Chance/TwoTime, Punishes Guest1337 blocks")
-print("- JohnDoe 404 Error: Parries Shedletsky/Chance/TwoTime")
-print("- 1x1x1x1 Mass Infection: Punishes Guest1337 blocks")
+print("SPECIAL KILLER ABILITIES UPDATED:")
+print("- Added Guest1337 animation ID: 87259391926321")
+print("- Added Shedletsky audio ID: 5569523548") 
+print("- Added Chance animation ID: 73697316043485")
