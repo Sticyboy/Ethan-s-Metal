@@ -347,7 +347,7 @@ local function getMyCharacterInfo()
             if survivor.Name == "Elliot" then
                 local usernameAttr = survivor:GetAttribute("Username")
                 if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "Elliot", true
+                    return "Survivor", "Elliot", true -- isElliot
                 end
             end
         end
@@ -667,6 +667,20 @@ local function amITwoTime()
     if SurvivorsFolder then
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
             if survivor.Name == "TwoTime" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIElliot()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Elliot" then
                 local usernameAttr = survivor:GetAttribute("Username")
                 if usernameAttr and usernameAttr == lp.Name then
                     return true, survivor
@@ -1134,6 +1148,37 @@ local function getSurvivorClosestToCursor()
     return nearestByDistance
 end
 
+local function getNearestSurvivor()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    local nearestSurvivor = nil
+    local nearestDistance = math.huge
+    
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+        else
+            local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestSurvivor = survivor
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestSurvivor
+end
+
 local function getNearestKiller()
     local myChar = lp.Character
     if not myChar then return nil end
@@ -1326,7 +1371,7 @@ end
 local function getAllCharactersByName(name)
     local characters = {}
     
-    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" or name == "7n7" then
+    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" or name == "7n7" or name == "Elliot" then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 if survivor.Name == name then
@@ -1370,7 +1415,7 @@ local function checkSpecialKillerActions()
         ["99820161736138"] = true, -- TwoTime ability
         ["86710781315432"] = true, -- TwoTime ability
         ["139012439429121"] = true, -- Chance ability
-        ["5569523548"] = true,      -- Shedletsky audio (rbxassetid://5569523548)
+        ["5569523548"] = true,      -- Shedletsky audio
     }
     
     -- Guest1337 block animation IDs
@@ -1382,7 +1427,7 @@ local function checkSpecialKillerActions()
         ["140671644163156"] = true,
         ["100926346851492"] = true,
         ["96959123077498"] = true,
-        ["87259391926321"] = true,  -- New Guest1337 animation
+        ["87259391926321"] = true,  -- Guest1337 animation
     }
     
     -- Chance animation IDs
@@ -1390,7 +1435,7 @@ local function checkSpecialKillerActions()
         ["133491532453922"] = true,
         ["86371356500204"] = true,
         ["131189930305001"] = true,
-        ["73697316043485"] = true,  -- New Chance animation
+        ["73697316043485"] = true,  -- Chance animation
     }
     
     -- Check for Raging Pace Auto Punish (Slasher vs Guest1337 block)
@@ -2080,6 +2125,83 @@ local function getKillersAndSurvivors()
     return characters
 end
 
+local function getValidTargetsForSurvivor()
+    local targets = {}
+    local myChar = lp.Character
+    if not myChar then return targets end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return targets end
+    
+    -- For Elliot, target survivors (other survivors)
+    local targetFolder = SurvivorsFolder
+    if not targetFolder then return targets end
+    
+    local viewportSize = Camera.ViewportSize
+    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+    
+    for _, obj in ipairs(targetFolder:GetChildren()) do
+        -- Skip self
+        local usernameAttr = obj:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            continue
+        end
+        
+        -- Check if alive
+        local humanoid = obj:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            continue
+        end
+        
+        -- Get target part
+        local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
+        if not targetPart then continue end
+        
+        -- Distance check
+        local distance = (targetPart.Position - myRoot.Position).Magnitude
+        if distance > aimbotMaxDistance then
+            continue
+        end
+        
+        -- Screen position check (only if using FOV)
+        if aimbotUseFOV then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+            if onScreen then
+                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                local distanceFromCenter = (screenVector - screenCenter).Magnitude
+                
+                if distanceFromCenter <= aimbotFOV then
+                    table.insert(targets, {
+                        obj = obj,
+                        part = targetPart,
+                        distance = distance,
+                        screenDistance = distanceFromCenter
+                    })
+                end
+            end
+        else
+            table.insert(targets, {
+                obj = obj,
+                part = targetPart,
+                distance = distance,
+                screenDistance = 0
+            })
+        end
+    end
+    
+    if aimbotUseFOV then
+        table.sort(targets, function(a, b)
+            return a.screenDistance < b.screenDistance
+        end)
+    else
+        table.sort(targets, function(a, b)
+            return a.distance < b.distance
+        end)
+    end
+    
+    return targets
+end
+
 local function getValidTargets()
     local targets = {}
     local myChar = lp.Character
@@ -2088,8 +2210,10 @@ local function getValidTargets()
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return targets end
     
+    -- Get my team
     local myTeam, myCharacter = getMyCharacterInfo()
     
+    -- Determine target folder (opposite team)
     local targetFolder = nil
     if myTeam == "Killer" then
         targetFolder = SurvivorsFolder
@@ -2105,24 +2229,29 @@ local function getValidTargets()
     local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
     
     for _, obj in ipairs(targetFolder:GetChildren()) do
+        -- Skip self
         local usernameAttr = obj:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
             continue
         end
         
+        -- Check if alive
         local humanoid = obj:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then
             continue
         end
         
+        -- Get target part
         local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
         if not targetPart then continue end
         
+        -- Distance check
         local distance = (targetPart.Position - myRoot.Position).Magnitude
         if distance > aimbotMaxDistance then
             continue
         end
         
+        -- Screen position check (only if using FOV)
         if aimbotUseFOV then
             local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
             if onScreen then
@@ -2174,11 +2303,13 @@ local function getValidTargetsFromBothFolders()
     local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
     
     for _, obj in ipairs(allCharacters) do
+        -- Skip self
         local usernameAttr = obj:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
             continue
         end
         
+        -- Check if alive
         local humanoid = obj:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then
             continue
@@ -2237,7 +2368,16 @@ local function startAimbotForDuration(duration, customSmoothness)
         return
     end
     
-    local targets = getValidTargets()
+    local isElliot = amIElliot()
+    local targets
+    
+    if isElliot then
+        -- Elliot targets survivors
+        targets = getValidTargetsForSurvivor()
+    else
+        -- Normal targeting (killers target survivors, survivors target killers)
+        targets = getValidTargets()
+    end
     
     if #targets == 0 then 
         return 
@@ -2359,10 +2499,13 @@ local function setupInputHook()
         local isKiller = (myTeam == "Killer")
         local isSurvivor = (myTeam == "Survivor")
         
+        -- Check specific survivor types
         local isShedletsky = (myTeam == "Survivor" and myCharacter == "Shedletsky")
         local isChance = (myTeam == "Survivor" and myCharacter == "Chance")
         local isTwoTime = (myTeam == "Survivor" and myCharacter == "TwoTime")
+        local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
         
+        -- Check specific killer types
         local isSlasher = (myTeam == "Killer" and myCharacter == "Slasher")
         local isJohnDoe = (myTeam == "Killer" and myCharacter == "JohnDoe")
         local is1x1x1x1 = (myTeam == "Killer" and myCharacter == "1x1x1x1")
@@ -2370,6 +2513,7 @@ local function setupInputHook()
         local isNoli = (myTeam == "Killer" and myCharacter == "Noli")
         local isGuest1337 = (myTeam == "Survivor" and myCharacter == "Guest1337")
         
+        -- Left click for killers (0.65s)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if not aimbotEnabled then return end
             if not isKiller then
@@ -2378,38 +2522,56 @@ local function setupInputHook()
             startAimbotForDuration(0.65)
         end
         
+        -- Keyboard keys
         if input.UserInputType == Enum.UserInputType.Keyboard then
+            -- Q key abilities
             if input.KeyCode == Enum.KeyCode.Q then
                 if not aimbotEnabled then return end
                 
+                -- JohnDoe Q (Corrupt Energy) - 4.5 seconds
                 if isJohnDoe then
                     startAimbotForDuration(4.5)
+                -- Shedletsky Q - 1.1 seconds
                 elseif isShedletsky then
                     startAimbotForDuration(1.1)
+                -- TwoTime Q - 0.4 seconds
                 elseif isTwoTime then
                     startAimbotForDuration(0.4)
+                -- 1x1x1x1 Q - 2.1 seconds
                 elseif is1x1x1x1 then
                     startAimbotForDuration(2.1)
+                -- Noli Q - 4 seconds
                 elseif isNoli then
                     startAimbotForDuration(4.0)
+                -- Slasher Q - 0.95 seconds
                 elseif isSlasher then
                     startAimbotForDuration(0.95)
+                -- c00lkidd Q (Corrupt Nature) - 0.2 seconds with 0.5 smoothness
                 elseif isc00lkidd then
                     startAimbotForDuration(0.2, 0.5)
+                -- Elliot Q - 0.5 seconds (targets survivors)
+                elseif isElliot then
+                    startAimbotForDuration(0.5)
                 end
             end
             
+            -- E key abilities
             if input.KeyCode == Enum.KeyCode.E then
                 if not aimbotEnabled then return end
                 
+                -- Chance E - 1.1 seconds
                 if isChance then
                     startAimbotForDuration(1.1)
+                -- 1x1x1x1 E - 1.2 seconds
                 elseif is1x1x1x1 then
                     startAimbotForDuration(1.2)
+                -- c00lkidd E - 0.8 seconds
                 elseif isc00lkidd then
                     startAimbotForDuration(0.8)
+                -- Slasher E - 0.5 seconds
                 elseif isSlasher then
                     startAimbotForDuration(0.5)
+                -- Noli E (Nova) - 0.8 seconds with 0.5 smoothness and 10s cooldown
                 elseif isNoli then
                     local now = tick()
                     if now - lastNovaTime >= NOVA_COOLDOWN then
@@ -2419,6 +2581,7 @@ local function setupInputHook()
                 end
             end
             
+            -- R key for Guest1337 (0.95s)
             if input.KeyCode == Enum.KeyCode.R then
                 if not aimbotEnabled then return end
                 if not isGuest1337 then
@@ -2861,6 +3024,7 @@ AimbotTab:CreateParagraph({
               "  - Shedletsky Q: 1.1s\n" ..
               "  - Chance E: 1.1s\n" ..
               "  - TwoTime Q: 0.4s\n" ..
+              "  - Elliot Q: 0.5s (TARGETS SURVIVORS)\n" ..
               "• MAX 1 TARGET AT A TIME\n" ..
               "• SHIFTLOCK ENABLED (only if not already on)\n" ..
               "• Target Selection: FOV Mode (with circle) or Nearest Mode\n" ..
@@ -3011,14 +3175,5 @@ Rayfield:LoadConfiguration()
 
 refreshUIRefs()
 
-print("wahoo wario time - All new killers and survivors added!")
-print("Red sphere for aimbot (max 1 target), Blue sphere for Dusekkar")
-print("c00lkidd Q: 0.2s with 0.5 smoothness")
-print("Noli E: 0.8s with 0.5 smoothness (10s cooldown, no notifications)")
-print("Dusekkar now targets the BLUE SPHERE (predicted position)!")
-print("Aimbot uses improved shiftlock (only enables if not already on)")
-print("Prediction multiplier shared between aimbot and Dusekkar")
-print("SPECIAL KILLER ABILITIES UPDATED:")
-print("- Added Guest1337 animation ID: 87259391926321")
-print("- Added Shedletsky audio ID: 5569523548") 
-print("- Added Chance animation ID: 73697316043485")
+print("wahoo wario time")
+print("ELLIOT AIMBOT ADDED: Q ability (0.5s) targets SURVIVORS")
