@@ -50,6 +50,7 @@ end
 -- ===== SOUND IDs FOR AUTO BLOCK =====
 local autoBlockTriggerSounds = {
     ["102228729296384"] = true,
+    ["98111231282218"] = true,
     ["124903763333174"] = true,
     ["131123355704017"] = true,
     ["128856426573270"] = true,
