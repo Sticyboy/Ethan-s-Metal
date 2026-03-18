@@ -50,6 +50,7 @@ end
 -- ===== SOUND IDs FOR AUTO BLOCK =====
 local autoBlockTriggerSounds = {
     ["102228729296384"] = true,
+    ["106836941416453"] = true,
     ["98111231282218"] = true,
     ["124903763333174"] = true,
     ["131123355704017"] = true,
@@ -208,6 +209,10 @@ local currentSphereConnection = nil
 local positionHistory = {}
 local HISTORY_SIZE = 5
 
+-- ===== 7N7 ROTATION VARIABLES =====
+local rotationActive = false
+local ROTATION_DURATION = 0.3
+
 -- ===== SPECIAL KILLER VARIABLES =====
 local isPlayingAsSpecialKiller = false
 local currentKillerType = nil
@@ -338,6 +343,46 @@ local function SendNotif(title, text, duration)
             Text = text or "Notification",
             Duration = duration or 4
         })
+    end)
+end
+
+-- ===== KEY PRESS FUNCTION =====
+local function pressKey(keyCode)
+    -- Press the key down
+    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+    -- Small delay for the game to register
+    task.wait(0.05)
+    -- Release the key
+    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+end
+
+-- ===== 7N7 ROTATION FUNCTION =====
+local function rotateTowardsKiller(killerModel)
+    if rotationActive then return end
+    if not killerModel then return end
+    
+    local char = lp.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local killerHrp = killerModel:FindFirstChild("HumanoidRootPart")
+    if not killerHrp then return end
+    
+    rotationActive = true
+    
+    -- Calculate direction to killer
+    local myPos = hrp.Position
+    local killerPos = killerHrp.Position
+    local direction = (Vector3.new(killerPos.X, myPos.Y, killerPos.Z) - myPos).Unit
+    
+    -- Instantly rotate to face the killer
+    hrp.CFrame = CFrame.lookAt(myPos, myPos + direction)
+    
+    -- Keep rotation active for the duration (prevents multiple rotations)
+    task.delay(ROTATION_DURATION, function()
+        rotationActive = false
     end)
 end
 
@@ -621,7 +666,7 @@ local function createTargetSphere(targetCharacter, sphereColor)
     return sphere, connection
 end
 
--- ===== CHARACTER DETECTION FUNCTIONS =====
+-- ===== CHARACTER IDENTIFICATION FUNCTIONS =====
 local function amIGuest1337()
     if SurvivorsFolder then
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
@@ -1395,7 +1440,11 @@ end
 
 -- ===== SPECIAL KILLER AUTO PARRY/PUNISH =====
 local function checkSpecialKillerActions()
-    if not isPlayingAsSpecialKiller or not currentKillerType then return end
+    local isSlasher, slasherChar = amISlasher()
+    local isJohnDoe, johnDoeChar = amIJohnDoe()
+    local is1x1x1x1, onexChar = amI1x1x1x1()
+    
+    if not (isSlasher or isJohnDoe or is1x1x1x1) then return end
     
     local now = tick()
     if now - lastSpecialAbilityTime < SPECIAL_ABILITY_COOLDOWN then return end
@@ -1439,8 +1488,8 @@ local function checkSpecialKillerActions()
         ["73697316043485"] = true,  -- Chance animation
     }
     
-    -- Check for Raging Pace Auto Punish (Slasher vs Guest1337 block)
-    if currentKillerType == "Slasher" and ragingPaceAutoPunish then
+    -- Check for Raging Pace Auto Punish (Slasher vs Guest1337 block) - PRESS R
+    if isSlasher and ragingPaceAutoPunish then
         local allGuest1337s = getAllCharactersByName("Guest1337")
         
         for _, guest1337 in ipairs(allGuest1337s) do
@@ -1455,14 +1504,14 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local id = extractNumericAnimationId(track.Animation.AnimationId)
                                 if id and guest1337BlockAnims[id] then
-                                    -- Guest1337 is blocking, use Raging Pace
+                                    -- Guest1337 is blocking, press R for Raging Pace
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
                                     
-                                    fireSpecialAbility("RagingPace")
+                                    pressKey(Enum.KeyCode.R)
                                     lastSpecialAbilityTime = now
-                                    SendNotif("Slasher", "Raging Pace used on blocking Guest1337", 1)
+                                    SendNotif("Slasher", "Raging Pace used on blocking Guest1337 (Pressed R)", 1)
                                     return true
                                 end
                             end
@@ -1473,8 +1522,8 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Mass Infection Auto Punish (1x1x1x1 vs Guest1337 block)
-    if currentKillerType == "1x1x1x1" and onexOnexOnexOneAutoPunish then
+    -- Check for Mass Infection Auto Punish (1x1x1x1 vs Guest1337 block) - PRESS Q
+    if is1x1x1x1 and onexOnexOnexOneAutoPunish then
         local allGuest1337s = getAllCharactersByName("Guest1337")
         
         for _, guest1337 in ipairs(allGuest1337s) do
@@ -1489,14 +1538,14 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local id = extractNumericAnimationId(track.Animation.AnimationId)
                                 if id and guest1337BlockAnims[id] then
-                                    -- Guest1337 is blocking, use Mass Infection
+                                    -- Guest1337 is blocking, press Q for Mass Infection
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
                                     
-                                    fireSpecialAbility("MassInfection")
+                                    pressKey(Enum.KeyCode.Q)
                                     lastSpecialAbilityTime = now
-                                    SendNotif("1x1x1x1", "Mass Infection used on blocking Guest1337", 1)
+                                    SendNotif("1x1x1x1", "Mass Infection used on blocking Guest1337 (Pressed Q)", 1)
                                     return true
                                 end
                             end
@@ -1507,8 +1556,8 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Raging Pace Auto Parry (Slasher vs Shedletsky)
-    if currentKillerType == "Slasher" and ragingPaceAutoParry then
+    -- Check for Raging Pace Auto Parry (Slasher vs Shedletsky) - PRESS R
+    if isSlasher and ragingPaceAutoParry then
         local allShedletskies = getAllCharactersByName("Shedletsky")
         
         for _, shedletsky in ipairs(allShedletskies) do
@@ -1520,14 +1569,14 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and triggerSoundIds[soundId] then
-                                -- Shedletsky using ability, use Raging Pace
+                                -- Shedletsky using ability, press R for Raging Pace
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
                                 
-                                fireSpecialAbility("RagingPace")
+                                pressKey(Enum.KeyCode.R)
                                 lastSpecialAbilityTime = now
-                                SendNotif("Slasher", "Raging Pace used on Shedletsky ability", 1)
+                                SendNotif("Slasher", "Raging Pace used on Shedletsky ability (Pressed R)", 1)
                                 return true
                             end
                         end
@@ -1537,8 +1586,8 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Raging Pace Auto Parry (Slasher vs TwoTime)
-    if currentKillerType == "Slasher" and ragingPaceAutoParry then
+    -- Check for Raging Pace Auto Parry (Slasher vs TwoTime) - PRESS R
+    if isSlasher and ragingPaceAutoParry then
         local allTwoTimes = getAllCharactersByName("TwoTime")
         
         for _, twotime in ipairs(allTwoTimes) do
@@ -1550,14 +1599,14 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
-                                -- TwoTime using ability, use Raging Pace
+                                -- TwoTime using ability, press R for Raging Pace
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
                                 
-                                fireSpecialAbility("RagingPace")
+                                pressKey(Enum.KeyCode.R)
                                 lastSpecialAbilityTime = now
-                                SendNotif("Slasher", "Raging Pace used on TwoTime ability", 1)
+                                SendNotif("Slasher", "Raging Pace used on TwoTime ability (Pressed R)", 1)
                                 return true
                             end
                         end
@@ -1567,8 +1616,8 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Raging Pace Auto Parry (Slasher vs Chance)
-    if currentKillerType == "Slasher" and ragingPaceAutoParry then
+    -- Check for Raging Pace Auto Parry (Slasher vs Chance) - PRESS R
+    if isSlasher and ragingPaceAutoParry then
         local allChances = getAllCharactersByName("Chance")
         
         for _, chance in ipairs(allChances) do
@@ -1581,14 +1630,14 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and soundId == "139012439429121" then
-                                -- Chance using ability, use Raging Pace
+                                -- Chance using ability, press R for Raging Pace
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
                                 
-                                fireSpecialAbility("RagingPace")
+                                pressKey(Enum.KeyCode.R)
                                 lastSpecialAbilityTime = now
-                                SendNotif("Slasher", "Raging Pace used on Chance ability", 1)
+                                SendNotif("Slasher", "Raging Pace used on Chance ability (Pressed R)", 1)
                                 return true
                             end
                         end
@@ -1602,14 +1651,14 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local animId = extractNumericAnimationId(track.Animation.AnimationId)
                                 if animId and chanceAnimIds[animId] then
-                                    -- Chance using ability animation, use Raging Pace
+                                    -- Chance using ability animation, press R for Raging Pace
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
                                     
-                                    fireSpecialAbility("RagingPace")
+                                    pressKey(Enum.KeyCode.R)
                                     lastSpecialAbilityTime = now
-                                    SendNotif("Slasher", "Raging Pace used on Chance animation", 1)
+                                    SendNotif("Slasher", "Raging Pace used on Chance animation (Pressed R)", 1)
                                     return true
                                 end
                             end
@@ -1620,8 +1669,8 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Error 404 Auto Parry (JohnDoe vs Shedletsky)
-    if currentKillerType == "JohnDoe" and error404AutoParry then
+    -- Check for Error 404 Auto Parry (JohnDoe vs Shedletsky) - PRESS R
+    if isJohnDoe and error404AutoParry then
         local allShedletskies = getAllCharactersByName("Shedletsky")
         
         for _, shedletsky in ipairs(allShedletskies) do
@@ -1633,14 +1682,14 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and triggerSoundIds[soundId] then
-                                -- Shedletsky using ability, use 404Error
+                                -- Shedletsky using ability, press R for 404Error
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
                                 
-                                fireSpecialAbility("404Error")
+                                pressKey(Enum.KeyCode.R)
                                 lastSpecialAbilityTime = now
-                                SendNotif("JohnDoe", "404 Error used on Shedletsky ability", 1)
+                                SendNotif("JohnDoe", "404 Error used on Shedletsky ability (Pressed R)", 1)
                                 return true
                             end
                         end
@@ -1650,8 +1699,8 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Error 404 Auto Parry (JohnDoe vs TwoTime)
-    if currentKillerType == "JohnDoe" and error404AutoParry then
+    -- Check for Error 404 Auto Parry (JohnDoe vs TwoTime) - PRESS R
+    if isJohnDoe and error404AutoParry then
         local allTwoTimes = getAllCharactersByName("TwoTime")
         
         for _, twotime in ipairs(allTwoTimes) do
@@ -1663,14 +1712,14 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
-                                -- TwoTime using ability, use 404Error
+                                -- TwoTime using ability, press R for 404Error
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
                                 
-                                fireSpecialAbility("404Error")
+                                pressKey(Enum.KeyCode.R)
                                 lastSpecialAbilityTime = now
-                                SendNotif("JohnDoe", "404 Error used on TwoTime ability", 1)
+                                SendNotif("JohnDoe", "404 Error used on TwoTime ability (Pressed R)", 1)
                                 return true
                             end
                         end
@@ -1680,8 +1729,8 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Error 404 Auto Parry (JohnDoe vs Chance)
-    if currentKillerType == "JohnDoe" and error404AutoParry then
+    -- Check for Error 404 Auto Parry (JohnDoe vs Chance) - PRESS R
+    if isJohnDoe and error404AutoParry then
         local allChances = getAllCharactersByName("Chance")
         
         for _, chance in ipairs(allChances) do
@@ -1694,14 +1743,14 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and soundId == "139012439429121" then
-                                -- Chance using ability, use 404Error
+                                -- Chance using ability, press R for 404Error
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
                                 
-                                fireSpecialAbility("404Error")
+                                pressKey(Enum.KeyCode.R)
                                 lastSpecialAbilityTime = now
-                                SendNotif("JohnDoe", "404 Error used on Chance ability", 1)
+                                SendNotif("JohnDoe", "404 Error used on Chance ability (Pressed R)", 1)
                                 return true
                             end
                         end
@@ -1715,14 +1764,14 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local animId = extractNumericAnimationId(track.Animation.AnimationId)
                                 if animId and chanceAnimIds[animId] then
-                                    -- Chance using ability animation, use 404Error
+                                    -- Chance using ability animation, press R for 404Error
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
                                     
-                                    fireSpecialAbility("404Error")
+                                    pressKey(Enum.KeyCode.R)
                                     lastSpecialAbilityTime = now
-                                    SendNotif("JohnDoe", "404 Error used on Chance animation", 1)
+                                    SendNotif("JohnDoe", "404 Error used on Chance animation (Pressed R)", 1)
                                     return true
                                 end
                             end
@@ -1731,104 +1780,6 @@ local function checkSpecialKillerActions()
                 end
             end
         end
-    end
-    
-    return false
-end
-
--- ===== SPECIAL KILLER DETECTION =====
-local function checkSpecialKillerStatus()
-    local character = lp.Character
-    if not character then 
-        if isPlayingAsSpecialKiller then
-            isPlayingAsSpecialKiller = false
-            currentKillerType = nil
-            facingCheckEnabled = originalFacingCheckState
-        end
-        return false
-    end
-    
-    local allSlashers = getAllCharactersByName("Slasher")
-    local allJohnDoes = getAllCharactersByName("JohnDoe")
-    local allOnexOnexOnexOnes = getAllCharactersByName("1x1x1x1")
-    local allc00lkidds = getAllCharactersByName("c00lkidd")
-    local allNolis = getAllCharactersByName("Noli")
-    
-    for _, slasher in ipairs(allSlashers) do
-        local usernameAttr = slasher:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "Slasher" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "Slasher"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-                print("Playing as Slasher - Special abilities enabled")
-            end
-            return true
-        end
-    end
-    
-    for _, johnDoe in ipairs(allJohnDoes) do
-        local usernameAttr = johnDoe:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "JohnDoe" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "JohnDoe"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-                print("Playing as JohnDoe - Special abilities enabled")
-            end
-            return true
-        end
-    end
-    
-    for _, onexone in ipairs(allOnexOnexOnexOnes) do
-        local usernameAttr = onexone:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "1x1x1x1" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "1x1x1x1"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-                print("Playing as 1x1x1x1 - Special abilities enabled")
-            end
-            return true
-        end
-    end
-    
-    for _, c00lkidd in ipairs(allc00lkidds) do
-        local usernameAttr = c00lkidd:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "c00lkidd" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "c00lkidd"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-                print("Playing as c00lkidd - Special abilities enabled")
-            end
-            return true
-        end
-    end
-    
-    for _, noli in ipairs(allNolis) do
-        local usernameAttr = noli:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "Noli" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "Noli"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-                print("Playing as Noli - Special abilities enabled")
-            end
-            return true
-        end
-    end
-    
-    if isPlayingAsSpecialKiller then
-        isPlayingAsSpecialKiller = false
-        currentKillerType = nil
-        facingCheckEnabled = originalFacingCheckState
-        print("No longer playing as special killer")
     end
     
     return false
@@ -1837,7 +1788,6 @@ end
 -- ===== GUEST1337 AUTO BLOCK FUNCTION =====
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
-    if isPlayingAsSpecialKiller then return end
     
     local now = tick()
     if now - lastBlockTime < BLOCK_COOLDOWN then return end
@@ -1880,19 +1830,10 @@ local function checkForAttackSounds()
                                         if autoblocktype == "Block" then
                                             if cachedCooldown and cachedCooldown.Text == "" then
                                                 fireGuiBlock()
-                                                if doubleblocktech then
-                                                    fireGuiPunch()
-                                                end
                                                 if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
                                                     _lastBlockMessageTime = tick()
                                                 end
                                                 lastBlockTime = now
-                                                
-                                                if hitboxDraggingTech and autoblocktype == "Block" then
-                                                    task.wait(Ddelay)
-                                                    task.spawn(function() beginDragIntoKiller(killer) end)
-                                                end
-                                                
                                                 return
                                             end
                                         elseif autoblocktype == "Charge" then
@@ -1919,10 +1860,9 @@ local function checkForAttackSounds()
     end
 end
 
--- ===== 7N7 AUTO CLONE FUNCTION =====
+-- ===== 7N7 AUTO CLONE FUNCTION WITH ROTATION =====
 local function checkForCloneTrigger()
     if not autoCloneFor7n7 then return end
-    if isPlayingAsSpecialKiller then return end
     
     local now = tick()
     if now - lastCloneTime < CLONE_COOLDOWN then return end
@@ -1959,6 +1899,7 @@ local function checkForCloneTrigger()
                                     
                                     if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
                                         fireGuiClone()
+                                        rotateTowardsKiller(killer)
                                         lastCloneTime = now
                                         return
                                     end
@@ -1970,6 +1911,98 @@ local function checkForCloneTrigger()
             end
         end
     end
+end
+
+-- ===== SPECIAL KILLER DETECTION =====
+local function checkSpecialKillerStatus()
+    local character = lp.Character
+    if not character then 
+        if isPlayingAsSpecialKiller then
+            isPlayingAsSpecialKiller = false
+            currentKillerType = nil
+            facingCheckEnabled = originalFacingCheckState
+        end
+        return false
+    end
+    
+    local allSlashers = getAllCharactersByName("Slasher")
+    local allJohnDoes = getAllCharactersByName("JohnDoe")
+    local allOnexOnexOnexOnes = getAllCharactersByName("1x1x1x1")
+    local allc00lkidds = getAllCharactersByName("c00lkidd")
+    local allNolis = getAllCharactersByName("Noli")
+    
+    for _, slasher in ipairs(allSlashers) do
+        local usernameAttr = slasher:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "Slasher" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "Slasher"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, johnDoe in ipairs(allJohnDoes) do
+        local usernameAttr = johnDoe:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "JohnDoe" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "JohnDoe"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, onexone in ipairs(allOnexOnexOnexOnes) do
+        local usernameAttr = onexone:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "1x1x1x1" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "1x1x1x1"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, c00lkidd in ipairs(allc00lkidds) do
+        local usernameAttr = c00lkidd:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "c00lkidd" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "c00lkidd"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    for _, noli in ipairs(allNolis) do
+        local usernameAttr = noli:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "Noli" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "Noli"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
+    if isPlayingAsSpecialKiller then
+        isPlayingAsSpecialKiller = false
+        currentKillerType = nil
+        facingCheckEnabled = originalFacingCheckState
+    end
+    
+    return false
 end
 
 -- ===== VISUAL RANGE =====
@@ -2638,7 +2671,7 @@ local TechTab = Window:CreateTab("Techs", 4483362458)
 local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
--- Guest Auto Block Keybind
+-- Guest Auto Block Keybind - Still checks if playing as Guest1337, but no notification if not
 AutoBlockTab:CreateKeybind({
     Name = "1. Guest Auto Block",
     CurrentKeybind = "G",
@@ -2650,12 +2683,13 @@ AutoBlockTab:CreateKeybind({
             autoBlockForGuest = not autoBlockForGuest
             SendNotif("Guest Auto Block", autoBlockForGuest and "Enabled" or "Disabled", 1)
         end
+        -- No notification if not playing as Guest1337
     end
 })
 
--- 7n7 Auto Clone Keybind
+-- 7n7 Auto Clone Keybind - Still checks if playing as 7n7, but no notification if not
 AutoBlockTab:CreateKeybind({
-    Name = "2. 7n7 Auto Clone",
+    Name = "2. 7n7 Auto Clone + Rotation (0.3s)",
     CurrentKeybind = "H",
     HoldToInteract = false,
     Flag = "SevenNAutoCloneKey",
@@ -2663,48 +2697,49 @@ AutoBlockTab:CreateKeybind({
         local is7n7 = amI7n7()
         if is7n7 then
             autoCloneFor7n7 = not autoCloneFor7n7
-            SendNotif("7n7 Auto Clone", autoCloneFor7n7 and "Enabled" or "Disabled", 1)
+            SendNotif("7n7 Auto Clone", autoCloneFor7n7 and "Enabled (Rotates to killer for 0.3s)" or "Disabled", 1)
         end
+        -- No notification if not playing as 7n7
     end
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "3. Raging Pace Auto Parry (Slasher)",
+    Name = "3. Raging Pace Auto Parry (Slasher) - Presses R",
     CurrentValue = false,
     Flag = "RagingPaceAutoParry",
     Callback = function(Value)
         ragingPaceAutoParry = Value
-        SendNotif("Slasher", "Raging Pace Auto Parry " .. (Value and "Enabled" or "Disabled"), 1)
+        SendNotif("Slasher", "Raging Pace Auto Parry " .. (Value and "Enabled (Presses R)" or "Disabled"), 1)
     end
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "4. Error 404 Auto Parry (JohnDoe)",
+    Name = "4. Error 404 Auto Parry (JohnDoe) - Presses R",
     CurrentValue = false,
     Flag = "Error404AutoParry",
     Callback = function(Value)
         error404AutoParry = Value
-        SendNotif("JohnDoe", "Error 404 Auto Parry " .. (Value and "Enabled" or "Disabled"), 1)
+        SendNotif("JohnDoe", "Error 404 Auto Parry " .. (Value and "Enabled (Presses R)" or "Disabled"), 1)
     end
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "5. Raging Pace Auto Punish (Slasher vs Guest1337 block)",
+    Name = "5. Raging Pace Auto Punish (Slasher vs Guest1337 block) - Presses R",
     CurrentValue = false,
     Flag = "RagingPaceAutoPunish",
     Callback = function(Value)
         ragingPaceAutoPunish = Value
-        SendNotif("Slasher", "Raging Pace Auto Punish " .. (Value and "Enabled" or "Disabled"), 1)
+        SendNotif("Slasher", "Raging Pace Auto Punish " .. (Value and "Enabled (Presses R)" or "Disabled"), 1)
     end
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "6. Mass Infection Auto Punish (1x1x1x1 vs Guest1337 block)",
+    Name = "6. Mass Infection Auto Punish (1x1x1x1 vs Guest1337 block) - Presses Q",
     CurrentValue = false,
     Flag = "OnexOnexOnexOneAutoPunish",
     Callback = function(Value)
         onexOnexOnexOneAutoPunish = Value
-        SendNotif("1x1x1x1", "Mass Infection Auto Punish " .. (Value and "Enabled" or "Disabled"), 1)
+        SendNotif("1x1x1x1", "Mass Infection Auto Punish " .. (Value and "Enabled (Presses Q)" or "Disabled"), 1)
     end
 })
 
@@ -3178,3 +3213,4 @@ refreshUIRefs()
 
 print("wahoo wario time")
 print("ELLIOT AIMBOT ADDED: Q ability (0.5s) targets SURVIVORS")
+print("7N7 AUTO CLONE: Now rotates to face killer for 0.3s when clone is used")
