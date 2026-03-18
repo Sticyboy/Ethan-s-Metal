@@ -420,3 +420,5 @@ end)
 
 -- Initial setup
 setMode("Survivor")
+
+loadstring(game:HttpGet('https://raw.githubusercontent.com/Sticyboy/Ethan-s-Metal/refs/heads/main/MusicForsaken/script'))()
