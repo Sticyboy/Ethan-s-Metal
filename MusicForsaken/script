@@ -1,0 +1,286 @@
+-- i make scripts because i like them, not caring of other's personal opinion so fuck ya if u dont like this also funny getcustomasset moment
+local audioReplacements = {
+    ["rbxassetid://123676748918993"] = {
+        fileName = "coolkidms4layer1.mp3",
+        description = "Coolkid MS4 Layer 1",
+        githubPath = "MusicForsaken/coolkidms4layer1.mp3"
+    },
+    ["rbxassetid://117756121527078"] = {
+        fileName = "coolkidms4layer2.mp3",
+        description = "Coolkid MS4 Layer 2",
+        githubPath = "MusicForsaken/coolkidms4layer2.mp3"
+    },
+    ["rbxassetid://113960555777390"] = {
+        fileName = "coolkidms4layer3.mp3",
+        description = "Coolkid MS4 Layer 3",
+        githubPath = "MusicForsaken/coolkidms4layer3.mp3"
+    },
+    ["rbxassetid://72867661507332"] = {
+        fileName = "coolkidms4chase.mp3",
+        description = "Coolkid MS4 Chase",
+        githubPath = "MusicForsaken/coolkidms4chase.mp3"
+    }
+}
+
+local folderPath = "MusicForsaken/"
+local githubBaseUrl = "https://raw.githubusercontent.com/Sticyboy/Ethan-s-Metal/main/"
+
+-- Function to create folder if it doesn't exist
+local function ensureFolderExists()
+    local folderExists = pcall(function()
+        return isfolder(folderPath)
+    end)
+    
+    if not folderExists then
+        pcall(function()
+            makefolder(folderPath)
+        end)
+    end
+end
+
+-- Function to download a file from GitHub
+local function downloadFromGitHub(fileName, githubPath)
+    local fileUrl = githubBaseUrl .. githubPath
+    local filePath = folderPath .. fileName
+    
+    local success, response = pcall(function()
+        local requestFunc = http_request or syn.request or request
+        if requestFunc then
+            return requestFunc({
+                Url = fileUrl,
+                Method = "GET",
+                Headers = {
+                    ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                }
+            })
+        else
+            return { Body = game:HttpGet(fileUrl), StatusCode = 200 }
+        end
+    end)
+    
+    if success and response and response.StatusCode == 200 and response.Body then
+        pcall(function()
+            writefile(filePath, response.Body)
+        end)
+        return true
+    end
+    return false
+end
+
+-- Function to check and download missing audio files
+local function ensureAudioFiles()
+    local allFilesExist = true
+    
+    for targetId, audioInfo in pairs(audioReplacements) do
+        local filePath = folderPath .. audioInfo.fileName
+        local fileExists = isfile(filePath)
+        
+        if not fileExists then
+            allFilesExist = false
+            downloadFromGitHub(audioInfo.fileName, audioInfo.githubPath)
+        end
+    end
+    
+    -- Final check
+    for targetId, audioInfo in pairs(audioReplacements) do
+        if not isfile(folderPath .. audioInfo.fileName) then
+            return false
+        end
+    end
+    
+    return true
+end
+
+-- Try to load custom assets
+local function loadCustomAssets()
+    local replacementSounds = {}
+    local loadedCount = 0
+    
+    for targetId, audioInfo in pairs(audioReplacements) do
+        local filePath = folderPath .. audioInfo.fileName
+        
+        if isfile(filePath) then
+            local success, customAsset = pcall(function()
+                return getcustomasset(filePath)
+            end)
+            
+            if success then
+                replacementSounds[targetId] = customAsset
+                loadedCount = loadedCount + 1
+            end
+        end
+    end
+    
+    return replacementSounds, loadedCount
+end
+
+-- Function to check if Coolkid is using Milestone 3-4 skins
+local function checkCoolkidSkin()
+    local killersFolder = workspace:FindFirstChild("Players") and 
+                         workspace.Players:FindFirstChild("Killers")
+    
+    if not killersFolder then
+        killersFolder = workspace:FindFirstChild("GameAssets") and 
+                       workspace.GameAssets:FindFirstChild("Teams") and
+                       workspace.GameAssets.Teams:FindFirstChild("Killer")
+    end
+    
+    if killersFolder then
+        for _, killer in pairs(killersFolder:GetChildren()) do
+            if killer.Name:lower():find("c00lkidd") or killer.Name:lower():find("coolkid") then
+                local skinName = killer:GetAttribute("SkinName") or 
+                                (killer:FindFirstChild("Configuration") and 
+                                killer.Configuration:GetAttribute("SkinName"))
+                
+                if not skinName then
+                    local skinFolder = killer:FindFirstChild("Skin") or 
+                                      killer:FindFirstChild("Appearance")
+                    if skinFolder then
+                        skinName = skinFolder:GetAttribute("Name") or 
+                                  skinFolder:GetAttribute("SkinName") or
+                                  skinFolder.Value
+                    end
+                end
+                
+                if skinName == "Milestone100CK" or skinName == "Milestone75CK" then
+                    return true
+                else
+                    return false
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Function to reset a sound to original
+local function resetSoundToOriginal(sound, replacementSounds)
+    if not sound:IsA("Sound") then return end
+    
+    for targetId, customAsset in pairs(replacementSounds) do
+        if sound.SoundId == customAsset then
+            sound.SoundId = targetId
+            break
+        end
+    end
+end
+
+-- MAIN SCRIPT EXECUTION
+ensureFolderExists()
+ensureAudioFiles()
+local replacementSounds, loadedCount = loadCustomAssets()
+
+if loadedCount == 0 then
+    return
+end
+
+-- Store sounds we've seen
+local knownSounds = {}
+
+-- Function to process a single sound
+local function processSound(sound)
+    if not sound:IsA("Sound") then return false end
+    
+    local shouldReplace = checkCoolkidSkin()
+    
+    if not shouldReplace then
+        resetSoundToOriginal(sound, replacementSounds)
+        return false
+    end
+    
+    for targetId, customAsset in pairs(replacementSounds) do
+        if sound.SoundId == targetId then
+            sound.SoundId = customAsset
+            sound.Volume = math.min(sound.Volume * 2, 10)
+            return true
+        end
+    end
+    return false
+end
+
+-- Initial scan
+for _, sound in pairs(game:GetDescendants()) do
+    processSound(sound)
+end
+
+-- Listen for NEW sounds
+game.DescendantAdded:Connect(function(descendant)
+    if descendant:IsA("Sound") then
+        task.wait(0.05)
+        processSound(descendant)
+    end
+end)
+
+-- Listen for SoundId changes
+local function setupPropertyWatchers()
+    for _, sound in pairs(game:GetDescendants()) do
+        if sound:IsA("Sound") then
+            if knownSounds[sound] then
+                continue
+            end
+            
+            sound:GetPropertyChangedSignal("SoundId"):Connect(function()
+                processSound(sound)
+            end)
+            
+            sound:GetPropertyChangedSignal("Playing"):Connect(function()
+                if sound.Playing then
+                    task.wait(0.02)
+                    processSound(sound)
+                end
+            end)
+            
+            knownSounds[sound] = true
+        end
+    end
+end
+
+setupPropertyWatchers()
+
+-- Watch for new sounds to add watchers
+game.DescendantAdded:Connect(function(descendant)
+    if descendant:IsA("Sound") then
+        task.wait(0.1)
+        
+        descendant:GetPropertyChangedSignal("SoundId"):Connect(function()
+            processSound(descendant)
+        end)
+        
+        descendant:GetPropertyChangedSignal("Playing"):Connect(function()
+            if descendant.Playing then
+                task.wait(0.02)
+                processSound(descendant)
+            end
+        end)
+        
+        knownSounds[descendant] = true
+    end
+end)
+
+-- Periodic check
+task.spawn(function()
+    while task.wait(5) do
+        for _, sound in pairs(game:GetDescendants()) do
+            if sound:IsA("Sound") then
+                processSound(sound)
+            end
+        end
+    end
+end)
+
+-- Monitor skin changes
+local function monitorSkinChanges()
+    local killersFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+    if killersFolder then
+        killersFolder.ChildAdded:Connect(function()
+            task.wait(0.5)
+            for _, sound in pairs(game:GetDescendants()) do
+                if sound:IsA("Sound") then
+                    processSound(sound)
+                end
+            end
+        end)
+    end
+end
+
+monitorSkinChanges()
