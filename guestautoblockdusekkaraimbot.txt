@@ -130,6 +130,7 @@ local survivorTargetKillers = {
     ["Shedletsky"] = true,
     ["Chance"] = true,
     ["TwoTime"] = true,
+    ["JaneDoe"] = true,  -- Added Jane Doe
 }
 
 -- ===== KILLER CHARACTERS =====
@@ -438,6 +439,17 @@ local function getMyCharacterInfo()
                 local usernameAttr = survivor:GetAttribute("Username")
                 if usernameAttr and usernameAttr == lp.Name then
                     return "Survivor", "TwoTime", false
+                end
+            end
+        end
+    end
+    
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "JaneDoe" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return "Survivor", "JaneDoe", false
                 end
             end
         end
@@ -763,6 +775,20 @@ local function amIDusekkar()
         end
     end
     return false
+end
+
+local function amIJaneDoe()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "JaneDoe" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
 end
 
 local function amISlasher()
@@ -1417,7 +1443,7 @@ end
 local function getAllCharactersByName(name)
     local characters = {}
     
-    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" or name == "7n7" or name == "Elliot" then
+    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" or name == "7n7" or name == "Elliot" or name == "JaneDoe" then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 if survivor.Name == name then
@@ -1455,7 +1481,7 @@ local function checkSpecialKillerActions()
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
     
-    -- Trigger sound IDs for survivor abilities
+    -- Trigger sound IDs for survivor abilities (including Jane Doe)
     local triggerSoundIds = {
         ["12222225"] = true,      -- Common ability sound
         ["132596270805754"] = true,
@@ -1466,6 +1492,7 @@ local function checkSpecialKillerActions()
         ["86710781315432"] = true, -- TwoTime ability
         ["139012439429121"] = true, -- Chance ability
         ["5569523548"] = true,      -- Shedletsky audio
+        ["92445809840331"] = true,  -- Jane Doe ability sound
     }
     
     -- Guest1337 block animation IDs
@@ -1556,10 +1583,10 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Raging Pace Auto Parry (Slasher vs Shedletsky) - PRESS R
+    -- Check for Raging Pace Auto Parry (Slasher vs Shedletsky/TwoTime/Chance/JaneDoe) - PRESS R
     if isSlasher and ragingPaceAutoParry then
+        -- Check Shedletsky
         local allShedletskies = getAllCharactersByName("Shedletsky")
-        
         for _, shedletsky in ipairs(allShedletskies) do
             local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
             if shedletskyHrp then
@@ -1584,12 +1611,9 @@ local function checkSpecialKillerActions()
                 end
             end
         end
-    end
-    
-    -- Check for Raging Pace Auto Parry (Slasher vs TwoTime) - PRESS R
-    if isSlasher and ragingPaceAutoParry then
-        local allTwoTimes = getAllCharactersByName("TwoTime")
         
+        -- Check TwoTime
+        local allTwoTimes = getAllCharactersByName("TwoTime")
         for _, twotime in ipairs(allTwoTimes) do
             local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
             if twotimeHrp then
@@ -1614,12 +1638,9 @@ local function checkSpecialKillerActions()
                 end
             end
         end
-    end
-    
-    -- Check for Raging Pace Auto Parry (Slasher vs Chance) - PRESS R
-    if isSlasher and ragingPaceAutoParry then
-        local allChances = getAllCharactersByName("Chance")
         
+        -- Check Chance
+        local allChances = getAllCharactersByName("Chance")
         for _, chance in ipairs(allChances) do
             local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
             if chanceHrp then
@@ -1667,12 +1688,39 @@ local function checkSpecialKillerActions()
                 end
             end
         end
+        
+        -- Check Jane Doe (20 stud range like Shedletsky)
+        local allJaneDoes = getAllCharactersByName("JaneDoe")
+        for _, janeDoe in ipairs(allJaneDoes) do
+            local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
+            if janeDoeHrp then
+                local distance = (janeDoeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 20 then
+                    for _, sound in ipairs(janeDoe:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and soundId == "92445809840331" then
+                                -- Jane Doe using ability, press R for Raging Pace
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("Slasher", "Raging Pace used on Jane Doe ability (Pressed R)", 1)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
     end
     
-    -- Check for Error 404 Auto Parry (JohnDoe vs Shedletsky) - PRESS R
+    -- Check for Error 404 Auto Parry (JohnDoe vs Shedletsky/TwoTime/Chance/JaneDoe) - PRESS R
     if isJohnDoe and error404AutoParry then
+        -- Check Shedletsky
         local allShedletskies = getAllCharactersByName("Shedletsky")
-        
         for _, shedletsky in ipairs(allShedletskies) do
             local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
             if shedletskyHrp then
@@ -1697,12 +1745,9 @@ local function checkSpecialKillerActions()
                 end
             end
         end
-    end
-    
-    -- Check for Error 404 Auto Parry (JohnDoe vs TwoTime) - PRESS R
-    if isJohnDoe and error404AutoParry then
-        local allTwoTimes = getAllCharactersByName("TwoTime")
         
+        -- Check TwoTime
+        local allTwoTimes = getAllCharactersByName("TwoTime")
         for _, twotime in ipairs(allTwoTimes) do
             local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
             if twotimeHrp then
@@ -1727,12 +1772,9 @@ local function checkSpecialKillerActions()
                 end
             end
         end
-    end
-    
-    -- Check for Error 404 Auto Parry (JohnDoe vs Chance) - PRESS R
-    if isJohnDoe and error404AutoParry then
-        local allChances = getAllCharactersByName("Chance")
         
+        -- Check Chance
+        local allChances = getAllCharactersByName("Chance")
         for _, chance in ipairs(allChances) do
             local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
             if chanceHrp then
@@ -1774,6 +1816,33 @@ local function checkSpecialKillerActions()
                                     SendNotif("JohnDoe", "404 Error used on Chance animation (Pressed R)", 1)
                                     return true
                                 end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Check Jane Doe (20 stud range like Shedletsky)
+        local allJaneDoes = getAllCharactersByName("JaneDoe")
+        for _, janeDoe in ipairs(allJaneDoes) do
+            local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
+            if janeDoeHrp then
+                local distance = (janeDoeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 20 then
+                    for _, sound in ipairs(janeDoe:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and soundId == "92445809840331" then
+                                -- Jane Doe using ability, press R for 404Error
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("JohnDoe", "404 Error used on Jane Doe ability (Pressed R)", 1)
+                                return true
                             end
                         end
                     end
@@ -2057,6 +2126,9 @@ local function updateDetectionRangeVisuals()
                     elseif survivor.Name == "Shedletsky" then
                         visualRange = 20
                         circleColor = Color3.fromRGB(0, 255, 0)
+                    elseif survivor.Name == "JaneDoe" then
+                        visualRange = 20
+                        circleColor = Color3.fromRGB(255, 255, 0)  -- Yellow color for Jane Doe
                     elseif survivor.Name == "Guest1337" then
                         visualRange = detectionRange
                         circleColor = Color3.fromRGB(255, 165, 0)
@@ -2402,7 +2474,8 @@ local function startAimbotForDuration(duration, customSmoothness)
         return
     end
     
-    local isElliot = amIElliot()
+    local myTeam, myCharacter = getMyCharacterInfo()
+    local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
     local targets
     
     if isElliot then
@@ -2442,6 +2515,32 @@ local function startAimbotForDuration(duration, customSmoothness)
         end
         stopAimbot()
     end)
+end
+
+-- New function for hold-based aimbot (for Jane Doe Q ability)
+local function startAimbotHoldBased()
+    if not aimbotEnabled then return end
+    
+    if aimbotActive then
+        return
+    end
+    
+    local targets = getValidTargets() -- Jane Doe targets killers
+    
+    if #targets == 0 then 
+        return 
+    end
+    
+    local target = targets[1]
+    aimbotCurrentTarget = target.obj
+    aimbotActive = true
+    aimbotTargetCount = aimbotTargetCount + 1
+    
+    setShiftLock(true)
+    
+    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0))
+    
+    -- No timer set here - will be stopped by InputEnded
 end
 
 local function updateAimbot()
@@ -2538,6 +2637,7 @@ local function setupInputHook()
         local isChance = (myTeam == "Survivor" and myCharacter == "Chance")
         local isTwoTime = (myTeam == "Survivor" and myCharacter == "TwoTime")
         local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
+        local isJaneDoe = (myTeam == "Survivor" and myCharacter == "JaneDoe")
         
         -- Check specific killer types
         local isSlasher = (myTeam == "Killer" and myCharacter == "Slasher")
@@ -2586,6 +2686,9 @@ local function setupInputHook()
                 -- Elliot Q - 0.5 seconds (targets survivors)
                 elseif isElliot then
                     startAimbotForDuration(0.5)
+                -- Jane Doe Q - Hold-based targeting (lasts as long as Q is held)
+                elseif isJaneDoe then
+                    startAimbotHoldBased()
                 end
             end
             
@@ -2612,6 +2715,9 @@ local function setupInputHook()
                         lastNovaTime = now
                         startAimbotForDuration(0.8, 0.5)
                     end
+                -- Jane Doe E - 0.8 seconds
+                elseif isJaneDoe then
+                    startAimbotForDuration(0.8)
                 end
             end
             
@@ -2622,6 +2728,21 @@ local function setupInputHook()
                     return
                 end
                 startAimbotForDuration(0.95)
+            end
+        end
+    end)
+    
+    -- Track input ended for hold-based abilities (Jane Doe Q)
+    UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            if input.KeyCode == Enum.KeyCode.Q then
+                local myTeam, myCharacter = getMyCharacterInfo()
+                if myTeam == "Survivor" and myCharacter == "JaneDoe" then
+                    -- Stop aimbot when Q is released
+                    stopAimbot()
+                end
             end
         end
     end)
@@ -3061,6 +3182,8 @@ AimbotTab:CreateParagraph({
               "  - Chance E: 1.1s\n" ..
               "  - TwoTime Q: 0.4s\n" ..
               "  - Elliot Q: 0.5s (TARGETS SURVIVORS)\n" ..
+              "  - Jane Doe Q: HOLD-BASED (targets for as long as Q is held)\n" ..
+              "  - Jane Doe E: 0.8s\n" ..
               "• MAX 1 TARGET AT A TIME\n" ..
               "• SHIFTLOCK ENABLED (only if not already on)\n" ..
               "• Target Selection: FOV Mode (with circle) or Nearest Mode\n" ..
@@ -3214,3 +3337,4 @@ refreshUIRefs()
 print("wahoo wario time")
 print("ELLIOT AIMBOT ADDED: Q ability (0.5s) targets SURVIVORS")
 print("7N7 AUTO CLONE: Now rotates to face killer for 0.3s when clone is used")
+print("JANE DOE ADDED: Auto parry (20 studs, sound ID 92445809840331), E ability 0.8s aimbot, Q ability HOLD-BASED aimbot")
