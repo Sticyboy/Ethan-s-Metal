@@ -1,4 +1,4 @@
---// Stamina System GUI (Skateboard transparency + Trick audio detection with cooldown)
+--// Stamina System GUI (Skateboard transparency + Trick audio detection)
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -56,7 +56,6 @@ local veeronicaChar = nil
 -- Trick audio ID
 local TRICK_AUDIO_ID = "rbxassetid://91937289286100"
 local trickSound = nil
-local canGainTrickStamina = true  -- Cooldown flag
 
 -- Module variables
 local timeUntilStaminaRecovers = 0
@@ -129,6 +128,12 @@ local function setupTrickAudioDetection()
         humanoidRootPart.ChildAdded:Connect(function(child)
             if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
                 trickSound = child
+                -- Connect to the sound playing
+                trickSound.Played:Connect(function()
+                    -- Give 4 stamina immediately
+                    stamina = math.min(stamina + 4, maxStamina)
+                    print("🎮 +4 stamina gained from trick! (Total:", stamina, ")")
+                end)
             end
         end)
         return
@@ -136,23 +141,9 @@ local function setupTrickAudioDetection()
     
     -- Connect to the sound playing
     trickSound.Played:Connect(function()
-        if canGainTrickStamina then
-            -- Disable cooldown
-            canGainTrickStamina = false
-            
-            -- Give stamina after sound finishes (0.5 seconds after it stops)
-            local soundLength = trickSound.TimeLength or 0.5
-            task.wait(soundLength + 0.5)
-            
-            -- Give 4 stamina
-            local oldStamina = stamina
-            stamina = math.min(stamina + 4, maxStamina)
-            local gained = stamina - oldStamina
-            print("🎮 +4 stamina gained from trick! (Total:", stamina, ")")
-            
-            -- Re-enable cooldown
-            canGainTrickStamina = true
-        end
+        -- Give 4 stamina immediately
+        stamina = math.min(stamina + 4, maxStamina)
+        print("🎮 +4 stamina gained from trick! (Total:", stamina, ")")
     end)
 end
 
@@ -172,7 +163,6 @@ localPlayer.CharacterAdded:Connect(function(character)
     skateboardPart = nil
     veeronicaChar = nil
     trickSound = nil
-    canGainTrickStamina = true
 end)
 
 -- Function to check if player is moving
