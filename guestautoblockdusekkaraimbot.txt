@@ -130,7 +130,7 @@ local survivorTargetKillers = {
     ["Shedletsky"] = true,
     ["Chance"] = true,
     ["TwoTime"] = true,
-    ["JaneDoe"] = true,  -- Added Jane Doe
+    ["JaneDoe"] = true,
 }
 
 -- ===== KILLER CHARACTERS =====
@@ -187,10 +187,6 @@ local mousePositionModule = nil
 local currentTarget = nil
 local dusekkarActive = false
 local dusekkarTimer = nil
-
--- ===== NOLI COOLDOWN VARIABLES =====
-local lastNovaTime = 0
-local NOVA_COOLDOWN = 10
 
 -- ===== HDT VARIABLES =====
 local hitboxDraggingTech = false
@@ -349,11 +345,8 @@ end
 
 -- ===== KEY PRESS FUNCTION =====
 local function pressKey(keyCode)
-    -- Press the key down
     VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-    -- Small delay for the game to register
     task.wait(0.05)
-    -- Release the key
     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
 end
 
@@ -373,15 +366,12 @@ local function rotateTowardsKiller(killerModel)
     
     rotationActive = true
     
-    -- Calculate direction to killer
     local myPos = hrp.Position
     local killerPos = killerHrp.Position
     local direction = (Vector3.new(killerPos.X, myPos.Y, killerPos.Z) - myPos).Unit
     
-    -- Instantly rotate to face the killer
     hrp.CFrame = CFrame.lookAt(myPos, myPos + direction)
     
-    -- Keep rotation active for the duration (prevents multiple rotations)
     task.delay(ROTATION_DURATION, function()
         rotationActive = false
     end)
@@ -394,7 +384,7 @@ local function getMyCharacterInfo()
             if survivor.Name == "Elliot" then
                 local usernameAttr = survivor:GetAttribute("Username")
                 if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "Elliot", true -- isElliot
+                    return "Survivor", "Elliot", true
                 end
             end
         end
@@ -1483,16 +1473,16 @@ local function checkSpecialKillerActions()
     
     -- Trigger sound IDs for survivor abilities (including Jane Doe)
     local triggerSoundIds = {
-        ["12222225"] = true,      -- Common ability sound
+        ["12222225"] = true,
         ["132596270805754"] = true,
         ["83851356262523"] = true,
         ["111910850942168"] = true,
         ["115267992424648"] = true,
-        ["99820161736138"] = true, -- TwoTime ability
-        ["86710781315432"] = true, -- TwoTime ability
-        ["139012439429121"] = true, -- Chance ability
-        ["5569523548"] = true,      -- Shedletsky audio
-        ["92445809840331"] = true,  -- Jane Doe ability sound
+        ["99820161736138"] = true,
+        ["86710781315432"] = true,
+        ["139012439429121"] = true,
+        ["5569523548"] = true,
+        ["92445809840331"] = true,
     }
     
     -- Guest1337 block animation IDs
@@ -1504,7 +1494,7 @@ local function checkSpecialKillerActions()
         ["140671644163156"] = true,
         ["100926346851492"] = true,
         ["96959123077498"] = true,
-        ["87259391926321"] = true,  -- Guest1337 animation
+        ["87259391926321"] = true,
     }
     
     -- Chance animation IDs
@@ -1512,7 +1502,7 @@ local function checkSpecialKillerActions()
         ["133491532453922"] = true,
         ["86371356500204"] = true,
         ["131189930305001"] = true,
-        ["73697316043485"] = true,  -- Chance animation
+        ["73697316043485"] = true,
     }
     
     -- Check for Raging Pace Auto Punish (Slasher vs Guest1337 block) - PRESS R
@@ -1531,7 +1521,6 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local id = extractNumericAnimationId(track.Animation.AnimationId)
                                 if id and guest1337BlockAnims[id] then
-                                    -- Guest1337 is blocking, press R for Raging Pace
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
@@ -1565,7 +1554,6 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local id = extractNumericAnimationId(track.Animation.AnimationId)
                                 if id and guest1337BlockAnims[id] then
-                                    -- Guest1337 is blocking, press Q for Mass Infection
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
@@ -1596,7 +1584,6 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and triggerSoundIds[soundId] then
-                                -- Shedletsky using ability, press R for Raging Pace
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -1623,7 +1610,6 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
-                                -- TwoTime using ability, press R for Raging Pace
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -1646,12 +1632,10 @@ local function checkSpecialKillerActions()
             if chanceHrp then
                 local distance = (chanceHrp.Position - myRoot.Position).Magnitude
                 if distance <= 90 then
-                    -- Check for Chance ability sound
                     for _, sound in ipairs(chance:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and soundId == "139012439429121" then
-                                -- Chance using ability, press R for Raging Pace
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -1664,7 +1648,6 @@ local function checkSpecialKillerActions()
                         end
                     end
                     
-                    -- Check for Chance ability animations
                     local hum = chance:FindFirstChildOfClass("Humanoid")
                     if hum then
                         local animator = hum:FindFirstChildOfClass("Animator")
@@ -1672,7 +1655,6 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local animId = extractNumericAnimationId(track.Animation.AnimationId)
                                 if animId and chanceAnimIds[animId] then
-                                    -- Chance using ability animation, press R for Raging Pace
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
@@ -1699,8 +1681,7 @@ local function checkSpecialKillerActions()
                     for _, sound in ipairs(janeDoe:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
-                            if soundId and soundId == "92445809840331" then
-                                -- Jane Doe using ability, press R for Raging Pace
+                            if soundId and (soundId == "92445809840331" or soundId == "83851356262523") then
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -1730,7 +1711,6 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and triggerSoundIds[soundId] then
-                                -- Shedletsky using ability, press R for 404Error
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -1757,7 +1737,6 @@ local function checkSpecialKillerActions()
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
-                                -- TwoTime using ability, press R for 404Error
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -1780,12 +1759,10 @@ local function checkSpecialKillerActions()
             if chanceHrp then
                 local distance = (chanceHrp.Position - myRoot.Position).Magnitude
                 if distance <= 90 then
-                    -- Check for Chance ability sound
                     for _, sound in ipairs(chance:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
                             if soundId and soundId == "139012439429121" then
-                                -- Chance using ability, press R for 404Error
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -1798,7 +1775,6 @@ local function checkSpecialKillerActions()
                         end
                     end
                     
-                    -- Check for Chance ability animations
                     local hum = chance:FindFirstChildOfClass("Humanoid")
                     if hum then
                         local animator = hum:FindFirstChildOfClass("Animator")
@@ -1806,7 +1782,6 @@ local function checkSpecialKillerActions()
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local animId = extractNumericAnimationId(track.Animation.AnimationId)
                                 if animId and chanceAnimIds[animId] then
-                                    -- Chance using ability animation, press R for 404Error
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
@@ -1833,8 +1808,7 @@ local function checkSpecialKillerActions()
                     for _, sound in ipairs(janeDoe:GetDescendants()) do
                         if sound:IsA("Sound") and sound.IsPlaying then
                             local soundId = extractNumericSoundId(sound)
-                            if soundId and soundId == "92445809840331" then
-                                -- Jane Doe using ability, press R for 404Error
+                            if soundId and (soundId == "92445809840331" or soundId == "83851356262523") then
                                 if blockdelay > 0 then
                                     task.wait(blockdelay)
                                 end
@@ -2128,7 +2102,7 @@ local function updateDetectionRangeVisuals()
                         circleColor = Color3.fromRGB(0, 255, 0)
                     elseif survivor.Name == "JaneDoe" then
                         visualRange = 20
-                        circleColor = Color3.fromRGB(255, 255, 0)  -- Yellow color for Jane Doe
+                        circleColor = Color3.fromRGB(255, 255, 0)
                     elseif survivor.Name == "Guest1337" then
                         visualRange = detectionRange
                         circleColor = Color3.fromRGB(255, 165, 0)
@@ -2239,7 +2213,6 @@ local function getValidTargetsForSurvivor()
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return targets end
     
-    -- For Elliot, target survivors (other survivors)
     local targetFolder = SurvivorsFolder
     if not targetFolder then return targets end
     
@@ -2247,29 +2220,24 @@ local function getValidTargetsForSurvivor()
     local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
     
     for _, obj in ipairs(targetFolder:GetChildren()) do
-        -- Skip self
         local usernameAttr = obj:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
             continue
         end
         
-        -- Check if alive
         local humanoid = obj:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then
             continue
         end
         
-        -- Get target part
         local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
         if not targetPart then continue end
         
-        -- Distance check
         local distance = (targetPart.Position - myRoot.Position).Magnitude
         if distance > aimbotMaxDistance then
             continue
         end
         
-        -- Screen position check (only if using FOV)
         if aimbotUseFOV then
             local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
             if onScreen then
@@ -2316,10 +2284,8 @@ local function getValidTargets()
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return targets end
     
-    -- Get my team
     local myTeam, myCharacter = getMyCharacterInfo()
     
-    -- Determine target folder (opposite team)
     local targetFolder = nil
     if myTeam == "Killer" then
         targetFolder = SurvivorsFolder
@@ -2335,29 +2301,24 @@ local function getValidTargets()
     local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
     
     for _, obj in ipairs(targetFolder:GetChildren()) do
-        -- Skip self
         local usernameAttr = obj:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
             continue
         end
         
-        -- Check if alive
         local humanoid = obj:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then
             continue
         end
         
-        -- Get target part
         local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
         if not targetPart then continue end
         
-        -- Distance check
         local distance = (targetPart.Position - myRoot.Position).Magnitude
         if distance > aimbotMaxDistance then
             continue
         end
         
-        -- Screen position check (only if using FOV)
         if aimbotUseFOV then
             local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
             if onScreen then
@@ -2409,13 +2370,11 @@ local function getValidTargetsFromBothFolders()
     local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
     
     for _, obj in ipairs(allCharacters) do
-        -- Skip self
         local usernameAttr = obj:GetAttribute("Username")
         if usernameAttr and usernameAttr == lp.Name then
             continue
         end
         
-        -- Check if alive
         local humanoid = obj:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then
             continue
@@ -2479,10 +2438,8 @@ local function startAimbotForDuration(duration, customSmoothness)
     local targets
     
     if isElliot then
-        -- Elliot targets survivors
         targets = getValidTargetsForSurvivor()
     else
-        -- Normal targeting (killers target survivors, survivors target killers)
         targets = getValidTargets()
     end
     
@@ -2515,32 +2472,6 @@ local function startAimbotForDuration(duration, customSmoothness)
         end
         stopAimbot()
     end)
-end
-
--- New function for hold-based aimbot (for Jane Doe Q ability)
-local function startAimbotHoldBased()
-    if not aimbotEnabled then return end
-    
-    if aimbotActive then
-        return
-    end
-    
-    local targets = getValidTargets() -- Jane Doe targets killers
-    
-    if #targets == 0 then 
-        return 
-    end
-    
-    local target = targets[1]
-    aimbotCurrentTarget = target.obj
-    aimbotActive = true
-    aimbotTargetCount = aimbotTargetCount + 1
-    
-    setShiftLock(true)
-    
-    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0))
-    
-    -- No timer set here - will be stopped by InputEnded
 end
 
 local function updateAimbot()
@@ -2632,22 +2563,17 @@ local function setupInputHook()
         local isKiller = (myTeam == "Killer")
         local isSurvivor = (myTeam == "Survivor")
         
-        -- Check specific survivor types
         local isShedletsky = (myTeam == "Survivor" and myCharacter == "Shedletsky")
         local isChance = (myTeam == "Survivor" and myCharacter == "Chance")
         local isTwoTime = (myTeam == "Survivor" and myCharacter == "TwoTime")
         local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
         local isJaneDoe = (myTeam == "Survivor" and myCharacter == "JaneDoe")
         
-        -- Check specific killer types
         local isSlasher = (myTeam == "Killer" and myCharacter == "Slasher")
         local isJohnDoe = (myTeam == "Killer" and myCharacter == "JohnDoe")
         local is1x1x1x1 = (myTeam == "Killer" and myCharacter == "1x1x1x1")
-        local isc00lkidd = (myTeam == "Killer" and myCharacter == "c00lkidd")
-        local isNoli = (myTeam == "Killer" and myCharacter == "Noli")
         local isGuest1337 = (myTeam == "Survivor" and myCharacter == "Guest1337")
         
-        -- Left click for killers (0.65s)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if not aimbotEnabled then return end
             if not isKiller then
@@ -2656,93 +2582,45 @@ local function setupInputHook()
             startAimbotForDuration(0.65)
         end
         
-        -- Keyboard keys
         if input.UserInputType == Enum.UserInputType.Keyboard then
-            -- Q key abilities
             if input.KeyCode == Enum.KeyCode.Q then
                 if not aimbotEnabled then return end
                 
-                -- JohnDoe Q (Corrupt Energy) - 4.5 seconds
                 if isJohnDoe then
                     startAimbotForDuration(4.5)
-                -- Shedletsky Q - 1.1 seconds
                 elseif isShedletsky then
                     startAimbotForDuration(1.1)
-                -- TwoTime Q - 0.4 seconds
                 elseif isTwoTime then
                     startAimbotForDuration(0.4)
-                -- 1x1x1x1 Q - 2.1 seconds
                 elseif is1x1x1x1 then
                     startAimbotForDuration(2.1)
-                -- Noli Q - 4 seconds
-                elseif isNoli then
-                    startAimbotForDuration(4.0)
-                -- Slasher Q - 0.95 seconds
                 elseif isSlasher then
                     startAimbotForDuration(0.95)
-                -- c00lkidd Q (Corrupt Nature) - 0.2 seconds with 0.5 smoothness
-                elseif isc00lkidd then
-                    startAimbotForDuration(0.2, 0.5)
-                -- Elliot Q - 0.5 seconds (targets survivors)
                 elseif isElliot then
                     startAimbotForDuration(0.5)
-                -- Jane Doe Q - Hold-based targeting (lasts as long as Q is held)
-                elseif isJaneDoe then
-                    startAimbotHoldBased()
                 end
             end
             
-            -- E key abilities
             if input.KeyCode == Enum.KeyCode.E then
                 if not aimbotEnabled then return end
                 
-                -- Chance E - 1.1 seconds
                 if isChance then
                     startAimbotForDuration(1.1)
-                -- 1x1x1x1 E - 1.2 seconds
                 elseif is1x1x1x1 then
                     startAimbotForDuration(1.2)
-                -- c00lkidd E - 0.8 seconds
-                elseif isc00lkidd then
-                    startAimbotForDuration(0.8)
-                -- Slasher E - 0.5 seconds
                 elseif isSlasher then
                     startAimbotForDuration(0.5)
-                -- Noli E (Nova) - 0.8 seconds with 0.5 smoothness and 10s cooldown
-                elseif isNoli then
-                    local now = tick()
-                    if now - lastNovaTime >= NOVA_COOLDOWN then
-                        lastNovaTime = now
-                        startAimbotForDuration(0.8, 0.5)
-                    end
-                -- Jane Doe E - 0.8 seconds
                 elseif isJaneDoe then
-                    startAimbotForDuration(0.8)
+                    startAimbotForDuration(0.9)
                 end
             end
             
-            -- R key for Guest1337 (0.95s)
             if input.KeyCode == Enum.KeyCode.R then
                 if not aimbotEnabled then return end
                 if not isGuest1337 then
                     return
                 end
                 startAimbotForDuration(0.95)
-            end
-        end
-    end)
-    
-    -- Track input ended for hold-based abilities (Jane Doe Q)
-    UserInputService.InputEnded:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            if input.KeyCode == Enum.KeyCode.Q then
-                local myTeam, myCharacter = getMyCharacterInfo()
-                if myTeam == "Survivor" and myCharacter == "JaneDoe" then
-                    -- Stop aimbot when Q is released
-                    stopAimbot()
-                end
             end
         end
     end)
@@ -2792,7 +2670,6 @@ local TechTab = Window:CreateTab("Techs", 4483362458)
 local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
--- Guest Auto Block Keybind - Still checks if playing as Guest1337, but no notification if not
 AutoBlockTab:CreateKeybind({
     Name = "1. Guest Auto Block",
     CurrentKeybind = "G",
@@ -2804,11 +2681,9 @@ AutoBlockTab:CreateKeybind({
             autoBlockForGuest = not autoBlockForGuest
             SendNotif("Guest Auto Block", autoBlockForGuest and "Enabled" or "Disabled", 1)
         end
-        -- No notification if not playing as Guest1337
     end
 })
 
--- 7n7 Auto Clone Keybind - Still checks if playing as 7n7, but no notification if not
 AutoBlockTab:CreateKeybind({
     Name = "2. 7n7 Auto Clone + Rotation (0.3s)",
     CurrentKeybind = "H",
@@ -2820,7 +2695,6 @@ AutoBlockTab:CreateKeybind({
             autoCloneFor7n7 = not autoCloneFor7n7
             SendNotif("7n7 Auto Clone", autoCloneFor7n7 and "Enabled (Rotates to killer for 0.3s)" or "Disabled", 1)
         end
-        -- No notification if not playing as 7n7
     end
 })
 
@@ -3174,16 +3048,13 @@ AimbotTab:CreateParagraph({
               "  - Slasher Q: 0.95s | E: 0.5s\n" ..
               "  - JohnDoe Q (Corrupt Energy): 4.5s\n" ..
               "  - 1x1x1x1 Q: 2.1s | E: 1.2s\n" ..
-              "  - c00lkidd E: 0.8s | Q (Corrupt Nature): 0.2s (0.5 smoothness)\n" ..
-              "  - Noli Q: 4.0s | E (Nova): 0.8s (0.5 smoothness, 10s cooldown)\n" ..
               "• SURVIVORS:\n" ..
               "  - Guest1337 R: 0.95s\n" ..
               "  - Shedletsky Q: 1.1s\n" ..
               "  - Chance E: 1.1s\n" ..
               "  - TwoTime Q: 0.4s\n" ..
               "  - Elliot Q: 0.5s (TARGETS SURVIVORS)\n" ..
-              "  - Jane Doe Q: HOLD-BASED (targets for as long as Q is held)\n" ..
-              "  - Jane Doe E: 0.8s\n" ..
+              "  - Jane Doe E: 0.9s\n" ..
               "• MAX 1 TARGET AT A TIME\n" ..
               "• SHIFTLOCK ENABLED (only if not already on)\n" ..
               "• Target Selection: FOV Mode (with circle) or Nearest Mode\n" ..
@@ -3335,6 +3206,3 @@ Rayfield:LoadConfiguration()
 refreshUIRefs()
 
 print("wahoo wario time")
-print("ELLIOT AIMBOT ADDED: Q ability (0.5s) targets SURVIVORS")
-print("7N7 AUTO CLONE: Now rotates to face killer for 0.3s when clone is used")
-print("JANE DOE ADDED: Auto parry (20 studs, sound ID 92445809840331), E ability 0.8s aimbot, Q ability HOLD-BASED aimbot")
