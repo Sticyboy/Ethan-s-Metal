@@ -1,0 +1,605 @@
+-- Auto Generator/Survivor Hunter Loop - ULTRA FAST
+-- WITH AUTO CHARACTER LEVELING SYSTEM
+-- ONLY EXECUTES FOR: vrreblux OR caxa845
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Check if this script should run for this user
+local ALLOWED_USERNAMES = {
+    "vrreblux",
+    "matthewjee332"
+}
+
+local function IsAllowedUser()
+    local playerName = LocalPlayer.Name:lower()
+    for _, allowedName in ipairs(ALLOWED_USERNAMES) do
+        if playerName == allowedName:lower() then
+            return true
+        end
+    end
+    return false
+end
+
+-- If not allowed, stop the script immediately
+if not IsAllowedUser() then
+    print("❌ Script not authorized for user: " .. LocalPlayer.Name)
+    print("✅ Allowed users: " .. table.concat(ALLOWED_USERNAMES, ", "))
+    return
+end
+
+print("✅ Script authorized for user: " .. LocalPlayer.Name)
+
+-- ============================================
+-- AUTO CHARACTER LEVELING SYSTEM
+-- ============================================
+
+-- Wait for the player and their data
+local player = game:GetService("Players").LocalPlayer
+local playerData = player:WaitForChild("PlayerData")
+local survivorsMilestones = playerData:WaitForChild("Achievements"):WaitForChild("SurvivorsMilestones")
+local killersMilestones = playerData:WaitForChild("Achievements"):WaitForChild("KillersMilestones")
+
+-- Define all Survivors with priority order
+local allSurvivors = {
+    "Noob",
+    "Builderman",
+    "Elliot",
+    "Veeronica",
+    "Taph",
+    "Dusekkar",
+    "007n7",
+    "Chance",
+    "Guest1337",
+    "JaneDoe",
+    "Shedletsky",
+    "TwoTime"
+}
+
+-- Define all Killers with priority order
+local allKillers = {
+    "Slasher",
+    "Sixer",
+    "1x1x1x1",
+    "JohnDoe",
+    "Noli",
+    "Nosferatu",
+    "c00lkidd"
+}
+
+-- Function to switch to a Survivor
+local function switchToSurvivor(survivorName)
+    local args = {
+        "EquipState",
+        {
+            game:GetService("ReplicatedStorage"):WaitForChild("Assets"):WaitForChild("Survivors"):WaitForChild(survivorName),
+            buffer.fromstring("\001\001")
+        }
+    }
+    game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+    print("Switched to Survivor: " .. survivorName .. "!")
+end
+
+-- Function to switch to a Killer
+local function switchToKiller(killerName)
+    local args = {
+        "EquipState",
+        {
+            game:GetService("ReplicatedStorage"):WaitForChild("Assets"):WaitForChild("Killers"):WaitForChild(killerName),
+            buffer.fromstring("\001\001")
+        }
+    }
+    game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+    print("Switched to Killer: " .. killerName .. "!")
+end
+
+-- Function to check if a character (Survivor or Killer) is level 100 or above
+local function isCharacterLevel100(milestoneTable, characterName)
+    local milestoneName = characterName .. "Milestone"
+    local milestone = milestoneTable:FindFirstChild(milestoneName)
+    if milestone then
+        return milestone.Value >= 100
+    end
+    return false
+end
+
+-- Function to find the next Survivor that is NOT level 100 based on priority order
+local function findNonLevel100Survivor()
+    for _, survivorName in ipairs(allSurvivors) do
+        if not isCharacterLevel100(survivorsMilestones, survivorName) then
+            return survivorName
+        end
+    end
+    return nil -- All survivors are level 100 or above
+end
+
+-- Function to find the next Killer that is NOT level 100 based on priority order
+local function findNonLevel100Killer()
+    for _, killerName in ipairs(allKillers) do
+        if not isCharacterLevel100(killersMilestones, killerName) then
+            return killerName
+        end
+    end
+    return nil -- All killers are level 100 or above
+end
+
+-- Function to handle Survivor switching
+local function switchToNonLevel100Survivor()
+    local targetSurvivor = findNonLevel100Survivor()
+    
+    if targetSurvivor then
+        print("Found Survivor not at level 100: " .. targetSurvivor)
+        switchToSurvivor(targetSurvivor)
+    else
+        print("All Survivors are level 100 or above! Cannot find a Survivor to switch to.")
+    end
+end
+
+-- Function to handle Killer switching
+local function switchToNonLevel100Killer()
+    local targetKiller = findNonLevel100Killer()
+    
+    if targetKiller then
+        print("Found Killer not at level 100: " .. targetKiller)
+        switchToKiller(targetKiller)
+    else
+        print("All Killers are level 100 or above! Cannot find a Killer to switch to.")
+    end
+end
+
+-- Function to monitor both Survivors and Killers
+local function monitorAndSwitch()
+    local connections = {}
+    
+    -- Monitor all Survivors
+    for _, survivorName in ipairs(allSurvivors) do
+        local milestoneName = survivorName .. "Milestone"
+        local milestone = survivorsMilestones:FindFirstChild(milestoneName)
+        if milestone then
+            local connection = milestone:GetPropertyChangedSignal("Value"):Connect(function()
+                if milestone.Value >= 100 then
+                    print(survivorName .. " (Survivor) reached level " .. milestone.Value .. "!")
+                    switchToNonLevel100Survivor()
+                end
+            end)
+            table.insert(connections, connection)
+        end
+    end
+    
+    -- Monitor all Killers
+    for _, killerName in ipairs(allKillers) do
+        local milestoneName = killerName .. "Milestone"
+        local milestone = killersMilestones:FindFirstChild(milestoneName)
+        if milestone then
+            local connection = milestone:GetPropertyChangedSignal("Value"):Connect(function()
+                if milestone.Value >= 100 then
+                    print(killerName .. " (Killer) reached level " .. milestone.Value .. "!")
+                    switchToNonLevel100Killer()
+                end
+            end)
+            table.insert(connections, connection)
+        end
+    end
+    
+    print("Monitoring all Survivors and Killers for level 100...")
+    print("Survivor priority order: Noob -> Builderman -> Elliot -> Veeronica -> Taph -> Dusekkar -> rest")
+    print("Killer priority order: Slasher -> Sixer -> 1x1x1x1 -> JohnDoe -> Noli -> Nosferatu -> c00lkidd")
+    
+    -- Initial switches if needed
+    switchToNonLevel100Survivor()
+    switchToNonLevel100Killer()
+    
+    return connections
+end
+
+-- Start the character leveling monitor
+local levelingConnections = monitorAndSwitch()
+
+-- ============================================
+-- ORIGINAL GENERATOR/SURVIVOR HUNTER LOOP
+-- ============================================
+
+-- Configuration - GENERATOR MODE
+local PUZZLES_PER_GENERATOR = 4
+local PUZZLES_BEFORE_LEAVE = 1
+local PUZZLE_COMPLETE_DELAY = 0.05
+local LEAVE_DELAY = 0.1
+local REENTER_DELAY = 2.5
+local BETWEEN_GENERATORS_DELAY = 0.1
+local LOOP_DELAY = 0.5
+
+-- Configuration - KILLER MODE
+local STAB_DELAY = 0.5
+local BETWEEN_SURVIVORS_DELAY = 0.2
+
+-- Get the remote
+local Remote = game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent")
+print("Remote found:", Remote ~= nil)
+
+-- Function to check if local player is a survivor
+local function IsPlayerSurvivor()
+    local survivors = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    if not survivors then return false end
+    
+    for _, survivor in ipairs(survivors:GetChildren()) do
+        if survivor:GetAttribute("Username") == LocalPlayer.Name then
+            return true
+        end
+        if survivor.Name == LocalPlayer.Name then
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to check if local player is a killer and which killer
+local function GetKillerType()
+    local killers = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+    if not killers then return nil end
+    
+    for _, killer in ipairs(killers:GetChildren()) do
+        local isMe = killer:GetAttribute("Username") == LocalPlayer.Name or killer.Name == LocalPlayer.Name
+        
+        if isMe then
+            return killer.Name
+        end
+    end
+    return nil
+end
+
+-- Function to get all living survivors
+local function GetLivingSurvivors()
+    local survivors = {}
+    local survivorsFolder = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Survivors")
+    
+    if survivorsFolder then
+        for _, survivor in ipairs(survivorsFolder:GetChildren()) do
+            local humanoid = survivor:FindFirstChild("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                table.insert(survivors, survivor)
+            end
+        end
+    end
+    return survivors
+end
+
+-- Function to attack based on killer type
+local function Attack(killerType)
+    local args
+    
+    if killerType == "1x1x1x1" then
+        args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Slash")
+            }
+        }
+        print("🔪 Attacking as 1x1x1x1 with Slash")
+        
+    elseif killerType == "Slasher" then
+        args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Slash")
+            }
+        }
+        print("🔪 Attacking as Slasher with Slash")
+        
+    elseif killerType == "Noli" then
+        args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\004\000\000\000Stab")
+            }
+        }
+        print("🔪 Attacking as Noli with Stab")
+        
+    elseif killerType == "JohnDoe" then
+        args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Slash")
+            }
+        }
+        print("🔪 Attacking as JohnDoe with Slash")
+        
+    elseif killerType == "Nosferatu" then
+        args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Slash")
+            }
+        }
+        print("🔪 Attacking as Nosferatu with Slash")
+        
+    elseif killerType == "c00lkidd" then
+        args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\005\000\000\000Punch")
+            }
+        }
+        print("👊 Attacking as c00lkidd with Punch")
+        
+    elseif killerType == "Sixer" then
+        args = {
+            "UseActorAbility",
+            {
+                buffer.fromstring("\003\r\000\000\000Carving Slash")
+            }
+        }
+        print("⚔️ Attacking as Sixer with Carving Slash")
+        
+    else
+        print("⚠ Unknown killer type: " .. (killerType or "nil") .. " - Not attacking")
+        return false
+    end
+    
+    local success, err = pcall(function()
+        Remote:FireServer(unpack(args))
+    end)
+    
+    if not success then
+        print("✗ Attack failed:", err)
+        return false
+    end
+    
+    return true
+end
+
+-- Function to INSTANTLY teleport to a survivor
+local function TeleportToSurvivor(survivor)
+    if not LocalPlayer.Character then return false end
+    
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local survivorHRP = survivor:FindFirstChild("HumanoidRootPart")
+    
+    if not hrp or not survivorHRP then return false end
+    
+    local behindPosition = survivorHRP.Position + (survivorHRP.CFrame.LookVector * -2) + Vector3.new(0, 1, 0)
+    hrp.CFrame = CFrame.new(behindPosition, survivorHRP.Position)
+    
+    return true
+end
+
+-- Function to hunt a survivor
+local function HuntSurvivor(survivor, killerType)
+    if not LocalPlayer.Character then
+        print("No character found")
+        return false
+    end
+    
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local survivorHRP = survivor:FindFirstChild("HumanoidRootPart")
+    local survivorHumanoid = survivor:FindFirstChild("Humanoid")
+    
+    if not hrp or not survivorHRP or not survivorHumanoid then
+        print("Missing required parts")
+        return false
+    end
+    
+    print("→ Hunting: " .. survivor.Name .. " (Health: " .. survivorHumanoid.Health .. ") as " .. killerType)
+    
+    TeleportToSurvivor(survivor)
+    task.wait(0.05)
+    
+    local attackCount = 0
+    local startTime = tick()
+    
+    while survivorHumanoid and survivorHumanoid.Health > 0 do
+        attackCount = attackCount + 1
+        
+        if attackCount % 3 == 0 then
+            TeleportToSurvivor(survivor)
+        end
+        
+        Attack(killerType)
+        task.wait(STAB_DELAY)
+        
+        if not survivor.Parent then 
+            print("→ Survivor model removed")
+            break 
+        end
+        
+        survivorHRP = survivor:FindFirstChild("HumanoidRootPart")
+        survivorHumanoid = survivor:FindFirstChild("Humanoid")
+        
+        if not survivorHRP or not survivorHumanoid then
+            print("→ Survivor lost parts")
+            break
+        end
+        
+        if attackCount % 5 == 0 then
+            print("→ Health: " .. survivorHumanoid.Health .. " (Attacks: " .. attackCount .. ")")
+        end
+    end
+    
+    local timeTaken = tick() - startTime
+    print("✓ Killed " .. survivor.Name .. " in " .. math.floor(timeTaken * 10) / 10 .. "s with " .. attackCount .. " attacks")
+    return true
+end
+
+-- SURVIVOR MODE FUNCTIONS
+local function GetIncompleteGenerators()
+    local generators = {}
+    local mapFolder = workspace:FindFirstChild("Map") 
+        and workspace.Map:FindFirstChild("Ingame") 
+        and workspace.Map.Ingame:FindFirstChild("Map")
+    
+    if mapFolder then
+        for _, obj in ipairs(mapFolder:GetChildren()) do
+            if obj.Name == "Generator" and obj:FindFirstChild("Progress") then
+                if obj.Progress.Value < 100 then
+                    table.insert(generators, obj)
+                end
+            end
+        end
+    end
+    return generators
+end
+
+local function LeaveGenerator(generator)
+    if generator and generator.Remotes and generator.Remotes.RF then
+        pcall(function()
+            generator.Remotes.RF:InvokeServer("Leave")
+        end)
+    end
+end
+
+local function GetGeneratorPosition(generator)
+    local positions = generator:FindFirstChild("Positions")
+    if positions then
+        local center = positions:FindFirstChild("Center")
+        if center then
+            return center.Position
+        end
+    end
+    return generator.Main and generator.Main.Position or generator:GetPivot().Position
+end
+
+local function CompleteGeneratorFast(generator)
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local hrp = character.HumanoidRootPart
+    local genPosition = GetGeneratorPosition(generator)
+    
+    hrp.CFrame = CFrame.new(genPosition + Vector3.new(0, 1, 0))
+    task.wait(0.05)
+    
+    local prompt = generator.Main and generator.Main:FindFirstChild("Prompt")
+    if prompt then
+        fireproximityprompt(prompt)
+    end
+    
+    local puzzlesCompleted = 0
+    
+    while generator.Progress.Value < 100 do
+        if generator.Remotes and generator.Remotes.RE then
+            generator.Remotes.RE:FireServer()
+            puzzlesCompleted = puzzlesCompleted + 1
+            
+            task.wait(PUZZLE_COMPLETE_DELAY)
+            
+            if puzzlesCompleted >= PUZZLES_BEFORE_LEAVE and generator.Progress.Value < 100 then
+                LeaveGenerator(generator)
+                task.wait(LEAVE_DELAY)
+                
+                hrp.CFrame = CFrame.new(genPosition + Vector3.new(0, 1, 0))
+                task.wait(REENTER_DELAY)
+                
+                if prompt then
+                    fireproximityprompt(prompt)
+                end
+                
+                puzzlesCompleted = 0
+            end
+        end
+    end
+    
+    LeaveGenerator(generator)
+    return true
+end
+
+-- Main loop function
+local function StartLoop()
+    print("══════════════════════════════════════════════════════════════════")
+    print("    AUTO MODE STARTED - ULTRA FAST")
+    print("    Supporting: Noli, 1x1x1x1, Slasher, JohnDoe, Nosferatu, c00lkidd, Sixer")
+    print("    Authorized for: " .. LocalPlayer.Name)
+    print("    AUTO CHARACTER LEVELING ACTIVE")
+    print("══════════════════════════════════════════════════════════════════")
+    
+    while true do
+        local isSurvivor = IsPlayerSurvivor()
+        local killerType = GetKillerType()
+        
+        if isSurvivor then
+            print("▶ SURVIVOR MODE (doing generators)")
+            
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local character = LocalPlayer.Character
+                local hrp = character.HumanoidRootPart
+                local originalPosition = hrp.CFrame
+                
+                local generators = GetIncompleteGenerators()
+                
+                if #generators > 0 then
+                    print("Found " .. #generators .. " generators")
+                    
+                    for i, generator in ipairs(generators) do
+                        print("  Generator " .. i .. "/" .. #generators)
+                        
+                        pcall(function()
+                            CompleteGeneratorFast(generator)
+                        end)
+                        
+                        if i < #generators then
+                            task.wait(BETWEEN_GENERATORS_DELAY)
+                        end
+                    end
+                    
+                    hrp.CFrame = originalPosition
+                    print("✓ All generators done!")
+                end
+            end
+            
+            task.wait(LOOP_DELAY)
+            
+        elseif killerType then
+            print("▶ KILLER MODE - Playing as: " .. killerType)
+            
+            if LocalPlayer.Character then
+                local survivors = GetLivingSurvivors()
+                
+                if #survivors > 0 then
+                    print("Found " .. #survivors .. " survivors")
+                    
+                    for i, survivor in ipairs(survivors) do
+                        print("  Hunting " .. i .. "/" .. #survivors .. ": " .. survivor.Name)
+                        
+                        local success, err = pcall(function()
+                            HuntSurvivor(survivor, killerType)
+                        end)
+                        
+                        if not success then
+                            print("  Error:", err)
+                        end
+                        
+                        local newKillerType = GetKillerType()
+                        if not newKillerType or newKillerType ~= killerType then
+                            print("Killer type changed or no longer killer")
+                            break
+                        end
+                        
+                        if i < #survivors then
+                            task.wait(BETWEEN_SURVIVORS_DELAY)
+                        end
+                    end
+                else
+                    print("No survivors found")
+                end
+            else
+                print("Waiting for character...")
+            end
+            
+            task.wait(LOOP_DELAY)
+            
+        else
+            print("▶ WAITING (not survivor or killer)")
+            task.wait(LOOP_DELAY)
+        end
+    end
+end
+
+-- Start the main loop
+local success, err = pcall(StartLoop)
+if not success then
+    print("Loop failed:", err)
+end
+
+print("Script loaded! Supporting: Noli (Stab), 1x1x1x1 (Slash), Slasher (Slash), JohnDoe (Slash), Nosferatu (Slash), c00lkidd (Punch), Sixer (Carving Slash)")
+print("Auto character leveling system active!")
