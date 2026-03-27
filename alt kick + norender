@@ -1,0 +1,161 @@
+-- Pure Player Monitor - KICKS YOU when ANY target user leaves
+-- With 3D Rendering Toggle (Press P to toggle)
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- ============================================
+-- 3D RENDERING TOGGLE
+-- ============================================
+local renderingEnabled = true
+
+-- Function to toggle rendering
+local function toggleRendering()
+    renderingEnabled = not renderingEnabled
+    RunService:Set3dRenderingEnabled(renderingEnabled)
+    
+    if renderingEnabled then
+        print("3D Rendering: ON 🟢")
+    else
+        print("3D Rendering: OFF 🔴")
+    end
+end
+
+-- Connect P key press
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.P then
+        toggleRendering()
+    end
+end)
+
+print("Press P to toggle 3D rendering ON/OFF")
+print("Current state: ON 🟢")
+
+-- ============================================
+-- PLAYER MONITOR - KICK ON LEAVE
+-- ============================================
+
+-- Player Monitor Configuration - List of users to watch
+local TARGET_USERNAMES = {
+    "matthewjee332",
+    "vrreblux",
+    "scrolladdicttt",
+    "guragurababala",
+    "mafala8859",
+    "lvl2crookboss",
+    "flamingfanbloxfruits",
+    "cminorpentscale",
+    "duxxiitowerdefense",
+    "CandyTombstone"
+}
+
+-- Track which users have joined at least once
+local usersWhoJoined = {}
+local kickExecuted = false
+
+-- Function to check if ANY target user is in server
+local function AnyTargetInServer()
+    for _, player in ipairs(Players:GetPlayers()) do
+        for _, targetName in ipairs(TARGET_USERNAMES) do
+            if player.Name:lower() == targetName:lower() then
+                return true, player.Name
+            end
+        end
+    end
+    return false, nil
+end
+
+-- Function to check if a specific user is in server
+local function IsUserInServer(username)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Name:lower() == username:lower() then
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to kick yourself from the game
+local function KickYourself(leavingUser)
+    if kickExecuted then return end
+    kickExecuted = true
+    print("👋 User '" .. leavingUser .. "' left! Kicking self from game...")
+    
+    -- Method 1: Kick yourself
+    pcall(function()
+        LocalPlayer:Kick("Target user left the server - Exiting game")
+    end)
+    
+    -- Method 2: Shutdown as backup (if kick doesn't work)
+    task.wait(0.5)
+    pcall(function()
+        game:Shutdown()
+    end)
+end
+
+-- Initialize user tracking
+for _, username in ipairs(TARGET_USERNAMES) do
+    usersWhoJoined[username:lower()] = false
+end
+
+-- Initial check for any target users already in server
+local anyInServer, firstUser = AnyTargetInServer()
+if anyInServer then
+    print("✅ Users already in server. Monitoring all targets for leave...")
+    for _, player in ipairs(Players:GetPlayers()) do
+        for _, targetName in ipairs(TARGET_USERNAMES) do
+            if player.Name:lower() == targetName:lower() then
+                usersWhoJoined[targetName:lower()] = true
+                print("  - " .. targetName .. " is in server")
+            end
+        end
+    end
+else
+    print("⏳ No target users in server. Waiting for any to join first...")
+end
+
+-- Monitor for users joining
+Players.PlayerAdded:Connect(function(player)
+    for _, targetName in ipairs(TARGET_USERNAMES) do
+        if player.Name:lower() == targetName:lower() then
+            usersWhoJoined[targetName:lower()] = true
+            print("✅ User '" .. targetName .. "' joined the server! Will kick self when ANY target leaves.")
+            break
+        end
+    end
+end)
+
+-- Monitor for users leaving
+Players.PlayerRemoving:Connect(function(player)
+    for _, targetName in ipairs(TARGET_USERNAMES) do
+        if player.Name:lower() == targetName:lower() and usersWhoJoined[targetName:lower()] then
+            KickYourself(targetName)
+            break
+        end
+    end
+end)
+
+-- Periodic check in case we missed events
+task.spawn(function()
+    while true do
+        task.wait(2)
+        
+        -- Check if any user who joined is now gone
+        for _, targetName in ipairs(TARGET_USERNAMES) do
+            local targetLower = targetName:lower()
+            if usersWhoJoined[targetLower] and not IsUserInServer(targetName) then
+                KickYourself(targetName)
+            end
+        end
+    end
+end)
+
+print("══════════════════════════════════════════════════════════════════")
+print("   PURE PLAYER MONITOR - KICK ON TARGET LEAVE")
+print("══════════════════════════════════════════════════════════════════")
+print("🔍 Monitoring for " .. #TARGET_USERNAMES .. " users: " .. table.concat(TARGET_USERNAMES, ", "))
+print("⚠ Will KICK YOU from the game when ANY target user leaves after having joined")
