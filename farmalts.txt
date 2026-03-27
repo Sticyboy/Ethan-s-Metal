@@ -1,6 +1,6 @@
 -- Auto Generator/Survivor Hunter Loop - ULTRA FAST
 -- WITH AUTO CHARACTER LEVELING SYSTEM
--- ONLY EXECUTES FOR: vrreblux OR caxa845
+-- ONLY EXECUTES FOR: vrreblux OR matthewjee332
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -41,32 +41,99 @@ local playerData = player:WaitForChild("PlayerData")
 local survivorsMilestones = playerData:WaitForChild("Achievements"):WaitForChild("SurvivorsMilestones")
 local killersMilestones = playerData:WaitForChild("Achievements"):WaitForChild("KillersMilestones")
 
--- Define all Survivors with priority order
-local allSurvivors = {
-    "Noob",
-    "Builderman",
-    "Elliot",
-    "Veeronica",
-    "Taph",
-    "Dusekkar",
-    "007n7",
-    "Chance",
-    "Guest1337",
-    "JaneDoe",
-    "Shedletsky",
-    "TwoTime"
-}
+-- Determine which user is running the script
+local currentUsername = LocalPlayer.Name:lower()
 
--- Define all Killers with priority order
-local allKillers = {
-    "Slasher",
-    "Sixer",
-    "1x1x1x1",
-    "JohnDoe",
-    "Noli",
-    "Nosferatu",
-    "c00lkidd"
-}
+-- Define Survivor priority orders based on username
+local survivorsOrder = {}
+local killersOrder = {}
+
+if currentUsername == "matthewjee332" then
+    -- Original order for matthewjee332
+    survivorsOrder = {
+        "Noob",
+        "Builderman",
+        "Elliot",
+        "Veeronica",
+        "Taph",
+        "Dusekkar",
+        "007n7",
+        "Chance",
+        "Guest1337",
+        "JaneDoe",
+        "Shedletsky",
+        "TwoTime"
+    }
+    
+    -- Original killer order for matthewjee332
+    killersOrder = {
+        "Slasher",
+        "Sixer",
+        "1x1x1x1",
+        "JohnDoe",
+        "Noli",
+        "Nosferatu",
+        "c00lkidd"
+    }
+    
+    print("📋 Using ORIGINAL priority order for matthewjee332")
+    
+elseif currentUsername == "vrreblux" then
+    -- Custom order for vrreblux
+    survivorsOrder = {
+        "Builderman",
+        "Veeronica",
+        "Elliot",
+        "Shedletsky",
+        "Noob",
+        "TwoTime",
+        "Taph"
+    }
+    
+    -- All killers are level 100, so order doesn't matter, but keeping for completeness
+    killersOrder = {
+        "Slasher",
+        "Sixer",
+        "1x1x1x1",
+        "JohnDoe",
+        "Noli",
+        "Nosferatu",
+        "c00lkidd"
+    }
+    
+    print("📋 Using CUSTOM priority order for vrreblux")
+    print("   Survivor order: Builderman → Veeronica → Elliot → Shedletsky → Noob → TwoTime → Taph")
+    print("   🎉 Congratulations! All Killers are level 100!")
+    
+else
+    -- Fallback to original order for any other allowed users (shouldn't happen with current list)
+    survivorsOrder = {
+        "Noob",
+        "Builderman",
+        "Elliot",
+        "Veeronica",
+        "Taph",
+        "Dusekkar",
+        "007n7",
+        "Chance",
+        "Guest1337",
+        "JaneDoe",
+        "Shedletsky",
+        "TwoTime"
+    }
+    
+    killersOrder = {
+        "Slasher",
+        "Sixer",
+        "1x1x1x1",
+        "JohnDoe",
+        "Noli",
+        "Nosferatu",
+        "c00lkidd"
+    }
+    
+    print("📋 Using DEFAULT priority order for: " .. LocalPlayer.Name)
+end
 
 -- Function to switch to a Survivor
 local function switchToSurvivor(survivorName)
@@ -106,7 +173,7 @@ end
 
 -- Function to find the next Survivor that is NOT level 100 based on priority order
 local function findNonLevel100Survivor()
-    for _, survivorName in ipairs(allSurvivors) do
+    for _, survivorName in ipairs(survivorsOrder) do
         if not isCharacterLevel100(survivorsMilestones, survivorName) then
             return survivorName
         end
@@ -116,7 +183,7 @@ end
 
 -- Function to find the next Killer that is NOT level 100 based on priority order
 local function findNonLevel100Killer()
-    for _, killerName in ipairs(allKillers) do
+    for _, killerName in ipairs(killersOrder) do
         if not isCharacterLevel100(killersMilestones, killerName) then
             return killerName
         end
@@ -145,6 +212,9 @@ local function switchToNonLevel100Killer()
         switchToKiller(targetKiller)
     else
         print("All Killers are level 100 or above! Cannot find a Killer to switch to.")
+        if currentUsername == "vrreblux" then
+            print("🎉 Great job! All your Killers are already max level!")
+        end
     end
 end
 
@@ -153,7 +223,7 @@ local function monitorAndSwitch()
     local connections = {}
     
     -- Monitor all Survivors
-    for _, survivorName in ipairs(allSurvivors) do
+    for _, survivorName in ipairs(survivorsOrder) do
         local milestoneName = survivorName .. "Milestone"
         local milestone = survivorsMilestones:FindFirstChild(milestoneName)
         if milestone then
@@ -168,7 +238,7 @@ local function monitorAndSwitch()
     end
     
     -- Monitor all Killers
-    for _, killerName in ipairs(allKillers) do
+    for _, killerName in ipairs(killersOrder) do
         local milestoneName = killerName .. "Milestone"
         local milestone = killersMilestones:FindFirstChild(milestoneName)
         if milestone then
@@ -183,8 +253,10 @@ local function monitorAndSwitch()
     end
     
     print("Monitoring all Survivors and Killers for level 100...")
-    print("Survivor priority order: Noob -> Builderman -> Elliot -> Veeronica -> Taph -> Dusekkar -> rest")
-    print("Killer priority order: Slasher -> Sixer -> 1x1x1x1 -> JohnDoe -> Noli -> Nosferatu -> c00lkidd")
+    
+    -- Print the current priority order for clarity
+    print("Survivor priority order: " .. table.concat(survivorsOrder, " → "))
+    print("Killer priority order: " .. table.concat(killersOrder, " → "))
     
     -- Initial switches if needed
     switchToNonLevel100Survivor()
