@@ -1,0 +1,127 @@
+-- Auto Reset when Killer - Only after all generators done
+-- ONLY EXECUTES FOR: lvl2crookboss OR CandyTombstone
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Check if this script should run for this user
+local ALLOWED_USERNAMES = {
+    "lvl2crookboss",
+    "candytombstone"
+}
+
+local function IsAllowedUser()
+    local playerName = LocalPlayer.Name:lower()
+    for _, allowedName in ipairs(ALLOWED_USERNAMES) do
+        if playerName == allowedName:lower() then
+            return true
+        end
+    end
+    return false
+end
+
+-- If not allowed, stop the script immediately
+if not IsAllowedUser() then
+    print("❌ Script not authorized for user: " .. LocalPlayer.Name)
+    print("✅ Allowed users: " .. table.concat(ALLOWED_USERNAMES, ", "))
+    return
+end
+
+print("✅ Script authorized for user: " .. LocalPlayer.Name)
+
+-- Function to check if all 5 generators are completed
+local function AreAllGeneratorsDone()
+    local mapFolder = workspace:FindFirstChild("Map") 
+        and workspace.Map:FindFirstChild("Ingame") 
+        and workspace.Map.Ingame:FindFirstChild("Map")
+    
+    if not mapFolder then return false end
+    
+    local completedCount = 0
+    local totalGenerators = 0
+    
+    for _, obj in ipairs(mapFolder:GetChildren()) do
+        if obj.Name == "Generator" and obj:FindFirstChild("Progress") then
+            totalGenerators = totalGenerators + 1
+            if obj.Progress.Value >= 100 then
+                completedCount = completedCount + 1
+            end
+        end
+    end
+    
+    return completedCount >= 5 and totalGenerators >= 5
+end
+
+-- Function to check if local player is a killer
+local function IsPlayerKiller()
+    local killers = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Killers")
+    if not killers then return false end
+    
+    for _, killer in ipairs(killers:GetChildren()) do
+        if killer:GetAttribute("Username") == LocalPlayer.Name then
+            return true
+        end
+        if killer.Name == LocalPlayer.Name then
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Track if we've already triggered the delayed reset
+local resetScheduled = false
+
+-- Function to reset character after delay
+local function DelayedReset()
+    if resetScheduled then return end
+    resetScheduled = true
+    
+    print("⏱️ All 5 generators done! Waiting 5 seconds before resetting...")
+    task.wait(5)
+    
+    if IsPlayerKiller() then
+        print("🔄 5 seconds passed, resetting now...")
+        if LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.Health = 0
+            else
+                LocalPlayer.Character:Destroy()
+            end
+        end
+    else
+        print("❌ No longer killer after 5 seconds, skipping reset")
+    end
+    
+    resetScheduled = false
+end
+
+-- Main loop
+local function StartLoop()
+    print("══════════════════════════════════════════════")
+    print("   AUTO RESET WHEN KILLER - GENERATOR CHECK")
+    print("   Authorized for: " .. LocalPlayer.Name)
+    print("══════════════════════════════════════════════")
+    print("Will reset 5 seconds AFTER all 5 generators are done")
+    
+    while true do
+        if IsPlayerKiller() then
+            if AreAllGeneratorsDone() and not resetScheduled then
+                task.spawn(DelayedReset)
+            end
+        else
+            resetScheduled = false
+        end
+        
+        task.wait(0.5)
+    end
+end
+
+-- Start the loop
+local success, err = pcall(StartLoop)
+if not success then
+    print("Loop failed:", err)
+end
+
+print("Script loaded! Will reset 5 seconds AFTER all 5 generators are 100%")
