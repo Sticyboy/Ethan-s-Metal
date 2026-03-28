@@ -1,1 +1,668 @@
+-- Load Rayfield Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+-- Create Window
+local Window = Rayfield:CreateWindow({
+    Name = "NPC Highlighter",
+    LoadingTitle = "NPC Highlighter",
+    LoadingSubtitle = "Highlight NPCs with health bars",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "NPC Highlighter",
+        FileName = "Settings"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "noinvitelink",
+        RememberJoins = true
+    },
+    KeySystem = false,
+})
+
+-- Main Tab
+local MainTab = Window:CreateTab("Main", "user")
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+
+-- Store highlights and billboards for toggling
+local ActiveHighlights = {}
+local ActiveBillboards = {}
+local ActiveHealthConnections = {}
+local HighlightingEnabled = false
+local AimbotEnabled = false
+local WallCheckEnabled = true
+local AimbotFOV = 200
+local AimbotSmoothness = 0.7
+local LocalPlayer = Players.LocalPlayer
+
+-- Store connections for cleanup
+local ChildAddedConnection = nil
+local ESPRefreshConnection = nil
+
+local function isPlayerCharacter(character)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character == character then
+            return true
+        end
+    end
+    return false
+end
+
+local function isAlive(character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid.Health > 0
+    end
+    
+    local healthSource = character:FindFirstChild("health") or character:FindFirstChild("Health")
+    if healthSource and (healthSource:IsA("IntValue") or healthSource:IsA("NumberValue")) then
+        return healthSource.Value > 0
+    end
+    
+    return true -- Assume alive if no health found
+end
+
+local function wallCheck(targetPosition, targetCharacter)
+    if not WallCheckEnabled then
+        return false
+    end
+    
+    local origin = Camera.CFrame.Position
+    local direction = (targetPosition - origin).Unit
+    local raycastParams = RaycastParams.new()
+    
+    -- Create blacklist including the target character and all its parts/accessories
+    local blacklist = {LocalPlayer.Character, Camera}
+    
+    -- Add the target character and all its descendants to the blacklist
+    if targetCharacter then
+        table.insert(blacklist, targetCharacter)
+        
+        -- Also add all parts and accessories of the target character
+        local characterDescendants = targetCharacter:GetDescendants()
+        for _, descendant in ipairs(characterDescendants) do
+            if descendant:IsA("BasePart") or descendant:IsA("Accessory") or descendant:IsA("Model") then
+                table.insert(blacklist, descendant)
+            end
+        end
+    end
+    
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = blacklist
+    
+    local raycastResult = Workspace:Raycast(origin, direction * 1000, raycastParams)
+    
+    if raycastResult then
+        -- Check if the hit is the target or something else
+        local distanceToTarget = (targetPosition - origin).Magnitude
+        local distanceToHit = (raycastResult.Position - origin).Magnitude
+        
+        -- If something is closer than the target, there's a wall in the way
+        return distanceToHit < distanceToTarget - 1
+    end
+    
+    return false -- No walls in the way
+end
+
+local function findHealthValue(character)
+    local healthObj = character:FindFirstChild("health") or character:FindFirstChild("Health")
+    
+    if healthObj then
+        if healthObj:IsA("IntValue") or healthObj:IsA("NumberValue") then
+            return healthObj
+        elseif healthObj:IsA("ModuleScript") or healthObj:IsA("Script") then
+            local success, value = pcall(function()
+                return require(healthObj) or healthObj:GetAttribute("Health") or healthObj:GetAttribute("Value")
+            end)
+            if success and value then
+                local fakeValue = Instance.new("NumberValue")
+                fakeValue.Value = value
+                fakeValue.Name = "Health"
+                fakeValue.Parent = character
+                return fakeValue
+            end
+        elseif healthObj:IsA("Folder") then
+            local value = healthObj:FindFirstChild("Value") or healthObj:FindFirstChild("health")
+            if value then
+                return value
+            end
+        end
+    end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid
+    end
+    
+    local attrHealth = character:GetAttribute("Health") or character:GetAttribute("health")
+    if attrHealth then
+        local fakeValue = Instance.new("NumberValue")
+        fakeValue.Value = attrHealth
+        fakeValue.Name = "Health"
+        fakeValue.Parent = character
+        return fakeValue
+    end
+    
+    return nil
+end
+
+local function removeCharacterESP(character)
+    if ActiveHighlights[character] then
+        ActiveHighlights[character]:Destroy()
+        ActiveHighlights[character] = nil
+    end
+    
+    if ActiveBillboards[character] then
+        ActiveBillboards[character]:Destroy()
+        ActiveBillboards[character] = nil
+    end
+    
+    if ActiveHealthConnections[character] then
+        ActiveHealthConnections[character]:Disconnect()
+        ActiveHealthConnections[character] = nil
+    end
+end
+
+local function createHealthBar(character, healthSource)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Adornee = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+    billboard.Size = UDim2.new(0, 120, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 500
+    billboard.Parent = character
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0, 20)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextScaled = true
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextColor3 = Color3.new(1, 1, 1)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    nameLabel.Text = character.Name
+    nameLabel.Parent = billboard
+    
+    local healthContainer = Instance.new("Frame")
+    healthContainer.Size = UDim2.new(1, 0, 0, 15)
+    healthContainer.Position = UDim2.new(0, 0, 0, 20)
+    healthContainer.BackgroundColor3 = Color3.new(0, 0, 0)
+    healthContainer.BorderSizePixel = 1
+    healthContainer.BorderColor3 = Color3.new(1, 1, 1)
+    healthContainer.Parent = billboard
+    
+    local healthBar = Instance.new("Frame")
+    healthBar.Size = UDim2.new(1, 0, 1, 0)
+    healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
+    healthBar.BorderSizePixel = 0
+    healthBar.Parent = healthContainer
+    healthBar.ZIndex = 2
+    
+    local healthText = Instance.new("TextLabel")
+    healthText.Size = UDim2.new(1, 0, 1, 0)
+    healthText.BackgroundTransparency = 1
+    healthText.TextScaled = true
+    healthText.Font = Enum.Font.GothamMedium
+    healthText.TextColor3 = Color3.new(1, 1, 1)
+    healthText.TextStrokeTransparency = 0
+    healthText.TextStrokeColor3 = Color3.new(0, 0, 0)
+    healthText.Parent = healthContainer
+    healthText.ZIndex = 3
+    
+    local function updateHealthBar()
+        local currentHealth, maxHealth
+        
+        if healthSource:IsA("Humanoid") then
+            currentHealth = healthSource.Health
+            maxHealth = healthSource.MaxHealth
+        elseif healthSource:IsA("IntValue") or healthSource:IsA("NumberValue") then
+            currentHealth = healthSource.Value
+            local maxHealthSource = character:FindFirstChild("MaxHealth") or character:FindFirstChild("maxHealth")
+            maxHealth = maxHealthSource and maxHealthSource.Value or 100
+        else
+            currentHealth = 100
+            maxHealth = 100
+        end
+        
+        local healthPercentage = math.clamp(currentHealth / maxHealth, 0, 1)
+        
+        healthBar.Size = UDim2.new(healthPercentage, 0, 1, 0)
+        
+        if healthPercentage > 0.6 then
+            healthBar.BackgroundColor3 = Color3.new(0, 1, 0)
+        elseif healthPercentage > 0.3 then
+            healthBar.BackgroundColor3 = Color3.new(1, 1, 0)
+        else
+            healthBar.BackgroundColor3 = Color3.new(1, 0, 0)
+        end
+        
+        healthText.Text = math.floor(currentHealth) .. "/" .. math.floor(maxHealth)
+        
+        -- Remove ESP if health is 0 or below
+        if currentHealth <= 0 then
+            removeCharacterESP(character)
+        end
+    end
+    
+    -- Store the connection for cleanup
+    if healthSource:IsA("Humanoid") then
+        ActiveHealthConnections[character] = healthSource:GetPropertyChangedSignal("Health"):Connect(updateHealthBar)
+    elseif healthSource:IsA("IntValue") or healthSource:IsA("NumberValue") then
+        ActiveHealthConnections[character] = healthSource.Changed:Connect(updateHealthBar)
+    end
+    
+    updateHealthBar()
+    
+    ActiveBillboards[character] = billboard
+    
+    return billboard
+end
+
+local function highlightCharacter(character)
+    -- Don't highlight if ESP is disabled
+    if not HighlightingEnabled then
+        return nil
+    end
+    
+    if isPlayerCharacter(character) then
+        return nil
+    end
+    
+    local healthSource = findHealthValue(character)
+    if not healthSource then
+        return nil
+    end
+    
+    -- Check if already dead
+    local currentHealth = 0
+    if healthSource:IsA("Humanoid") then
+        currentHealth = healthSource.Health
+    elseif healthSource:IsA("IntValue") or healthSource:IsA("NumberValue") then
+        currentHealth = healthSource.Value
+    end
+    
+    if currentHealth <= 0 then
+        return nil -- Don't highlight dead NPCs
+    end
+    
+    -- Check if already highlighted
+    if ActiveHighlights[character] then
+        return ActiveHighlights[character]
+    end
+    
+    -- Create highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = character
+    highlight.FillColor = Color3.new(1, 0, 0)
+    highlight.OutlineColor = Color3.new(1, 1, 1)
+    highlight.FillTransparency = 0.3
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = character
+    
+    -- Create health bar with name
+    createHealthBar(character, healthSource)
+    
+    ActiveHighlights[character] = highlight
+    
+    return highlight
+end
+
+local function removeAllHighlights()
+    for character, highlight in pairs(ActiveHighlights) do
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    
+    for character, billboard in pairs(ActiveBillboards) do
+        if billboard then
+            billboard:Destroy()
+        end
+    end
+    
+    for character, connection in pairs(ActiveHealthConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    
+    ActiveHighlights = {}
+    ActiveBillboards = {}
+    ActiveHealthConnections = {}
+end
+
+local function processExistingCharacters()
+    if not HighlightingEnabled then return end
+    
+    -- First remove any existing highlights
+    removeAllHighlights()
+    
+    -- Process all existing characters
+    for _, character in pairs(workspace.Characters:GetChildren()) do
+        if character:IsA("Model") then
+            highlightCharacter(character)
+        end
+    end
+    
+    -- Handle characters that might be added later
+    if ChildAddedConnection then
+        ChildAddedConnection:Disconnect()
+    end
+    
+    ChildAddedConnection = workspace.Characters.ChildAdded:Connect(function(character)
+        wait(0.5) -- Wait a bit for character to fully load
+        if character:IsA("Model") then
+            highlightCharacter(character)
+        end
+    end)
+end
+
+-- Aimbot Functions
+local function getClosestHeadToCursor()
+    local closestHead = nil
+    local closestDistance = math.huge
+    local mouseLocation = UserInputService:GetMouseLocation()
+    
+    for _, character in pairs(workspace.Characters:GetChildren()) do
+        if character:IsA("Model") and not isPlayerCharacter(character) and isAlive(character) then
+            local head = character:FindFirstChild("Head")
+            if head then
+                -- Convert 3D position to 2D screen position
+                local headPosition, onScreen = Camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen then
+                    -- Calculate distance from cursor to head on screen
+                    local distance = (Vector2.new(headPosition.X, headPosition.Y) - mouseLocation).Magnitude
+                    
+                    if distance < closestDistance and distance < AimbotFOV then
+                        -- Wall check - pass the character so its accessories are ignored
+                        if not wallCheck(head.Position, character) then
+                            closestDistance = distance
+                            closestHead = head
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestHead, closestDistance
+end
+
+local function aimAtHead(head)
+    if not head then return end
+    
+    -- Calculate the direction to the head
+    local camera = Workspace.CurrentCamera
+    local headPosition = head.Position
+    
+    -- Create a CFrame that looks at the head
+    local lookAt = CFrame.lookAt(camera.CFrame.Position, headPosition)
+    
+    -- Smoothly interpolate the camera
+    camera.CFrame = camera.CFrame:Lerp(lookAt, AimbotSmoothness)
+end
+
+-- Aimbot loop
+local aimbotConnection
+local function startAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+    end
+    
+    aimbotConnection = RunService.RenderStepped:Connect(function()
+        if AimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+            local closestHead, distance = getClosestHeadToCursor()
+            if closestHead then
+                aimAtHead(closestHead)
+            end
+        end
+    end)
+end
+
+local function stopAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+end
+
+-- Section for NPC Highlighter
+MainTab:CreateSection("NPC Highlighter")
+
+-- Main Toggle
+local HighlightToggle = MainTab:CreateToggle({
+    Name = "Enable NPC Highlighting",
+    CurrentValue = false,
+    Flag = "NPCHighlightToggle",
+    Callback = function(Value)
+        if Value == HighlightingEnabled then return end
+        
+        HighlightingEnabled = Value
+        
+        if Value then
+            -- Disconnect any existing connections first
+            if ChildAddedConnection then
+                ChildAddedConnection:Disconnect()
+                ChildAddedConnection = nil
+            end
+            
+            -- Start ESP
+            processExistingCharacters()
+            
+            -- Start periodic refresh
+            if ESPRefreshConnection then
+                ESPRefreshConnection:Disconnect()
+            end
+            
+            ESPRefreshConnection = RunService.Heartbeat:Connect(function()
+                -- Keep checking for new characters
+                for _, character in pairs(workspace.Characters:GetChildren()) do
+                    if character:IsA("Model") and not isPlayerCharacter(character) then
+                        if not ActiveHighlights[character] and isAlive(character) then
+                            highlightCharacter(character)
+                        elseif ActiveHighlights[character] and not isAlive(character) then
+                            removeCharacterESP(character)
+                        end
+                    end
+                end
+            end)
+            
+            Rayfield:Notify({
+                Title = "NPC Highlighting",
+                Content = "NPC highlighting has been enabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            -- Disconnect all connections
+            if ChildAddedConnection then
+                ChildAddedConnection:Disconnect()
+                ChildAddedConnection = nil
+            end
+            
+            if ESPRefreshConnection then
+                ESPRefreshConnection:Disconnect()
+                ESPRefreshConnection = nil
+            end
+            
+            -- Remove all highlights
+            removeAllHighlights()
+            
+            Rayfield:Notify({
+                Title = "NPC Highlighting",
+                Content = "NPC highlighting has been disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Aimbot Section
+MainTab:CreateSection("Aimbot")
+
+-- Aimbot Toggle
+local AimbotToggle = MainTab:CreateToggle({
+    Name = "Enable Aimbot",
+    CurrentValue = false,
+    Flag = "AimbotToggle",
+    Callback = function(Value)
+        AimbotEnabled = Value
+        if Value then
+            startAimbot()
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "Aimbot enabled - Hold Right Click to aim at closest NPC head",
+                Duration = 4,
+                Image = 4483362458
+            })
+        else
+            stopAimbot()
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "Aimbot disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+-- Aimbot Settings
+local AimbotFOVSlider = MainTab:CreateSlider({
+    Name = "Aimbot FOV (Pixels)",
+    Range = {50, 500},
+    Increment = 10,
+    Suffix = "px",
+    CurrentValue = 200,
+    Flag = "AimbotFOV",
+    Callback = function(Value)
+        AimbotFOV = Value
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = "Aimbot FOV set to " .. Value .. " pixels",
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+local AimbotSmoothnessSlider = MainTab:CreateSlider({
+    Name = "Aimbot Smoothness",
+    Range = {10, 90},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 70,
+    Flag = "AimbotSmoothness",
+    Callback = function(Value)
+        AimbotSmoothness = Value / 100
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = "Aimbot smoothness set to " .. Value .. "%",
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Wall Check Toggle
+local WallCheckToggle = MainTab:CreateToggle({
+    Name = "Wall Check (Recommended)",
+    CurrentValue = true,
+    Flag = "WallCheckToggle",
+    Callback = function(Value)
+        WallCheckEnabled = Value
+        local message = Value and "Wall check enabled" or "Wall check disabled"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = message,
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Refresh Button
+MainTab:CreateButton({
+    Name = "Refresh NPCs",
+    Callback = function()
+        if not HighlightingEnabled then
+            Rayfield:Notify({
+                Title = "NPC Highlighter",
+                Content = "Enable highlighting first!",
+                Duration = 2,
+                Image = 4483362458
+            })
+            return
+        end
+        
+        processExistingCharacters()
+        Rayfield:Notify({
+            Title = "NPC Highlighter",
+            Content = "NPC highlights refreshed",
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Settings Section
+MainTab:CreateSection("Settings")
+
+-- Highlight Color Picker
+local HighlightColor = MainTab:CreateColorPicker({
+    Name = "Highlight Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Flag = "HighlightColor",
+    Callback = function(Value)
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                highlight.FillColor = Value
+            end
+        end
+    end
+})
+
+-- Highlight Transparency Slider
+local TransparencySlider = MainTab:CreateSlider({
+    Name = "Highlight Transparency",
+    Range = {0, 100},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 30,
+    Flag = "HighlightTransparency",
+    Callback = function(Value)
+        local transparency = Value / 100
+        for character, highlight in pairs(ActiveHighlights) do
+            if highlight and highlight.Parent then
+                highlight.FillTransparency = transparency
+            end
+        end
+    end,
+})
+
+-- Info Section
+MainTab:CreateSection("Info")
+
+MainTab:CreateParagraph({
+    Title = "NPC Highlighter Info",
+    Content = "This script highlights all NPCs in workspace.Characters with red outlines and displays their health bars above them. Player characters are automatically excluded. ESP automatically removes when NPC health reaches 0."
+})
+
+MainTab:CreateParagraph({
+    Title = "Aimbot Info", 
+    Content = "When enabled, hold Right Mouse Button to automatically aim at the closest NPC head to your cursor. Features wall checking, only targets alive NPCs, and excludes players. Enemy accessories are ignored in wall checks."
+})
+
+-- Load configuration
+Rayfield:LoadConfiguration()
+
+print("NPC Highlighter with Aimbot Loaded!")
