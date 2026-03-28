@@ -1,0 +1,44 @@
+local player = game:GetService("Players").LocalPlayer
+local voiceEvent = player:WaitForChild("PlayerGui"):WaitForChild("Voiceline"):WaitForChild("VoiceEvent")
+local voiceLinesRoot = player.PlayerGui.Voiceline.VoiceLines.Bob
+
+-- Table of voicelines and their categories
+local voicelines = {
+	{ "Random", "\"Hahahaha!\"" },
+	{ "Random", "\"Oh, you're in the jungle now, baby!\"" },
+	{ "Random", "\"Oh, give it a rest!\"" },
+	{ "Random", "\"I'll shoot you in your God damn face!\"" },
+	{ "Ammo", "\"Okay, last mag.\"" },
+	{ "Ammo", "\"Black on ammo, guys!\"" },
+	{ "Ammo", "\"Ughh, running dry here!\"" },
+	{ "Ammo", "\"I'm on my last mag!\"" },
+	{ "Follow", "\"Need backup!\"" },
+	{ "Follow", "\"I need guys over here!\"" },
+	{ "Follow", "\"Hey, hey! Get me backup!\"" },
+	{ "Follow", "\"Yeah, help would be great!\"" },
+	{ "Kill", "\"Another one down!\"" },
+	{ "Kill", "\"Got 'em!\"" },
+	{ "Kill", "\"Target down!\"" },
+	{ "Kill", "\"Yeah, he's down.\"" },
+	{ "Spotted", "\"Ugh, I got contact!\"" },
+	{ "Spotted", "\"Enemy!\"" },
+	{ "Spotted", "\"Contact!\"" },
+	{ "Spotted", "\"I see a hostile!\"" },
+}
+
+-- Function to get a random voiceline
+local function getRandomVoiceline()
+	local choice = voicelines[math.random(1, #voicelines)]
+	local category, line = choice[1], choice[2]
+	local lineObject = voiceLinesRoot[category]:FindFirstChild(line)
+	return lineObject, category
+end
+
+-- Loop forever, spam random voicelines every 0.01s
+while true do
+	local lineObject, category = getRandomVoiceline()
+	if lineObject then
+		voiceEvent:FireServer(lineObject, category)
+	end
+	task.wait(0.01)
+end
