@@ -1,4 +1,4 @@
-local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/source.lua"))()
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -12,16 +12,16 @@ local PlayerGui = lp:WaitForChild("PlayerGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Lighting = game:GetService("Lighting")
 
--- Remotes with error handling
+-- Remotes with error handling (updated for Dusekkar)
 local testRemote = nil
 local success, result = pcall(function()
-    return ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent")
+    return ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"):WaitForChild("RemoteEvent")
 end)
 if success then
     testRemote = result
 else
     success, result = pcall(function()
-        return ReplicatedStorage:FindFirstChild("Network"):WaitForChild("RemoteEvent")
+        return ReplicatedStorage:FindFirstChild("Modules"):FindFirstChild("Network"):WaitForChild("RemoteEvent")
     end)
     if success then
         testRemote = result
@@ -1129,6 +1129,7 @@ local function firePlasmaBeam()
         return false
     end
     
+    -- Updated remote call for Dusekkar
     local args = {
         "UseActorAbility",
         {
@@ -1832,6 +1833,7 @@ local function checkSpecialKillerActions()
 end
 
 -- ===== GUEST1337 AUTO BLOCK FUNCTION =====
+-- UPDATED: Now presses Q button instead of firing remote code
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
     
@@ -1875,7 +1877,8 @@ local function checkForAttackSounds()
                                         
                                         if autoblocktype == "Block" then
                                             if cachedCooldown and cachedCooldown.Text == "" then
-                                                fireGuiBlock()
+                                                -- Press Q instead of firing remote
+                                                pressKey(Enum.KeyCode.Q)
                                                 if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
                                                     _lastBlockMessageTime = tick()
                                                 end
@@ -1884,13 +1887,13 @@ local function checkForAttackSounds()
                                             end
                                         elseif autoblocktype == "Charge" then
                                             if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
-                                                fireGuiCharge()
+                                                pressKey(Enum.KeyCode.Q)
                                                 lastBlockTime = now
                                                 return
                                             end
                                         elseif autoblocktype == "7n7 Clone" then
                                             if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
-                                                fireGuiClone()
+                                                pressKey(Enum.KeyCode.Q)
                                                 lastCloneTime = now
                                                 return
                                             end
@@ -1907,6 +1910,7 @@ local function checkForAttackSounds()
 end
 
 -- ===== 7N7 AUTO CLONE FUNCTION WITH ROTATION =====
+-- UPDATED: Now presses Q button instead of firing remote code
 local function checkForCloneTrigger()
     if not autoCloneFor7n7 then return end
     
@@ -1944,7 +1948,8 @@ local function checkForCloneTrigger()
                                     refreshUIRefs()
                                     
                                     if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
-                                        fireGuiClone()
+                                        -- Press Q instead of firing remote
+                                        pressKey(Enum.KeyCode.Q)
                                         rotateTowardsKiller(killer)
                                         lastCloneTime = now
                                         return
@@ -2674,7 +2679,7 @@ local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
 AutoBlockTab:CreateKeybind({
-    Name = "1. Guest Auto Block",
+    Name = "1. Guest Auto Block (Presses Q)",
     CurrentKeybind = "G",
     HoldToInteract = false,
     Flag = "GuestAutoBlockKey",
@@ -2682,13 +2687,13 @@ AutoBlockTab:CreateKeybind({
         local isGuest1337 = amIGuest1337()
         if isGuest1337 then
             autoBlockForGuest = not autoBlockForGuest
-            SendNotif("Guest Auto Block", autoBlockForGuest and "Enabled" or "Disabled", 1)
+            SendNotif("Guest Auto Block", autoBlockForGuest and "Enabled (Presses Q)" or "Disabled", 1)
         end
     end
 })
 
 AutoBlockTab:CreateKeybind({
-    Name = "2. 7n7 Auto Clone + Rotation (0.3s)",
+    Name = "2. 7n7 Auto Clone + Rotation (0.3s) (Presses Q)",
     CurrentKeybind = "H",
     HoldToInteract = false,
     Flag = "SevenNAutoCloneKey",
@@ -2696,7 +2701,7 @@ AutoBlockTab:CreateKeybind({
         local is7n7 = amI7n7()
         if is7n7 then
             autoCloneFor7n7 = not autoCloneFor7n7
-            SendNotif("7n7 Auto Clone", autoCloneFor7n7 and "Enabled (Rotates to killer for 0.3s)" or "Disabled", 1)
+            SendNotif("7n7 Auto Clone", autoCloneFor7n7 and "Enabled (Rotates to killer for 0.3s, Presses Q)" or "Disabled", 1)
         end
     end
 })
@@ -2773,15 +2778,15 @@ AutoBlockTab:CreateButton({
         if autoblocktype == "Block" then
             autoblocktype = "Charge"
             originalBlockType = "Charge"
-            SendNotif("Block Type", "Switched to Charge", 1.5)
+            SendNotif("Block Type", "Switched to Charge (Presses Q)", 1.5)
         elseif autoblocktype == "Charge" then
             autoblocktype = "7n7 Clone"
             originalBlockType = "7n7 Clone"
-            SendNotif("Block Type", "Switched to 7n7 Clone", 1.5)
+            SendNotif("Block Type", "Switched to 7n7 Clone (Presses Q)", 1.5)
         elseif autoblocktype == "7n7 Clone" then
             autoblocktype = "Block"
             originalBlockType = "Block"
-            SendNotif("Block Type", "Switched to Block", 1.5)
+            SendNotif("Block Type", "Switched to Block (Presses Q)", 1.5)
         end
     end
 })
@@ -3209,3 +3214,8 @@ Rayfield:LoadConfiguration()
 refreshUIRefs()
 
 print("wahoo wario time")
+print("GUEST1337 & 7N7: Now press Q button instead of firing remote code")
+print("DUSEKKAR: Fixed remote path for Plasma Beam")
+print("ELLIOT AIMBOT: Q ability (0.5s) targets SURVIVORS")
+print("7N7 AUTO CLONE: Rotates to face killer for 0.3s when clone is used, Presses Q")
+print("JANE DOE: Auto parry (20 studs, sounds: 92445809840331 and 83851356262523), E ability 0.9s aimbot")
