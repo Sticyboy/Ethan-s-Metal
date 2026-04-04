@@ -44,7 +44,7 @@ local playerData = player:WaitForChild("PlayerData")
 local survivorsMilestones = playerData:WaitForChild("Achievements"):WaitForChild("SurvivorsMilestones")
 local killersMilestones = playerData:WaitForChild("Achievements"):WaitForChild("KillersMilestones")
 
--- Get the correct remote for character switching (UPDATED PATH)
+-- Get the correct remote for character switching
 local RemoteEvent = game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"):WaitForChild("RemoteEvent")
 print("RemoteEvent found for character switching")
 
@@ -268,13 +268,17 @@ startLevelingMonitor()
 -- ============================================
 
 -- Configuration - GENERATOR MODE
+local SURVIVOR_START_DELAY = 4 -- Wait 4 seconds ONCE when first entering survivor mode
 local PUZZLE_DELAY = 2.8 -- seconds between each puzzle
-local BETWEEN_GENERATORS_DELAY = 2 -- seconds between different generators
+local BETWEEN_GENERATORS_DELAY = 0 -- NO delay between different generators
 local LOOP_DELAY = 0.5
 
 -- Configuration - KILLER MODE (Left Click Spam)
 local CLICK_DELAY = 0.15
 local BETWEEN_SURVIVORS_DELAY = 0.2
+
+-- Track if we've already done the initial survivor delay
+local survivorInitialDelayDone = false
 
 -- Function to simulate left click
 local function LeftClick()
@@ -417,7 +421,7 @@ local function CompletePuzzle(generator)
     return false
 end
 
--- Function to complete a generator
+-- Function to complete a generator (no delay - just do the work)
 local function CompleteGenerator(generator)
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then
@@ -544,7 +548,9 @@ local function StartLoop()
     print("══════════════════════════════════════════════════════════════════")
     print("    AUTO MODE STARTED - ULTRA FAST")
     print("    Authorized for: " .. LocalPlayer.Name)
-    print("    Survivor: Auto-completes generators (puzzle every " .. PUZZLE_DELAY .. "s)")
+    print("    Survivor: Completes generators (puzzle every " .. PUZZLE_DELAY .. "s)")
+    print("    Survivor: Initial " .. SURVIVOR_START_DELAY .. "s delay ONCE when first entering survivor mode")
+    print("    Survivor: NO delay between generators (instant teleport)")
     print("    Killer: Auto-hunts survivors (LEFT CLICK SPAM)")
     print("    Auto Character Leveling: ACTIVE")
     print("══════════════════════════════════════════════════════════════════")
@@ -555,6 +561,14 @@ local function StartLoop()
         local killerName = GetKillerName()
         
         if isSurvivor then
+            -- Check if this is the first time entering survivor mode
+            if not survivorInitialDelayDone then
+                print("▶ FIRST TIME ENTERING SURVIVOR MODE - Waiting " .. SURVIVOR_START_DELAY .. " seconds...")
+                task.wait(SURVIVOR_START_DELAY)
+                survivorInitialDelayDone = true
+                print("  Initial delay complete! Now starting generator work.")
+            end
+            
             print("▶ SURVIVOR MODE (doing generators)")
             
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -574,9 +588,9 @@ local function StartLoop()
                             CompleteGenerator(generator)
                         end)
                         
+                        -- No delay between generators (BETWEEN_GENERATORS_DELAY = 0)
                         if i < #generators then
-                            print("  Waiting " .. BETWEEN_GENERATORS_DELAY .. " seconds before next generator...")
-                            task.wait(BETWEEN_GENERATORS_DELAY)
+                            print("  Moving to next generator immediately...")
                         end
                     end
                     
@@ -594,6 +608,9 @@ local function StartLoop()
             task.wait(LOOP_DELAY)
             
         elseif isKiller then
+            -- Reset the survivor delay flag when switching to killer
+            survivorInitialDelayDone = false
+            
             print("▶ KILLER MODE - Playing as: " .. (killerName or "Unknown") .. " (LEFT CLICK SPAM)")
             
             if LocalPlayer.Character then
@@ -632,6 +649,8 @@ local function StartLoop()
             task.wait(LOOP_DELAY)
             
         else
+            -- Not survivor or killer, reset the delay flag
+            survivorInitialDelayDone = false
             print("▶ WAITING (not survivor or killer)")
             task.wait(LOOP_DELAY)
         end
@@ -645,6 +664,6 @@ if not success then
 end
 
 print("Script loaded!")
-print("  - As Survivor: Teleports to generator, fires prompt, completes puzzle every " .. PUZZLE_DELAY .. "s")
+print("  - As Survivor: Waits 4s ONLY ONCE when first entering survivor mode, then completes generators with NO delay between them")
 print("  - As Killer: Teleports to survivors and spams left click")
 print("  - Auto Character Leveling: Will switch characters when they reach level 100")
