@@ -1505,6 +1505,7 @@ local function checkSpecialKillerActions()
     -- Chance animation IDs
     local chanceAnimIds = {
         ["133491532453922"] = true,
+        ["76649505662612"] = true,
         ["86371356500204"] = true,
         ["131189930305001"] = true,
         ["73697316043485"] = true,
