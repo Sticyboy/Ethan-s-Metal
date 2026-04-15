@@ -182,6 +182,9 @@ local aimbotActiveTimer = nil
 local aimbotTargetCount = 0
 local aimbotPredictionMultiplier = 1
 
+-- ===== BACKSTAB MODE TOGGLE =====
+local faceSameSideAsKiller = false
+
 -- ===== DUSEKKAR SILENT AIM VARIABLES =====
 local dusekkarEnabled = false
 local dusekkarTargetMode = "Survivors"
@@ -213,6 +216,10 @@ local HISTORY_SIZE = 5
 -- ===== 7N7 ROTATION VARIABLES =====
 local rotationActive = false
 local ROTATION_DURATION = 0.3
+
+-- ===== TWOTIME ROTATION AIMBOT VARIABLES =====
+local twotimeRotationActive = false
+local twotimeRotationConnection = nil
 
 -- ===== SPECIAL KILLER VARIABLES =====
 local isPlayingAsSpecialKiller = false
@@ -1161,8 +1168,7 @@ local function getSurvivorClosestToCursor()
     
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         local usernameAttr = survivor:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-        else
+        if not (usernameAttr and usernameAttr == lp.Name) then
             local humanoid = survivor:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 then
                 local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
@@ -1196,8 +1202,7 @@ local function getSurvivorClosestToCursor()
     
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         local usernameAttr = survivor:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-        else
+        if not (usernameAttr and usernameAttr == lp.Name) then
             local humanoid = survivor:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 then
                 local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
@@ -1227,8 +1232,7 @@ local function getNearestSurvivor()
     
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         local usernameAttr = survivor:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-        else
+        if not (usernameAttr and usernameAttr == lp.Name) then
             local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
             if targetHrp then
                 local humanoid = survivor:FindFirstChildOfClass("Humanoid")
@@ -1258,8 +1262,7 @@ local function getNearestKiller()
     
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-        else
+        if not (usernameAttr and usernameAttr == lp.Name) then
             local targetHrp = killer:FindFirstChild("HumanoidRootPart")
             if targetHrp then
                 local humanoid = killer:FindFirstChildOfClass("Humanoid")
@@ -1835,7 +1838,6 @@ local function checkSpecialKillerActions()
 end
 
 -- ===== GUEST1337 AUTO BLOCK FUNCTION =====
--- UPDATED: Now presses Q button instead of firing remote code
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
     
@@ -1853,8 +1855,7 @@ local function checkForAttackSounds()
     
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-        else
+        if not (usernameAttr and usernameAttr == lp.Name) then
             local killerHrp = killer:FindFirstChild("HumanoidRootPart")
             if killerHrp then
                 local distance = (killerHrp.Position - myRoot.Position).Magnitude
@@ -1879,7 +1880,6 @@ local function checkForAttackSounds()
                                         
                                         if autoblocktype == "Block" then
                                             if cachedCooldown and cachedCooldown.Text == "" then
-                                                -- Press Q instead of firing remote
                                                 pressKey(Enum.KeyCode.Q)
                                                 if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
                                                     _lastBlockMessageTime = tick()
@@ -1912,7 +1912,6 @@ local function checkForAttackSounds()
 end
 
 -- ===== 7N7 AUTO CLONE FUNCTION WITH ROTATION =====
--- UPDATED: Now presses Q button instead of firing remote code
 local function checkForCloneTrigger()
     if not autoCloneFor7n7 then return end
     
@@ -1930,8 +1929,7 @@ local function checkForCloneTrigger()
     
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-        else
+        if not (usernameAttr and usernameAttr == lp.Name) then
             local killerHrp = killer:FindFirstChild("HumanoidRootPart")
             if killerHrp then
                 local distance = (killerHrp.Position - myRoot.Position).Magnitude
@@ -1950,7 +1948,6 @@ local function checkForCloneTrigger()
                                     refreshUIRefs()
                                     
                                     if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
-                                        -- Press Q instead of firing remote
                                         pressKey(Enum.KeyCode.Q)
                                         rotateTowardsKiller(killer)
                                         lastCloneTime = now
@@ -2147,8 +2144,7 @@ local function updateDetectionRangeVisuals()
                 local killerHrp = killer:FindFirstChild("HumanoidRootPart")
                 if killerHrp and not killerHrp:FindFirstChild("DetectionCircle") then
                     local usernameAttr = killer:GetAttribute("Username")
-                    if usernameAttr and usernameAttr == lp.Name then
-                    else
+                    if not (usernameAttr and usernameAttr == lp.Name) then
                         local distance = (killerHrp.Position - myRoot.Position).Magnitude
                         local inRange = distance <= detectionRange
                         
@@ -2176,12 +2172,20 @@ local function updateDetectionRangeVisuals()
     end
 end
 
--- ===== AIMBOT FUNCTIONS =====
-local function stopAimbot()
-    aimbotActive = false
-    aimbotCurrentTarget = nil
-    aimbotTargetCount = math.max(0, aimbotTargetCount - 1)
+-- ===== TWOTIME ROTATION AIMBOT FUNCTIONS =====
+local function stopTwotimeRotation()
+    if not twotimeRotationActive then return end
     
+    twotimeRotationActive = false
+    
+    if twotimeRotationConnection then
+        pcall(function()
+            twotimeRotationConnection:Disconnect()
+        end)
+        twotimeRotationConnection = nil
+    end
+    
+    -- Clean up sphere
     if currentTargetSphere then
         pcall(function() currentTargetSphere:Destroy() end)
         currentTargetSphere = nil
@@ -2190,10 +2194,118 @@ local function stopAimbot()
         pcall(function() currentSphereConnection:Disconnect() end)
         currentSphereConnection = nil
     end
+end
+
+local function startTwotimeRotation(targetModel, duration)
+    if twotimeRotationActive then return end
+    if not targetModel then return end
     
+    local char = lp.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    twotimeRotationActive = true
+    
+    if faceSameSideAsKiller then
+        -- BACKSTAB MODE: Copy killer's exact rotation
+        twotimeRotationConnection = RunService.Heartbeat:Connect(function()
+            if not twotimeRotationActive then
+                if twotimeRotationConnection then
+                    pcall(function() twotimeRotationConnection:Disconnect() end)
+                    twotimeRotationConnection = nil
+                end
+                return
+            end
+            
+            if not targetModel or not targetModel.Parent then
+                stopTwotimeRotation()
+                return
+            end
+            
+            local killerHrp = targetModel:FindFirstChild("HumanoidRootPart")
+            if killerHrp then
+                -- Copy the killer's exact rotation direction
+                local killerLook = killerHrp.CFrame.LookVector
+                if killerLook.Magnitude > 0 then
+                    hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + killerLook)
+                end
+            end
+        end)
+    else
+        -- Normal mode: Create prediction sphere and aim at it
+        createTargetSphere(targetModel, Color3.fromRGB(255, 0, 0))
+        
+        twotimeRotationConnection = RunService.Heartbeat:Connect(function()
+            if not twotimeRotationActive then
+                if twotimeRotationConnection then
+                    pcall(function() twotimeRotationConnection:Disconnect() end)
+                    twotimeRotationConnection = nil
+                end
+                return
+            end
+            
+            if not targetModel or not targetModel.Parent then
+                stopTwotimeRotation()
+                return
+            end
+            
+            local targetPos = nil
+            if currentTargetSphere and currentTargetSphere.Parent then
+                targetPos = currentTargetSphere.Position
+            else
+                local targetHrp = targetModel:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    targetPos = targetHrp.Position
+                else
+                    stopTwotimeRotation()
+                    return
+                end
+            end
+            
+            local myPos = hrp.Position
+            local direction = (Vector3.new(targetPos.X, myPos.Y, targetPos.Z) - myPos).Unit
+            
+            if direction.Magnitude > 0 then
+                local targetCF = CFrame.lookAt(myPos, myPos + direction)
+                hrp.CFrame = hrp.CFrame:Lerp(targetCF, aimbotSmoothness)
+            end
+        end)
+    end
+    
+    -- Stop after duration
+    task.delay(duration, function()
+        stopTwotimeRotation()
+    end)
+end
+
+-- ===== AIMBOT FUNCTIONS =====
+local function stopAimbot()
+    aimbotActive = false
+    aimbotCurrentTarget = nil
+    aimbotTargetCount = math.max(0, aimbotTargetCount - 1)
+    
+    if twotimeRotationActive then
+        stopTwotimeRotation()
+    end
+    
+    -- Safely cancel the timer
     if aimbotActiveTimer then
-        task.cancel(aimbotActiveTimer)
+        pcall(function()
+            task.cancel(aimbotActiveTimer)
+        end)
         aimbotActiveTimer = nil
+    end
+    
+    -- Clean up prediction sphere
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
     end
 end
 
@@ -2231,45 +2343,39 @@ local function getValidTargetsForSurvivor()
     
     for _, obj in ipairs(targetFolder:GetChildren()) do
         local usernameAttr = obj:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            continue
-        end
-        
-        local humanoid = obj:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            continue
-        end
-        
-        local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
-        if not targetPart then continue end
-        
-        local distance = (targetPart.Position - myRoot.Position).Magnitude
-        if distance > aimbotMaxDistance then
-            continue
-        end
-        
-        if aimbotUseFOV then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-            if onScreen then
-                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                local distanceFromCenter = (screenVector - screenCenter).Magnitude
-                
-                if distanceFromCenter <= aimbotFOV then
-                    table.insert(targets, {
-                        obj = obj,
-                        part = targetPart,
-                        distance = distance,
-                        screenDistance = distanceFromCenter
-                    })
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
+                if targetPart then
+                    local distance = (targetPart.Position - myRoot.Position).Magnitude
+                    if distance <= aimbotMaxDistance then
+                        if aimbotUseFOV then
+                            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                            if onScreen then
+                                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                                local distanceFromCenter = (screenVector - screenCenter).Magnitude
+                                
+                                if distanceFromCenter <= aimbotFOV then
+                                    table.insert(targets, {
+                                        obj = obj,
+                                        part = targetPart,
+                                        distance = distance,
+                                        screenDistance = distanceFromCenter
+                                    })
+                                end
+                            end
+                        else
+                            table.insert(targets, {
+                                obj = obj,
+                                part = targetPart,
+                                distance = distance,
+                                screenDistance = 0
+                            })
+                        end
+                    end
                 end
             end
-        else
-            table.insert(targets, {
-                obj = obj,
-                part = targetPart,
-                distance = distance,
-                screenDistance = 0
-            })
         end
     end
     
@@ -2295,131 +2401,69 @@ local function getValidTargets()
     if not myRoot then return targets end
     
     local myTeam, myCharacter = getMyCharacterInfo()
+    local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
     
-    local targetFolder = nil
-    if myTeam == "Killer" then
-        targetFolder = SurvivorsFolder
+    local viewportSize = Camera.ViewportSize
+    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+    
+    local function processTarget(obj)
+        local usernameAttr = obj:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            return
+        end
+        
+        local humanoid = obj:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            return
+        end
+        
+        local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
+        if not targetPart then return end
+        
+        local distance = (targetPart.Position - myRoot.Position).Magnitude
+        if distance > aimbotMaxDistance then
+            return
+        end
+        
+        if aimbotUseFOV then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+            if onScreen then
+                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                local distanceFromCenter = (screenVector - screenCenter).Magnitude
+                
+                if distanceFromCenter <= aimbotFOV then
+                    table.insert(targets, {
+                        obj = obj,
+                        part = targetPart,
+                        distance = distance,
+                        screenDistance = distanceFromCenter
+                    })
+                end
+            end
+        else
+            table.insert(targets, {
+                obj = obj,
+                part = targetPart,
+                distance = distance,
+                screenDistance = 0
+            })
+        end
+    end
+    
+    if isElliot then
+        -- Elliot targets survivors
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            processTarget(survivor)
+        end
+    elseif myTeam == "Killer" then
+        -- Killers target survivors
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            processTarget(survivor)
+        end
     elseif myTeam == "Survivor" then
-        targetFolder = KillersFolder
-    else
-        return getValidTargetsFromBothFolders()
-    end
-    
-    if not targetFolder then return targets end
-    
-    local viewportSize = Camera.ViewportSize
-    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-    
-    for _, obj in ipairs(targetFolder:GetChildren()) do
-        local usernameAttr = obj:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            continue
-        end
-        
-        local humanoid = obj:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            continue
-        end
-        
-        local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
-        if not targetPart then continue end
-        
-        local distance = (targetPart.Position - myRoot.Position).Magnitude
-        if distance > aimbotMaxDistance then
-            continue
-        end
-        
-        if aimbotUseFOV then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-            if onScreen then
-                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                local distanceFromCenter = (screenVector - screenCenter).Magnitude
-                
-                if distanceFromCenter <= aimbotFOV then
-                    table.insert(targets, {
-                        obj = obj,
-                        part = targetPart,
-                        distance = distance,
-                        screenDistance = distanceFromCenter
-                    })
-                end
-            end
-        else
-            table.insert(targets, {
-                obj = obj,
-                part = targetPart,
-                distance = distance,
-                screenDistance = 0
-            })
-        end
-    end
-    
-    if aimbotUseFOV then
-        table.sort(targets, function(a, b)
-            return a.screenDistance < b.screenDistance
-        end)
-    else
-        table.sort(targets, function(a, b)
-            return a.distance < b.distance
-        end)
-    end
-    
-    return targets
-end
-
-local function getValidTargetsFromBothFolders()
-    local targets = {}
-    local myChar = lp.Character
-    if not myChar then return targets end
-    
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return targets end
-    
-    local allCharacters = getKillersAndSurvivors()
-    local viewportSize = Camera.ViewportSize
-    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-    
-    for _, obj in ipairs(allCharacters) do
-        local usernameAttr = obj:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            continue
-        end
-        
-        local humanoid = obj:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            continue
-        end
-        
-        local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
-        if not targetPart then continue end
-        
-        local distance = (targetPart.Position - myRoot.Position).Magnitude
-        if distance > aimbotMaxDistance then
-            continue
-        end
-        
-        if aimbotUseFOV then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-            if onScreen then
-                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                local distanceFromCenter = (screenVector - screenCenter).Magnitude
-                
-                if distanceFromCenter <= aimbotFOV then
-                    table.insert(targets, {
-                        obj = obj,
-                        part = targetPart,
-                        distance = distance,
-                        screenDistance = distanceFromCenter
-                    })
-                end
-            end
-        else
-            table.insert(targets, {
-                obj = obj,
-                part = targetPart,
-                distance = distance,
-                screenDistance = 0
-            })
+        -- Survivors target killers
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            processTarget(killer)
         end
     end
     
@@ -2438,30 +2482,32 @@ end
 
 local function startAimbotForDuration(duration, customSmoothness)
     if not aimbotEnabled then return end
-    
-    if aimbotActive then
-        return
-    end
+    if aimbotActive then return end
     
     local myTeam, myCharacter = getMyCharacterInfo()
+    local isTwotime = (myTeam == "Survivor" and myCharacter == "TwoTime")
     local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
-    local targets
     
-    if isElliot then
-        targets = getValidTargetsForSurvivor()
-    else
-        targets = getValidTargets()
-    end
-    
-    if #targets == 0 then 
-        return 
-    end
+    local targets = getValidTargets()
+    if #targets == 0 then return end
     
     local target = targets[1]
     aimbotCurrentTarget = target.obj
     aimbotActive = true
     aimbotTargetCount = aimbotTargetCount + 1
     
+    -- For Twotime, use character rotation (no shiftlock, can move freely)
+    if isTwotime then
+        startTwotimeRotation(aimbotCurrentTarget, duration)
+        -- Clear aimbotActive after duration
+        task.delay(duration, function()
+            aimbotActive = false
+            aimbotCurrentTarget = nil
+        end)
+        return
+    end
+    
+    -- For all other characters, use camera aimbot with shiftlock
     setShiftLock(true)
     
     local originalSmoothness = aimbotSmoothness
@@ -2471,8 +2517,11 @@ local function startAimbotForDuration(duration, customSmoothness)
     
     createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0))
     
+    -- Safely cancel existing timer
     if aimbotActiveTimer then
-        task.cancel(aimbotActiveTimer)
+        pcall(function()
+            task.cancel(aimbotActiveTimer)
+        end)
         aimbotActiveTimer = nil
     end
     
@@ -2497,6 +2546,14 @@ local function updateAimbot()
     if aimbotConnection then return end
     
     aimbotConnection = RunService.RenderStepped:Connect(function()
+        -- Skip camera movement for Twotime (they use character rotation)
+        local myTeam, myCharacter = getMyCharacterInfo()
+        local isTwotime = (myTeam == "Survivor" and myCharacter == "TwoTime")
+        
+        if isTwotime then
+            return
+        end
+        
         if not aimbotEnabled or not aimbotActive or not aimbotCurrentTarget then
             return
         end
@@ -2571,24 +2628,21 @@ local function setupInputHook()
         
         local myTeam, myCharacter = getMyCharacterInfo()
         local isKiller = (myTeam == "Killer")
-        local isSurvivor = (myTeam == "Survivor")
         
         local isShedletsky = (myTeam == "Survivor" and myCharacter == "Shedletsky")
         local isChance = (myTeam == "Survivor" and myCharacter == "Chance")
         local isTwoTime = (myTeam == "Survivor" and myCharacter == "TwoTime")
         local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
         local isJaneDoe = (myTeam == "Survivor" and myCharacter == "JaneDoe")
+        local isGuest1337 = (myTeam == "Survivor" and myCharacter == "Guest1337")
         
         local isSlasher = (myTeam == "Killer" and myCharacter == "Slasher")
         local isJohnDoe = (myTeam == "Killer" and myCharacter == "JohnDoe")
         local is1x1x1x1 = (myTeam == "Killer" and myCharacter == "1x1x1x1")
-        local isGuest1337 = (myTeam == "Survivor" and myCharacter == "Guest1337")
         
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if not aimbotEnabled then return end
-            if not isKiller then
-                return
-            end
+            if not isKiller then return end
             startAimbotForDuration(0.65)
         end
         
@@ -2627,9 +2681,7 @@ local function setupInputHook()
             
             if input.KeyCode == Enum.KeyCode.R then
                 if not aimbotEnabled then return end
-                if not isGuest1337 then
-                    return
-                end
+                if not isGuest1337 then return end
                 startAimbotForDuration(0.95)
             end
         end
@@ -2947,7 +2999,7 @@ TechTab:CreateButton({
     end
 })
 
--- Aimbot Tab
+-- ===== AIMBOT TAB (UPDATED) =====
 local AimbotSection = AimbotTab:CreateSection("Aimbot Settings")
 
 local AimbotToggle = AimbotTab:CreateToggle({
@@ -2961,7 +3013,7 @@ local AimbotToggle = AimbotTab:CreateToggle({
             if aimbotUseFOV then
                 createFOVCircle()
             end
-            SendNotif("Aimbot", "Enabled - Left click to target (All Killers)", 2)
+            SendNotif("Aimbot", "Enabled", 2)
         else
             if aimbotConnection then
                 aimbotConnection:Disconnect()
@@ -2975,6 +3027,30 @@ local AimbotToggle = AimbotTab:CreateToggle({
             positionHistory = {}
             SendNotif("Aimbot", "Disabled", 1)
         end
+    end
+})
+
+-- Keybind to toggle Aimbot
+AimbotTab:CreateKeybind({
+    Name = "Toggle Aimbot (Keybind)",
+    CurrentKeybind = "Z",
+    HoldToInteract = false,
+    Flag = "AimbotToggleKey",
+    Callback = function()
+        local newState = not aimbotEnabled
+        AimbotToggle:Set(newState)
+        SendNotif("Aimbot", newState and "Enabled" or "Disabled", 1)
+    end
+})
+
+-- Backstab Mode Toggle (Silent, no notifications)
+AimbotTab:CreateToggle({
+    Name = "Face same side as killer (Backstab mode)",
+    CurrentValue = false,
+    Flag = "BackstabMode",
+    Callback = function(Value)
+        faceSameSideAsKiller = Value
+        -- Silent toggle - no notification
     end
 })
 
@@ -3062,17 +3138,12 @@ AimbotTab:CreateParagraph({
               "  - Guest1337 R: 0.95s\n" ..
               "  - Shedletsky Q: 1.1s\n" ..
               "  - Chance E: 1.1s\n" ..
-              "  - TwoTime Q: 0.4s\n" ..
+              "  - TwoTime Q: 0.4s (CHARACTER ROTATION, can move freely)\n" ..
               "  - Elliot Q: 0.5s (TARGETS SURVIVORS)\n" ..
               "  - Jane Doe E: 0.9s\n" ..
-              "• MAX 1 TARGET AT A TIME\n" ..
-              "• SHIFTLOCK ENABLED (only if not already on)\n" ..
-              "• Target Selection: FOV Mode (with circle) or Nearest Mode\n" ..
-              "• PREDICTION: Red sphere appears ONLY when targeting\n" ..
-              "• POSITION-BASED prediction - tracks actual position changes\n" ..
-              "• Sphere moves EXACTLY in the direction the target moves\n" ..
-              "• Smooth sphere movement (Lerp)\n" ..
-              "• Fixed camera aiming - aims at predicted position\n" ..
+              "• Press Z to toggle Aimbot on/off\n" ..
+              "• BACKSTAB MODE: When enabled, TwoTime faces the EXACT SAME direction as the killer\n" ..
+              "• PREDICTION: Red sphere appears when targeting\n" ..
               "• FOV circle appears only in FOV Mode"
 })
 
@@ -3217,7 +3288,7 @@ refreshUIRefs()
 
 print("wahoo wario time")
 print("GUEST1337 & 7N7: Now press Q button instead of firing remote code")
-print("DUSEKKAR: Fixed remote path for Plasma Beam")
-print("ELLIOT AIMBOT: Q ability (0.5s) targets SURVIVORS")
-print("7N7 AUTO CLONE: Rotates to face killer for 0.3s when clone is used, Presses Q")
-print("JANE DOE: Auto parry (20 studs, sounds: 92445809840331 and 83851356262523), E ability 0.9s aimbot")
+print("AIMBOT: Press Z to toggle on/off")
+print("BACKSTAB MODE: When enabled, TwoTime faces the EXACT SAME direction as the killer")
+print("TWOTIME: Q ability (0.4s) uses character rotation, can move freely")
+print("DUSEKKAR: Press X to toggle, Press F to fire")
