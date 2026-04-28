@@ -11,6 +11,7 @@ local lp = Players.LocalPlayer
 local PlayerGui = lp:WaitForChild("PlayerGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
 
 -- Remotes with error handling (updated for Dusekkar)
 local testRemote = nil
@@ -155,7 +156,6 @@ local ragingPaceAutoParry = false
 local error404AutoParry = false
 local ragingPaceAutoPunish = false
 local onexOnexOnexOneAutoPunish = false
-local doubleblocktech = false
 local blockdelay = 0
 local detectionRange = 18
 local messageWhenAutoBlockOn = false
@@ -167,6 +167,8 @@ local killerCirclesVisible = false
 local autoblocktype = "Block"
 local autoSwitchBlockCharge = false
 local originalBlockType = "Block"
+local autoBloodOrb = false
+local bloodOrbConnection = nil
 
 -- ===== AIMBOT VARIABLES =====
 local aimbotEnabled = false
@@ -194,15 +196,6 @@ local mousePositionModule = nil
 local currentTarget = nil
 local dusekkarActive = false
 local dusekkarTimer = nil
-
--- ===== HDT VARIABLES =====
-local hitboxDraggingTech = false
-local _hitboxDraggingDebounce = false
-local HITBOX_DRAG_DURATION = 1.4
-local Dspeed = 5.6
-local Ddelay = 0
-local hdtActive = false
-local hdtConnection = nil
 
 -- ===== PREDICTION VARIABLES =====
 local BASE_PREDICTION_DISTANCE = 4
@@ -862,6 +855,20 @@ local function amINoli()
     return false, nil
 end
 
+local function amISixer()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Sixer" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
 -- ===== BASIC FUNCTIONS =====
 local function refreshUIRefs()
     local main = PlayerGui:FindFirstChild("MainUI")
@@ -961,123 +968,77 @@ local function isHelpless()
     return false
 end
 
--- ===== HDT FUNCTIONS =====
-local function getKillerHRP(killerModel)
-    if not killerModel then return nil end
-    if killerModel:FindFirstChild("HumanoidRootPart") then
-        return killerModel:FindFirstChild("HumanoidRootPart")
-    end
-    if killerModel.PrimaryPart then
-        return killerModel.PrimaryPart
-    end
-    return killerModel:FindFirstChildWhichIsA("BasePart", true)
-end
-
-local function hasPunchCharge()
-    local success, charges = pcall(function()
-        return lp.PlayerGui.MainUI.AbilityContainer.Punch.Charges.Text
-    end)
-    if success and charges then
-        return charges == "1"
-    end
-    return false
-end
-
-local function getKillerHDTStopTime(killerModel)
-    if not killerModel then return HITBOX_DRAG_DURATION end
-    local killerName = killerModel.Name
-    return killerHDTStopTimes[killerName] or HITBOX_DRAG_DURATION
-end
-
-local function beginDragIntoKiller(killerModel)
-    if _hitboxDraggingDebounce then return end
-    if not killerModel or not killerModel.Parent then return end
-    if not hitboxDraggingTech then return end
+-- ===== AUTO BLOOD ORB FUNCTION =====
+local function bringBloodOrbsToPlayer()
+    if not autoBloodOrb then return end
     
-    local char = lp and lp.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not humanoid then return end
-
-    local targetHRP = getKillerHRP(killerModel)
-    if not targetHRP then return end
-
-    _hitboxDraggingDebounce = true
-    hdtActive = true
-
-    local killerPos = targetHRP.Position
-    local myPos = hrp.Position
-    local direction = (Vector3.new(killerPos.X, myPos.Y, killerPos.Z) - myPos).Unit
-    hrp.CFrame = CFrame.lookAt(myPos, myPos + direction)
-
-    local oldWalk = humanoid.WalkSpeed
-    local oldJump = humanoid.JumpPower
-    local oldPlatformStand = humanoid.PlatformStand
-
-    humanoid.WalkSpeed = 0
-    humanoid.JumpPower = 0
-    humanoid.PlatformStand = false
-
-    local bv = Instance.new("BodyVelocity")
-    bv.MaxForce = Vector3.new(1e5, 0, 1e5)
-    bv.Velocity = Vector3.new(0,0,0)
-    bv.Parent = hrp
-
-    local killerStopTime = getKillerHDTStopTime(killerModel)
-
-    hdtConnection = RunService.Heartbeat:Connect(function(dt)
-        if not hdtActive then
-            if hdtConnection then
-                hdtConnection:Disconnect()
-                hdtConnection = nil
-            end
-            if bv and bv.Parent then pcall(function() bv:Destroy() end) end
-            humanoid.WalkSpeed = oldWalk
-            humanoid.JumpPower = oldJump
-            humanoid.PlatformStand = oldPlatformStand
-            _hitboxDraggingDebounce = false
-            return
-        end
-
-        if not (char and char.Parent) or not (killerModel and killerModel.Parent) then
-            hdtActive = false
-            return
-        end
-
-        targetHRP = getKillerHRP(killerModel)
-        if not targetHRP then
-            hdtActive = false
-            return
-        end
-
-        local currentKillerPos = targetHRP.Position
-        local currentMyPos = hrp.Position
-        local currentDirection = (Vector3.new(currentKillerPos.X, currentMyPos.Y, currentKillerPos.Z) - currentMyPos).Unit
-        hrp.CFrame = CFrame.lookAt(currentMyPos, currentMyPos + currentDirection)
-
-        local toTarget = (targetHRP.Position - hrp.Position)
-        local dist = toTarget.Magnitude
+    local isSixer = amISixer()
+    if not isSixer then return end
+    
+    -- Check if BloodUI exists
+    local bloodUI = PlayerGui:FindFirstChild("TemporaryUI")
+    if bloodUI then
+        bloodUI = bloodUI:FindFirstChild("BloodUI")
+    end
+    
+    if bloodUI then
+        local blood = bloodUI:FindFirstChild("Blood")
+        local timer = bloodUI:FindFirstChild("Timer")
         
-        local horiz = Vector3.new(toTarget.X, 0, toTarget.Z)
-        if horiz.Magnitude > 0.01 then
-            local dir = horiz.Unit
-            bv.Velocity = Vector3.new(dir.X * Dspeed, bv.Velocity.Y, dir.Z * Dspeed)
-        else
-            bv.Velocity = Vector3.new(0, bv.Velocity.Y, 0)
+        if blood then
+            local bloodCount = blood:FindFirstChild("Count")
+            local bloodMax = blood:FindFirstChild("Max")
+            
+            if bloodCount and bloodMax then
+                local currentCount = bloodCount:FindFirstChild("ContentText")
+                local maxCount = bloodMax:FindFirstChild("ContextText")
+                
+                if currentCount and maxCount then
+                    if currentCount.Text == maxCount.Text then
+                        return -- Storage is full
+                    end
+                end
+            end
         end
-
-        if dist <= 2.0 or hasPunchCharge() then
-            hdtActive = false
-            return
+        
+        if timer then
+            local timeText = timer:FindFirstChild("Time")
+            if timeText then
+                local contentText = timeText:FindFirstChild("ContentText")
+                if contentText then
+                    local timeValue = contentText.Text
+                    if timeValue ~= "0" and timeValue ~= "TIME'S UP" then
+                        return -- Timer is active
+                    end
+                end
+            end
         end
-    end)
-
-    task.delay(killerStopTime, function()
-        if hdtActive then
-            hdtActive = false
+    end
+    
+    -- Bring blood orbs to player
+    local bloodOrbContainer = Workspace:FindFirstChild("Map")
+    if bloodOrbContainer then
+        bloodOrbContainer = bloodOrbContainer:FindFirstChild("vrrebluxBloodOrbContainer")
+    end
+    
+    if not bloodOrbContainer then return end
+    
+    local char = lp.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    for _, orb in ipairs(bloodOrbContainer:GetChildren()) do
+        if orb.Name == "BloodOrb" and orb:IsA("BasePart") then
+            pcall(function()
+                local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
+                local tween = TweenService:Create(orb, tweenInfo, {Position = hrp.Position})
+                tween:Play()
+                tween.Completed:Wait()
+            end)
         end
-    end)
+    end
 end
 
 -- ===== SILENT AIM HOOK SETUP =====
@@ -1137,7 +1098,6 @@ local function firePlasmaBeam()
         return false
     end
     
-    -- Updated remote call for Dusekkar
     local args = {
         "UseActorAbility",
         {
@@ -1449,7 +1409,7 @@ local function getAllCharactersByName(name)
                 end
             end
         end
-    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "c00lkidd" or name == "Noli" then
+    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "c00lkidd" or name == "Noli" or name == "Sixer" then
         if KillersFolder then
             for _, killer in ipairs(KillersFolder:GetChildren()) do
                 if killer.Name == name then
@@ -1479,7 +1439,6 @@ local function checkSpecialKillerActions()
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
     
-    -- Trigger sound IDs for survivor abilities (including Jane Doe)
     local triggerSoundIds = {
         ["12222225"] = true,
         ["132596270805754"] = true,
@@ -1493,7 +1452,6 @@ local function checkSpecialKillerActions()
         ["92445809840331"] = true,
     }
     
-    -- Guest1337 block animation IDs
     local guest1337BlockAnims = {
         ["95802026624883"] = true,
         ["82036084568393"] = true,
@@ -1505,7 +1463,6 @@ local function checkSpecialKillerActions()
         ["87259391926321"] = true,
     }
     
-    -- Chance animation IDs
     local chanceAnimIds = {
         ["133491532453922"] = true,
         ["76649505662612"] = true,
@@ -1514,7 +1471,6 @@ local function checkSpecialKillerActions()
         ["73697316043485"] = true,
     }
     
-    -- Check for Raging Pace Auto Punish (Slasher vs Guest1337 block) - PRESS R
     if isSlasher and ragingPaceAutoPunish then
         local allGuest1337s = getAllCharactersByName("Guest1337")
         
@@ -1547,7 +1503,6 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Mass Infection Auto Punish (1x1x1x1 vs Guest1337 block) - PRESS Q
     if is1x1x1x1 and onexOnexOnexOneAutoPunish then
         local allGuest1337s = getAllCharactersByName("Guest1337")
         
@@ -1580,9 +1535,7 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Raging Pace Auto Parry (Slasher vs Shedletsky/TwoTime/Chance/JaneDoe) - PRESS R
     if isSlasher and ragingPaceAutoParry then
-        -- Check Shedletsky
         local allShedletskies = getAllCharactersByName("Shedletsky")
         for _, shedletsky in ipairs(allShedletskies) do
             local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
@@ -1608,7 +1561,6 @@ local function checkSpecialKillerActions()
             end
         end
         
-        -- Check TwoTime
         local allTwoTimes = getAllCharactersByName("TwoTime")
         for _, twotime in ipairs(allTwoTimes) do
             local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
@@ -1634,7 +1586,6 @@ local function checkSpecialKillerActions()
             end
         end
         
-        -- Check Chance
         local allChances = getAllCharactersByName("Chance")
         for _, chance in ipairs(allChances) do
             local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
@@ -1680,7 +1631,6 @@ local function checkSpecialKillerActions()
             end
         end
         
-        -- Check Jane Doe (20 stud range like Shedletsky)
         local allJaneDoes = getAllCharactersByName("JaneDoe")
         for _, janeDoe in ipairs(allJaneDoes) do
             local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
@@ -1707,9 +1657,7 @@ local function checkSpecialKillerActions()
         end
     end
     
-    -- Check for Error 404 Auto Parry (JohnDoe vs Shedletsky/TwoTime/Chance/JaneDoe) - PRESS R
     if isJohnDoe and error404AutoParry then
-        -- Check Shedletsky
         local allShedletskies = getAllCharactersByName("Shedletsky")
         for _, shedletsky in ipairs(allShedletskies) do
             local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
@@ -1735,7 +1683,6 @@ local function checkSpecialKillerActions()
             end
         end
         
-        -- Check TwoTime
         local allTwoTimes = getAllCharactersByName("TwoTime")
         for _, twotime in ipairs(allTwoTimes) do
             local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
@@ -1761,7 +1708,6 @@ local function checkSpecialKillerActions()
             end
         end
         
-        -- Check Chance
         local allChances = getAllCharactersByName("Chance")
         for _, chance in ipairs(allChances) do
             local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
@@ -1807,7 +1753,6 @@ local function checkSpecialKillerActions()
             end
         end
         
-        -- Check Jane Doe (20 stud range like Shedletsky)
         local allJaneDoes = getAllCharactersByName("JaneDoe")
         for _, janeDoe in ipairs(allJaneDoes) do
             local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
@@ -1980,6 +1925,7 @@ local function checkSpecialKillerStatus()
     local allOnexOnexOnexOnes = getAllCharactersByName("1x1x1x1")
     local allc00lkidds = getAllCharactersByName("c00lkidd")
     local allNolis = getAllCharactersByName("Noli")
+    local allSixers = getAllCharactersByName("Sixer")
     
     for _, slasher in ipairs(allSlashers) do
         local usernameAttr = slasher:GetAttribute("Username")
@@ -2046,6 +1992,19 @@ local function checkSpecialKillerStatus()
         end
     end
     
+    for _, sixer in ipairs(allSixers) do
+        local usernameAttr = sixer:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            if not isPlayingAsSpecialKiller or currentKillerType ~= "Sixer" then
+                isPlayingAsSpecialKiller = true
+                currentKillerType = "Sixer"
+                originalFacingCheckState = facingCheckEnabled
+                facingCheckEnabled = false
+            end
+            return true
+        end
+    end
+    
     if isPlayingAsSpecialKiller then
         isPlayingAsSpecialKiller = false
         currentKillerType = nil
@@ -2099,8 +2058,7 @@ local function updateDetectionRangeVisuals()
                     local circleColor = Color3.fromRGB(255, 255, 0)
                     
                     if survivor.Name == "Chance" then
-                        visualRange = 90
-                        circleColor = Color3.fromRGB(255, 0, 255)
+                        visualRange = 90                        circleColor = Color3.fromRGB(255, 0, 255)
                     elseif survivor.Name == "TwoTime" then
                         visualRange = 30
                         circleColor = Color3.fromRGB(0, 255, 255)
@@ -2185,7 +2143,6 @@ local function stopTwotimeRotation()
         twotimeRotationConnection = nil
     end
     
-    -- Clean up sphere
     if currentTargetSphere then
         pcall(function() currentTargetSphere:Destroy() end)
         currentTargetSphere = nil
@@ -2209,7 +2166,6 @@ local function startTwotimeRotation(targetModel, duration)
     twotimeRotationActive = true
     
     if faceSameSideAsKiller then
-        -- BACKSTAB MODE: Copy killer's exact rotation
         twotimeRotationConnection = RunService.Heartbeat:Connect(function()
             if not twotimeRotationActive then
                 if twotimeRotationConnection then
@@ -2226,7 +2182,6 @@ local function startTwotimeRotation(targetModel, duration)
             
             local killerHrp = targetModel:FindFirstChild("HumanoidRootPart")
             if killerHrp then
-                -- Copy the killer's exact rotation direction
                 local killerLook = killerHrp.CFrame.LookVector
                 if killerLook.Magnitude > 0 then
                     hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + killerLook)
@@ -2234,7 +2189,6 @@ local function startTwotimeRotation(targetModel, duration)
             end
         end)
     else
-        -- Normal mode: Create prediction sphere and aim at it
         createTargetSphere(targetModel, Color3.fromRGB(255, 0, 0))
         
         twotimeRotationConnection = RunService.Heartbeat:Connect(function()
@@ -2274,7 +2228,6 @@ local function startTwotimeRotation(targetModel, duration)
         end)
     end
     
-    -- Stop after duration
     task.delay(duration, function()
         stopTwotimeRotation()
     end)
@@ -2290,7 +2243,6 @@ local function stopAimbot()
         stopTwotimeRotation()
     end
     
-    -- Safely cancel the timer
     if aimbotActiveTimer then
         pcall(function()
             task.cancel(aimbotActiveTimer)
@@ -2298,7 +2250,6 @@ local function stopAimbot()
         aimbotActiveTimer = nil
     end
     
-    -- Clean up prediction sphere
     if currentTargetSphere then
         pcall(function() currentTargetSphere:Destroy() end)
         currentTargetSphere = nil
@@ -2307,89 +2258,6 @@ local function stopAimbot()
         pcall(function() currentSphereConnection:Disconnect() end)
         currentSphereConnection = nil
     end
-end
-
-local function getKillersAndSurvivors()
-    local characters = {}
-    
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            table.insert(characters, killer)
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            table.insert(characters, survivor)
-        end
-    end
-    
-    return characters
-end
-
-local function getValidTargetsForSurvivor()
-    local targets = {}
-    local myChar = lp.Character
-    if not myChar then return targets end
-    
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return targets end
-    
-    local targetFolder = SurvivorsFolder
-    if not targetFolder then return targets end
-    
-    local viewportSize = Camera.ViewportSize
-    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-    
-    for _, obj in ipairs(targetFolder:GetChildren()) do
-        local usernameAttr = obj:GetAttribute("Username")
-        if not (usernameAttr and usernameAttr == lp.Name) then
-            local humanoid = obj:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
-                if targetPart then
-                    local distance = (targetPart.Position - myRoot.Position).Magnitude
-                    if distance <= aimbotMaxDistance then
-                        if aimbotUseFOV then
-                            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                            if onScreen then
-                                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                                local distanceFromCenter = (screenVector - screenCenter).Magnitude
-                                
-                                if distanceFromCenter <= aimbotFOV then
-                                    table.insert(targets, {
-                                        obj = obj,
-                                        part = targetPart,
-                                        distance = distance,
-                                        screenDistance = distanceFromCenter
-                                    })
-                                end
-                            end
-                        else
-                            table.insert(targets, {
-                                obj = obj,
-                                part = targetPart,
-                                distance = distance,
-                                screenDistance = 0
-                            })
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    if aimbotUseFOV then
-        table.sort(targets, function(a, b)
-            return a.screenDistance < b.screenDistance
-        end)
-    else
-        table.sort(targets, function(a, b)
-            return a.distance < b.distance
-        end)
-    end
-    
-    return targets
 end
 
 local function getValidTargets()
@@ -2451,17 +2319,14 @@ local function getValidTargets()
     end
     
     if isElliot then
-        -- Elliot targets survivors
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
             processTarget(survivor)
         end
     elseif myTeam == "Killer" then
-        -- Killers target survivors
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
             processTarget(survivor)
         end
     elseif myTeam == "Survivor" then
-        -- Survivors target killers
         for _, killer in ipairs(KillersFolder:GetChildren()) do
             processTarget(killer)
         end
@@ -2480,13 +2345,36 @@ local function getValidTargets()
     return targets
 end
 
+-- Get Sixer Carving Slash charges
+local function getSixerCarvingSlashCharges()
+    local success, charges = pcall(function()
+        local abilityContainer = lp.PlayerGui.MainUI.AbilityContainer
+        if abilityContainer then
+            local carvingSlash = abilityContainer:FindFirstChild("Carving Slash") or abilityContainer:FindFirstChild("CarvingSlash")
+            if carvingSlash then
+                local chargesObj = carvingSlash:FindFirstChild("Charges")
+                if chargesObj then
+                    local contextText = chargesObj:FindFirstChild("ContextText")
+                    if contextText then
+                        return tonumber(contextText.Text) or 0
+                    end
+                end
+            end
+        end
+        return 0
+    end)
+    if success then
+        return charges
+    end
+    return 0
+end
+
 local function startAimbotForDuration(duration, customSmoothness)
     if not aimbotEnabled then return end
     if aimbotActive then return end
     
     local myTeam, myCharacter = getMyCharacterInfo()
     local isTwotime = (myTeam == "Survivor" and myCharacter == "TwoTime")
-    local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
     
     local targets = getValidTargets()
     if #targets == 0 then return end
@@ -2496,10 +2384,8 @@ local function startAimbotForDuration(duration, customSmoothness)
     aimbotActive = true
     aimbotTargetCount = aimbotTargetCount + 1
     
-    -- For Twotime, use character rotation (no shiftlock, can move freely)
     if isTwotime then
         startTwotimeRotation(aimbotCurrentTarget, duration)
-        -- Clear aimbotActive after duration
         task.delay(duration, function()
             aimbotActive = false
             aimbotCurrentTarget = nil
@@ -2507,7 +2393,6 @@ local function startAimbotForDuration(duration, customSmoothness)
         return
     end
     
-    -- For all other characters, use camera aimbot with shiftlock
     setShiftLock(true)
     
     local originalSmoothness = aimbotSmoothness
@@ -2517,7 +2402,6 @@ local function startAimbotForDuration(duration, customSmoothness)
     
     createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0))
     
-    -- Safely cancel existing timer
     if aimbotActiveTimer then
         pcall(function()
             task.cancel(aimbotActiveTimer)
@@ -2546,7 +2430,6 @@ local function updateAimbot()
     if aimbotConnection then return end
     
     aimbotConnection = RunService.RenderStepped:Connect(function()
-        -- Skip camera movement for Twotime (they use character rotation)
         local myTeam, myCharacter = getMyCharacterInfo()
         local isTwotime = (myTeam == "Survivor" and myCharacter == "TwoTime")
         
@@ -2622,66 +2505,115 @@ local function createFOVCircle()
     end)
 end
 
+-- ===== SIXER LEFT CLICK HANDLER (Based on Carving Slash charges) =====
+local function handleSixerLeftClick()
+    local charges = getSixerCarvingSlashCharges()
+    
+    if charges >= 1 then
+        -- Has at least 1 charge -> 2 second aimbot
+        startAimbotForDuration(2.0)
+    else
+        -- No charges -> 0.8 second aimbot
+        startAimbotForDuration(0.8)
+    end
+end
+
+-- ===== NOLI Q HANDLER =====
+local function startNoliQAimbot()
+    startAimbotForDuration(2.5)
+end
+
+-- ===== AUTO BLOOD ORB LOOP =====
+local function startBloodOrbLoop()
+    if bloodOrbConnection then
+        bloodOrbConnection:Disconnect()
+        bloodOrbConnection = nil
+    end
+    
+    if not autoBloodOrb then return end
+    
+    bloodOrbConnection = RunService.Heartbeat:Connect(function()
+        pcall(bringBloodOrbsToPlayer)
+    end)
+end
+
+-- ===== INPUT HOOK =====
 local function setupInputHook()
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         
         local myTeam, myCharacter = getMyCharacterInfo()
         local isKiller = (myTeam == "Killer")
-        
         local isShedletsky = (myTeam == "Survivor" and myCharacter == "Shedletsky")
         local isChance = (myTeam == "Survivor" and myCharacter == "Chance")
         local isTwoTime = (myTeam == "Survivor" and myCharacter == "TwoTime")
         local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
         local isJaneDoe = (myTeam == "Survivor" and myCharacter == "JaneDoe")
         local isGuest1337 = (myTeam == "Survivor" and myCharacter == "Guest1337")
-        
         local isSlasher = (myTeam == "Killer" and myCharacter == "Slasher")
         local isJohnDoe = (myTeam == "Killer" and myCharacter == "JohnDoe")
         local is1x1x1x1 = (myTeam == "Killer" and myCharacter == "1x1x1x1")
+        local isSixer = (myTeam == "Killer" and myCharacter == "Sixer")
+        local isc00lkidd = (myTeam == "Killer" and myCharacter == "c00lkidd")
+        local isNoli = (myTeam == "Killer" and myCharacter == "Noli")
         
+        -- Left Click handling
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if not aimbotEnabled then return end
-            if not isKiller then return end
-            startAimbotForDuration(0.65)
+            
+            if isSixer then
+                handleSixerLeftClick()
+            elseif isKiller then
+                startAimbotForDuration(0.65)
+            end
         end
         
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            if input.KeyCode == Enum.KeyCode.Q then
-                if not aimbotEnabled then return end
-                
-                if isJohnDoe then
-                    startAimbotForDuration(4.5)
-                elseif isShedletsky then
-                    startAimbotForDuration(1.1)
-                elseif isTwoTime then
-                    startAimbotForDuration(0.4)
-                elseif is1x1x1x1 then
-                    startAimbotForDuration(2.1)
-                elseif isSlasher then
-                    startAimbotForDuration(0.95)
-                elseif isElliot then
-                    startAimbotForDuration(0.5)
-                end
-            end
+        -- Q key abilities
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Q then
+            if not aimbotEnabled then return end
             
-            if input.KeyCode == Enum.KeyCode.E then
-                if not aimbotEnabled then return end
-                
-                if isChance then
-                    startAimbotForDuration(1.1)
-                elseif is1x1x1x1 then
-                    startAimbotForDuration(1.2)
-                elseif isSlasher then
-                    startAimbotForDuration(0.5)
-                elseif isJaneDoe then
-                    startAimbotForDuration(0.9)
-                end
+            if isNoli then
+                startNoliQAimbot()
+            elseif isSixer then
+                startAimbotForDuration(1.45)
+            elseif isJohnDoe then
+                startAimbotForDuration(4.5)
+            elseif isShedletsky then
+                startAimbotForDuration(1.1)
+            elseif isTwoTime then
+                startAimbotForDuration(0.4)
+            elseif is1x1x1x1 then
+                startAimbotForDuration(2.1)
+            elseif isSlasher then
+                startAimbotForDuration(0.95)
+            elseif isElliot then
+                startAimbotForDuration(0.5)
             end
+        end
+        
+        -- E key abilities
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.E then
+            if not aimbotEnabled then return end
             
-            if input.KeyCode == Enum.KeyCode.R then
-                if not aimbotEnabled then return end
-                if not isGuest1337 then return end
+            if isc00lkidd then
+                startAimbotForDuration(0.6)
+            elseif isSixer then
+                startAimbotForDuration(1.0)
+            elseif isChance then
+                startAimbotForDuration(1.1)
+            elseif is1x1x1x1 then
+                startAimbotForDuration(1.2)
+            elseif isSlasher then
+                startAimbotForDuration(0.5)
+            elseif isJaneDoe then
+                startAimbotForDuration(0.9)
+            end
+        end
+        
+        -- R key abilities
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.R then
+            if not aimbotEnabled then return end
+            if isGuest1337 then
                 startAimbotForDuration(0.95)
             end
         end
@@ -2732,6 +2664,7 @@ local TechTab = Window:CreateTab("Techs", 4483362458)
 local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
+-- Auto Block Tab
 AutoBlockTab:CreateKeybind({
     Name = "1. Guest Auto Block (Presses Q)",
     CurrentKeybind = "G",
@@ -2927,79 +2860,36 @@ AutoBlockTab:CreateToggle({
     end
 })
 
+-- Tech Tab (Only Auto Blood Orb)
 TechTab:CreateToggle({
-    Name = "Double Punch Tech",
+    Name = "Auto Blood Orb (Sixer)",
     CurrentValue = false,
-    Flag = "doubleblockTechtoggle",
+    Flag = "AutoBloodOrbToggle",
     Callback = function(Value)
-        doubleblocktech = Value
-    end
-})
-
-TechTab:CreateToggle({
-    Name = "HDT (Hitbox Dragging Tech)",
-    CurrentValue = false,
-    Flag = "HitboxDraggingToggle",
-    Callback = function(Value)
-        hitboxDraggingTech = Value
-        if not Value and hdtActive then
-            hdtActive = false
+        autoBloodOrb = Value
+        if Value then
+            startBloodOrbLoop()
+            SendNotif("Auto Blood Orb", "Enabled - Automatically collects blood orbs", 2)
+        else
+            if bloodOrbConnection then
+                bloodOrbConnection:Disconnect()
+                bloodOrbConnection = nil
+            end
+            SendNotif("Auto Blood Orb", "Disabled", 1)
         end
-        SendNotif("HDT", Value and "Enabled - Drags hitbox towards killer (Block only, stops when punch gained)" or "Disabled", 2)
-    end
-})
-
-TechTab:CreateInput({
-    Name = "HDT speed",
-    PlaceholderText = "5.6",
-    RemoveTextAfterFocusLost = false,
-    Flag = "HDTspeed",
-    Callback = function(Text)
-        Dspeed = tonumber(Text) or 5.6
-    end
-})
-
-TechTab:CreateInput({
-    Name = "HDT delay",
-    PlaceholderText = "0",
-    RemoveTextAfterFocusLost = false,
-    Flag = "HDTdelay",
-    Callback = function(Text)
-        Ddelay = tonumber(Text) or 0
     end
 })
 
 TechTab:CreateParagraph({
-    Title = "Hitbox Dragging tech",
-    Content = "Only triggers on Block (not Charge/Clone). Instantly aims at killer and drags you towards them. Stops automatically when you gain a punch charge."
+    Title = "Auto Blood Orb Info",
+    Content = "When playing as Sixer, automatically brings all Blood Orbs to you.\n" ..
+              "Won't collect if:\n" ..
+              "• Blood storage is full\n" ..
+              "• Timer is active (not 0 or TIME'S UP)\n" ..
+              "• You are not playing as Sixer"
 })
 
-TechTab:CreateButton({
-    Name = "Fake Lag Tech",
-    Callback = function()
-        local char = lp.Character
-        if not char then return end
-        
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
-        
-        local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
-        
-        for _, t in ipairs(animator:GetPlayingAnimationTracks()) do
-            local id = tostring(t.Animation.AnimationId):match("%d+")
-            if id == "136252471123500" then
-                t:Stop()
-            end
-        end
-        
-        local anim = Instance.new("Animation")
-        anim.AnimationId = "rbxassetid://136252471123500"
-        local track = animator:LoadAnimation(anim)
-        track:Play()
-    end
-})
-
--- ===== AIMBOT TAB (UPDATED) =====
+-- Aimbot Tab
 local AimbotSection = AimbotTab:CreateSection("Aimbot Settings")
 
 local AimbotToggle = AimbotTab:CreateToggle({
@@ -3030,7 +2920,6 @@ local AimbotToggle = AimbotTab:CreateToggle({
     end
 })
 
--- Keybind to toggle Aimbot
 AimbotTab:CreateKeybind({
     Name = "Toggle Aimbot (Keybind)",
     CurrentKeybind = "Z",
@@ -3043,14 +2932,12 @@ AimbotTab:CreateKeybind({
     end
 })
 
--- Backstab Mode Toggle (Silent, no notifications)
 AimbotTab:CreateToggle({
     Name = "Face same side as killer (Backstab mode)",
     CurrentValue = false,
     Flag = "BackstabMode",
     Callback = function(Value)
         faceSameSideAsKiller = Value
-        -- Silent toggle - no notification
     end
 })
 
@@ -3129,20 +3016,28 @@ local AimbotFOV = AimbotTab:CreateSlider({
 
 AimbotTab:CreateParagraph({
     Title = "Aimbot Features",
-    Content = "• LEFT CLICK: 0.65s (ALL KILLERS)\n" ..
-              "• KILLERS:\n" ..
-              "  - Slasher Q: 0.95s | E: 0.5s\n" ..
-              "  - JohnDoe Q (Corrupt Energy): 4.5s\n" ..
-              "  - 1x1x1x1 Q: 2.1s | E: 1.2s\n" ..
-              "• SURVIVORS:\n" ..
-              "  - Guest1337 R: 0.95s\n" ..
-              "  - Shedletsky Q: 1.1s\n" ..
-              "  - Chance E: 1.1s\n" ..
-              "  - TwoTime Q: 0.4s (CHARACTER ROTATION, can move freely)\n" ..
-              "  - Elliot Q: 0.5s (TARGETS SURVIVORS)\n" ..
-              "  - Jane Doe E: 0.9s\n" ..
+    Content = "• LEFT CLICK:\n" ..
+              "  - Sixer: 2s if Carving Slash has charges, 0.8s if no charges (NO NOTIFICATIONS)\n" ..
+              "  - Other Killers: 0.65s\n" ..
+              "• Q ABILITY:\n" ..
+              "  - Noli: 2.5s (NO NOTIFICATIONS)\n" ..
+              "  - Sixer: 1.45s (NO NOTIFICATIONS)\n" ..
+              "  - Slasher: 0.95s\n" ..
+              "  - JohnDoe: 4.5s\n" ..
+              "  - 1x1x1x1: 2.1s\n" ..
+              "  - Shedletsky: 1.1s\n" ..
+              "  - TwoTime: 0.4s\n" ..
+              "  - Elliot: 0.5s\n" ..
+              "• E ABILITY:\n" ..
+              "  - c00lkidd: 0.6s (NO NOTIFICATIONS)\n" ..
+              "  - Sixer: 1.0s (NO NOTIFICATIONS)\n" ..
+              "  - Chance: 1.1s\n" ..
+              "  - 1x1x1x1: 1.2s\n" ..
+              "  - Slasher: 0.5s\n" ..
+              "  - Jane Doe: 0.9s\n" ..
+              "• R ABILITY:\n" ..
+              "  - Guest1337: 0.95s\n" ..
               "• Press Z to toggle Aimbot on/off\n" ..
-              "• BACKSTAB MODE: When enabled, TwoTime faces the EXACT SAME direction as the killer\n" ..
               "• PREDICTION: Red sphere appears when targeting\n" ..
               "• FOV circle appears only in FOV Mode"
 })
@@ -3286,9 +3181,4 @@ Rayfield:LoadConfiguration()
 
 refreshUIRefs()
 
-print("wahoo wario time")
-print("GUEST1337 & 7N7: Now press Q button instead of firing remote code")
-print("AIMBOT: Press Z to toggle on/off")
-print("BACKSTAB MODE: When enabled, TwoTime faces the EXACT SAME direction as the killer")
-print("TWOTIME: Q ability (0.4s) uses character rotation, can move freely")
-print("DUSEKKAR: Press X to toggle, Press F to fire")
+print("wahoo wario time - Noli Q is now 2.5s tap aimbot! Sixer left click uses Carving Slash charges! Auto Blood Orb added!")
