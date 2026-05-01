@@ -269,8 +269,9 @@ startLevelingMonitor()
 
 -- Configuration - GENERATOR MODE
 local SURVIVOR_START_DELAY = 4 -- Wait 4 seconds ONCE when first entering survivor mode
+local PRE_TELEPORT_DELAY = 4 -- Wait 4 seconds BEFORE teleporting to each generator
+local POST_TELEPORT_DELAY = 4 -- Wait 4 seconds AFTER teleporting, BEFORE firing prompt
 local PUZZLE_DELAY = 2.8 -- seconds between each puzzle
-local BETWEEN_GENERATORS_DELAY = 0 -- NO delay between different generators
 local LOOP_DELAY = 0.5
 
 -- Configuration - KILLER MODE (Left Click Spam)
@@ -421,8 +422,8 @@ local function CompletePuzzle(generator)
     return false
 end
 
--- Function to complete a generator (no delay - just do the work)
-local function CompleteGenerator(generator)
+-- Function to complete a generator (with pre-teleport and post-teleport delays)
+local function CompleteGenerator(generator, generatorNumber, totalGenerators)
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then
         print("  No character found")
@@ -432,9 +433,18 @@ local function CompleteGenerator(generator)
     local hrp = character.HumanoidRootPart
     local genPosition = GetGeneratorPosition(generator)
     
+    -- Wait BEFORE teleporting to generator
+    print("  Waiting " .. PRE_TELEPORT_DELAY .. " seconds BEFORE teleporting to generator #" .. generatorNumber .. "...")
+    task.wait(PRE_TELEPORT_DELAY)
+    
     -- Teleport to generator
+    print("  Teleporting to generator...")
     hrp.CFrame = CFrame.new(genPosition + Vector3.new(0, 1, 0))
     task.wait(0.2)
+    
+    -- Wait AFTER teleporting, BEFORE firing prompt
+    print("  Waiting " .. POST_TELEPORT_DELAY .. " seconds after teleport BEFORE firing prompt...")
+    task.wait(POST_TELEPORT_DELAY)
     
     -- Fire proximity prompt to enter
     FireProximityPrompt(generator)
@@ -462,7 +472,7 @@ local function CompleteGenerator(generator)
         end
     end
     
-    print("  ✓ Generator completed! (" .. puzzlesCompleted .. " puzzles, " .. generator.Progress.Value .. "%)")
+    print("  ✓ Generator #" .. generatorNumber .. " completed! (" .. puzzlesCompleted .. " puzzles, " .. generator.Progress.Value .. "%)")
     return true
 end
 
@@ -550,7 +560,8 @@ local function StartLoop()
     print("    Authorized for: " .. LocalPlayer.Name)
     print("    Survivor: Completes generators (puzzle every " .. PUZZLE_DELAY .. "s)")
     print("    Survivor: Initial " .. SURVIVOR_START_DELAY .. "s delay ONCE when first entering survivor mode")
-    print("    Survivor: NO delay between generators (instant teleport)")
+    print("    Survivor: " .. PRE_TELEPORT_DELAY .. "s delay BEFORE each teleport")
+    print("    Survivor: " .. POST_TELEPORT_DELAY .. "s delay AFTER teleport BEFORE prompt")
     print("    Killer: Auto-hunts survivors (LEFT CLICK SPAM)")
     print("    Auto Character Leveling: ACTIVE")
     print("══════════════════════════════════════════════════════════════════")
@@ -585,10 +596,10 @@ local function StartLoop()
                         print("\n  Generator " .. i .. "/" .. #generators .. " (Progress: " .. generator.Progress.Value .. "%)")
                         
                         pcall(function()
-                            CompleteGenerator(generator)
+                            CompleteGenerator(generator, i, #generators)
                         end)
                         
-                        -- No delay between generators (BETWEEN_GENERATORS_DELAY = 0)
+                        -- No delay between generators
                         if i < #generators then
                             print("  Moving to next generator immediately...")
                         end
@@ -664,6 +675,7 @@ if not success then
 end
 
 print("Script loaded!")
-print("  - As Survivor: Waits 4s ONLY ONCE when first entering survivor mode, then completes generators with NO delay between them")
+print("  - As Survivor: Waits 4s ONCE when first entering survivor mode")
+print("  - As Survivor: Then for EACH generator: waits 4s → teleport → waits 4s → fire prompt → do puzzles")
 print("  - As Killer: Teleports to survivors and spams left click")
 print("  - Auto Character Leveling: Will switch characters when they reach level 100")
