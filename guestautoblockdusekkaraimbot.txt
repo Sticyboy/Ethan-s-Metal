@@ -10,10 +10,9 @@ local Camera = Workspace.CurrentCamera
 local lp = Players.LocalPlayer
 local PlayerGui = lp:WaitForChild("PlayerGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
--- Remotes with error handling (updated for Dusekkar)
+-- Remotes with error handling
 local testRemote = nil
 local success, result = pcall(function()
     return ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"):WaitForChild("RemoteEvent")
@@ -50,7 +49,8 @@ end
 
 -- ===== SOUND IDs FOR AUTO BLOCK =====
 local autoBlockTriggerSounds = {
-    ["102228729296384"] = true,
+    ["116468089135195"] = true,
+    ["74809026448465"] = true,
     ["106836941416453"] = true,
     ["98111231282218"] = true,
     ["124903763333174"] = true,
@@ -63,7 +63,6 @@ local autoBlockTriggerSounds = {
     ["128367348686124"] = true,
     ["104910828105172"] = true,
     ["140242176732868"] = true,
-    ["112809109188560"] = true,
     ["115026634746636"] = true,
     ["84116622032112"] = true,
     ["108907358619313"] = true,
@@ -118,42 +117,47 @@ local autoBlockTriggerSounds = {
     ["94317217837143"] = true,
 }
 
--- ===== KILLER-SPECIFIC HDT STOP TIMES =====
-local killerHDTStopTimes = {
-    ["Slasher"] = 0.25,
-    ["JohnDoe"] = 0.45,
-    ["c00lkidd"] = 0.15,
-    ["1x1x1x1"] = 0.45,
-    ["Noli"] = 0.4,
-    ["Sixer"] = 0.4,
-    ["Nosferatu"] = 0.35,
+-- ===== ANIMATION IDs FOR AUTO BLOCK (Slasher only) =====
+local autoBlockTriggerAnimations = {
+    ["126830014841198"] = true,
+    ["109667959938617"] = true,
+    ["130958529065375"] = true,
+    ["94958041603347"] = true,
+    ["108196996477620"] = true,
 }
 
--- ===== SURVIVOR CHARACTERS THAT CAN TARGET KILLERS =====
-local survivorTargetKillers = {
-    ["Guest1337"] = true,
-    ["Shedletsky"] = true,
-    ["Chance"] = true,
-    ["TwoTime"] = true,
-    ["JaneDoe"] = true,
+-- ===== GUEST1337 BLOCK/PUNCH ANIMATIONS (for Slasher/1x1x1x1 punish) =====
+local guest1337BlockAnims = {
+    ["95802026624883"] = true,
+    ["82036084568393"] = true,
+    ["120748030255574"] = true,
+    ["72722244508749"] = true,
+    ["140671644163156"] = true,
+    ["100926346851492"] = true,
+    ["96959123077498"] = true,
+    ["87259391926321"] = true,
+    ["82605295530067"] = true,
+    ["138040001965654"] = true,
+    ["127040663332045"] = true,
+    ["72007882634344"] = true,
 }
 
--- ===== KILLER CHARACTERS =====
-local killerCharacters = {
-    ["Slasher"] = true,
-    ["JohnDoe"] = true,
-    ["1x1x1x1"] = true,
-    ["c00lkidd"] = true,
-    ["Nosferatu"] = true,
-    ["Noli"] = true,
-    ["Sixer"] = true,
+-- ===== CHANCE ANIMATION IDs (for Slasher/JohnDoe auto parry) =====
+local chanceAnimIds = {
+    ["133491532453922"] = true,
+    ["76649505662612"] = true,
+    ["86371356500204"] = true,
+    ["131189930305001"] = true,
+    ["73697316043485"] = true,
+    ["103301489258021"] = true,
 }
 
--- ===== STATE VARIABLES =====
+-- ===== AUTO BLOCK STATE VARIABLES =====
 local autoBlockForGuest = false
 local autoCloneFor7n7 = false
 local ragingPaceAutoParry = false
 local error404AutoParry = false
+local bloodHuntAutoParry = false
 local ragingPaceAutoPunish = false
 local onexOnexOnexOneAutoPunish = false
 local blockdelay = 0
@@ -196,6 +200,7 @@ local mousePositionModule = nil
 local currentTarget = nil
 local dusekkarActive = false
 local dusekkarTimer = nil
+local dusekkarInputConnection = nil
 
 -- ===== PREDICTION VARIABLES =====
 local BASE_PREDICTION_DISTANCE = 4
@@ -210,7 +215,7 @@ local HISTORY_SIZE = 5
 local rotationActive = false
 local ROTATION_DURATION = 0.3
 
--- ===== TWOTIME ROTATION AIMBOT VARIABLES =====
+-- ===== TWOTIME VARIABLES =====
 local twotimeRotationActive = false
 local twotimeRotationConnection = nil
 
@@ -219,56 +224,13 @@ local isPlayingAsSpecialKiller = false
 local currentKillerType = nil
 local originalFacingCheckState = true
 
-local KILLER_CONFIGS = {
-    Slasher = {
-        abilityRemote = function()
-            if testRemote then
-                local args = {
-                    "UseActorAbility",
-                    {
-                        buffer.fromstring("\003\n\000\000\000RagingPace")
-                    }
-                }
-                pcall(function()
-                    testRemote:FireServer(unpack(args))
-                end)
-            end
-        end,
-        abilityName = "RagingPace"
-    },
-    JohnDoe = {
-        abilityRemote = function()
-            if testRemote then
-                local args = {
-                    "UseActorAbility",
-                    {
-                        buffer.fromstring("\003\b\000\000\000404Error")
-                    }
-                }
-                pcall(function()
-                    testRemote:FireServer(unpack(args))
-                end)
-            end
-        end,
-        abilityName = "404Error"
-    },
-    ["1x1x1x1"] = {
-        abilityRemote = function()
-            if testRemote then
-                local args = {
-                    "UseActorAbility",
-                    {
-                        buffer.fromstring("\003\r\000\000\000MassInfection")
-                    }
-                }
-                pcall(function()
-                    testRemote:FireServer(unpack(args))
-                end)
-            end
-        end,
-        abilityName = "MassInfection"
-    }
-}
+-- ===== VISUALS VARIABLES =====
+local stunImmuneEnabled = false
+local stunImmuneLoop = nil
+
+-- ===== UI REFERENCES =====
+local GuestToggle = nil
+local SevenNToggle = nil
 
 -- ===== SMOOTH SHIFTLOCK MODULE =====
 local SmoothShiftLock = nil
@@ -324,17 +286,42 @@ local function setShiftLock(enabled)
                 end)
             end
         end
+    else
+        if isShiftLockEnabled() then
+            if shiftlockLoaded and SmoothShiftLock and SmoothShiftLock.Enabled then
+                pcall(function()
+                    SmoothShiftLock:ToggleShiftLock()
+                end)
+            else
+                pcall(function()
+                    local shiftlockKeybindEnum = lp.PlayerData.Settings.Keybinds.ShiftLock.Value
+                    local shiftlockKeyCode = Enum.KeyCode[shiftlockKeybindEnum]
+                    
+                    if shiftlockKeyCode then
+                        VirtualInputManager:SendKeyEvent(true, shiftlockKeyCode, false, game)
+                        VirtualInputManager:SendKeyEvent(false, shiftlockKeyCode, false, game)
+                    end
+                end)
+            end
+        end
     end
 end
 
 -- ===== PERFORMANCE CACHES =====
-local detectionRangeSq = detectionRange * detectionRange
-local cachedPunchBtn, cachedBlockBtn, cachedChargeBtn, cachedCloneBtn
+local cachedBlockBtn, cachedChargeBtn, cachedCloneBtn
 local cachedCooldown
 local detectionCircles = {}
 local survivorCircles = {}
 local _lastBlockMessageTime = 0
 local MESSAGE_BLOCK_COOLDOWN = 0.6
+
+-- Timers for auto block
+local lastBlockTime = 0
+local lastCloneTime = 0
+local lastSpecialAbilityTime = 0
+local BLOCK_COOLDOWN = 0.7
+local CLONE_COOLDOWN = 0.7
+local SPECIAL_ABILITY_COOLDOWN = 1.0
 
 -- ===== UTILITY FUNCTIONS =====
 local function SendNotif(title, text, duration)
@@ -347,14 +334,276 @@ local function SendNotif(title, text, duration)
     end)
 end
 
--- ===== KEY PRESS FUNCTION =====
 local function pressKey(keyCode)
     VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
     task.wait(0.05)
     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
 end
 
--- ===== 7N7 ROTATION FUNCTION =====
+-- ===== AUTO BLOCK UI REFRESH =====
+local function refreshUIRefs()
+    local main = PlayerGui:FindFirstChild("MainUI")
+    if main then
+        local ability = main:FindFirstChild("AbilityContainer")
+        if ability then
+            cachedBlockBtn = ability:FindFirstChild("Block")
+            cachedChargeBtn = ability:FindFirstChild("Charge")
+            cachedCloneBtn = ability:FindFirstChild("Clone")
+            
+            if cachedBlockBtn then
+                cachedCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
+            end
+        end
+    end
+end
+
+local function isHelpless()
+    local success, helplessObj = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.Block:FindFirstChild("Helpless")
+    end)
+    
+    if success and helplessObj then
+        return true
+    end
+    return false
+end
+
+-- ===== CHANCE-BASED BLOCKING =====
+local function shouldBlock()
+    if blockChance >= 100 then return true end
+    if blockChance <= 0 then return false end
+    return math.random(1, 100) <= blockChance
+end
+
+-- ===== FACING CHECK =====
+local function isFacing(localRoot, targetRoot)
+    if not facingCheckEnabled then return true end
+    
+    local dx = localRoot.Position.X - targetRoot.Position.X
+    local dy = localRoot.Position.Y - targetRoot.Position.Y
+    local dz = localRoot.Position.Z - targetRoot.Position.Z
+    
+    local mag = math.sqrt(dx*dx + dy*dy + dz*dz)
+    if mag == 0 then return true end
+    local invMag = 1 / mag
+    
+    local ux, uy, uz = dx * invMag, dy * invMag, dz * invMag
+    local lv = targetRoot.CFrame.LookVector
+    local dot = lv.X * ux + lv.Y * uy + lv.Z * uz
+    
+    return dot > customFacingDot
+end
+
+-- ===== AUTO-SWITCH BLOCK/CHARGE =====
+local lastBlockCheckTime = 0
+local BLOCK_CHECK_INTERVAL = 0.2
+
+local function checkAndSwitchBlockType()
+    if not autoSwitchBlockCharge then return end
+    
+    local currentTime = tick()
+    if currentTime - lastBlockCheckTime < BLOCK_CHECK_INTERVAL then return end
+    lastBlockCheckTime = currentTime
+    
+    refreshUIRefs()
+    
+    if not cachedBlockBtn then return end
+    
+    local blockCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
+    if not blockCooldown then return end
+    
+    if blockCooldown.Text ~= "" and blockCooldown.Text ~= "0" then
+        if autoblocktype ~= "Charge" then
+            originalBlockType = autoblocktype
+            autoblocktype = "Charge"
+        end
+    else
+        if autoblocktype == "Charge" and originalBlockType ~= "Charge" then
+            autoblocktype = originalBlockType
+        end
+    end
+end
+
+-- ===== EXTRACT IDs =====
+local function extractNumericSoundId(sound)
+    if not sound then return nil end
+    local sid = tostring(sound.SoundId)
+    
+    local num = sid:match("rbxassetid://(%d+)") or
+                sid:match("://(%d+)") or
+                sid:match("^(%d+)$")
+    return num
+end
+
+local function extractNumericAnimationId(animationId)
+    if not animationId then return nil end
+    local id = tostring(animationId)
+    local num = id:match("rbxassetid://(%d+)") or
+                id:match("://(%d+)") or
+                id:match("^(%d+)$")
+    return num
+end
+
+-- ===== CHARACTER IDENTIFICATION FUNCTIONS =====
+local function getMyCharacterInfo()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            local usernameAttr = survivor:GetAttribute("Username")
+            if usernameAttr and usernameAttr == lp.Name then
+                return "Survivor", survivor.Name, survivor
+            end
+        end
+    end
+    
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            local usernameAttr = killer:GetAttribute("Username")
+            if usernameAttr and usernameAttr == lp.Name then
+                return "Killer", killer.Name, killer
+            end
+        end
+    end
+    
+    return nil, nil, nil
+end
+
+local function amIGuest1337()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Guest1337" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amI7n7()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "007n7" or survivor.Name == "7n7" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amISlasher()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Slasher" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIJohnDoe()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "JohnDoe" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amI1x1x1x1()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "1x1x1x1" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amITwoTime()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "TwoTime" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, survivor
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function amIDusekkar()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Dusekkar" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function amISixer()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Sixer" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true, killer
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
+local function getAllCharactersByName(name)
+    local characters = {}
+    
+    if name == "Guest1337" or name == "Shedletsky" or name == "TwoTime" or name == "Chance" or name == "JaneDoe" then
+        if SurvivorsFolder then
+            for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+                if survivor.Name == name then
+                    table.insert(characters, survivor)
+                end
+            end
+        end
+    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" then
+        if KillersFolder then
+            for _, killer in ipairs(KillersFolder:GetChildren()) do
+                if killer.Name == name then
+                    table.insert(characters, killer)
+                end
+            end
+        end
+    end
+    
+    return characters
+end
+
+-- ===== ROTATION FUNCTION =====
 local function rotateTowardsKiller(killerModel)
     if rotationActive then return end
     if not killerModel then return end
@@ -381,109 +630,7 @@ local function rotateTowardsKiller(killerModel)
     end)
 end
 
--- ===== CHARACTER IDENTIFICATION FUNCTIONS =====
-local function getMyCharacterInfo()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Elliot" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "Elliot", true
-                end
-            end
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Guest1337" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "Guest1337", false
-                end
-            end
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Shedletsky" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "Shedletsky", false
-                end
-            end
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Chance" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "Chance", false
-                end
-            end
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "TwoTime" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "TwoTime", false
-                end
-            end
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "JaneDoe" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "JaneDoe", false
-                end
-            end
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "007n7" or survivor.Name == "7n7" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "7n7", false
-                end
-            end
-        end
-    end
-    
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Dusekkar" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return "Survivor", "Dusekkar", false
-                end
-            end
-        end
-    end
-    
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            local usernameAttr = killer:GetAttribute("Username")
-            if usernameAttr and usernameAttr == lp.Name then
-                return "Killer", killer.Name, false
-            end
-        end
-    end
-    
-    return nil, nil, false
-end
-
--- ===== POSITION-BASED MOVEMENT DETECTION =====
+-- ===== PREDICTION FUNCTIONS =====
 local function updatePositionHistory(character, position)
     if not character or not position then return end
     
@@ -672,356 +819,185 @@ local function createTargetSphere(targetCharacter, sphereColor)
     return sphere, connection
 end
 
--- ===== CHARACTER IDENTIFICATION FUNCTIONS =====
-local function amIGuest1337()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Guest1337" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amIShedletsky()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Shedletsky" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amIChance()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Chance" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amITwoTime()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "TwoTime" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amIElliot()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Elliot" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amI7n7()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "007n7" or survivor.Name == "7n7" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amIDusekkar()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Dusekkar" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
-local function amIJaneDoe()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "JaneDoe" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, survivor
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amISlasher()
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            if killer.Name == "Slasher" then
-                local usernameAttr = killer:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, killer
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amIJohnDoe()
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            if killer.Name == "JohnDoe" then
-                local usernameAttr = killer:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, killer
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amI1x1x1x1()
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            if killer.Name == "1x1x1x1" then
-                local usernameAttr = killer:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, killer
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amIc00lkidd()
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            if killer.Name == "c00lkidd" then
-                local usernameAttr = killer:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, killer
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amINoli()
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            if killer.Name == "Noli" then
-                local usernameAttr = killer:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, killer
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
-local function amISixer()
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            if killer.Name == "Sixer" then
-                local usernameAttr = killer:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true, killer
-                end
-            end
-        end
-    end
-    return false, nil
-end
-
--- ===== BASIC FUNCTIONS =====
-local function refreshUIRefs()
-    local main = PlayerGui:FindFirstChild("MainUI")
-    if main then
-        local ability = main:FindFirstChild("AbilityContainer")
-        if ability then
-            cachedPunchBtn = ability:FindFirstChild("Punch")
-            cachedBlockBtn = ability:FindFirstChild("Block")
-            cachedChargeBtn = ability:FindFirstChild("Charge")
-            cachedCloneBtn = ability:FindFirstChild("Clone")
-            
-            if cachedBlockBtn then
-                cachedCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
-            end
-        end
-    end
-end
-
-local function fireGuiBlock()
-    if testRemote then
-        local args = {
-            "UseActorAbility",
-            {
-                buffer.fromstring("\003\005\000\000\000Block")
-            }
-        }
-        pcall(function()
-            testRemote:FireServer(unpack(args))
-        end)
-    end
-end
-
-local function fireGuiPunch()
-    if testRemote then
-        local args = {
-            "UseActorAbility",
-            {
-                buffer.fromstring("\003\005\000\000\000Punch")
-            }
-        }
-        pcall(function()
-            testRemote:FireServer(unpack(args))
-        end)
-    end
-end
-
-local function fireGuiCharge()
-    if testRemote then
-        local args = {
-            "UseActorAbility",
-            {
-                buffer.fromstring("\003\006\000\000\000Charge")
-            }
-        }
-        pcall(function()
-            testRemote:FireServer(unpack(args))
-        end)
-    end
-end
-
-local function fireGuiClone()
-    if testRemote then
-        local args = {
-            "UseActorAbility",
-            {
-                buffer.fromstring("\003\005\000\000\000Clone")
-            }
-        }
-        pcall(function()
-            testRemote:FireServer(unpack(args))
-        end)
-    end
-end
-
-local function fireSpecialAbility(abilityName)
-    if testRemote then
-        local args = {
-            "UseActorAbility",
-            {
-                abilityName
-            }
-        }
-        pcall(function()
-            testRemote:FireServer(unpack(args))
-        end)
-    end
-end
-
-local function isHelpless()
-    local success, helplessObj = pcall(function()
-        return lp.PlayerGui.MainUI.AbilityContainer.Block:FindFirstChild("Helpless")
-    end)
+-- ===== GET VALID TARGETS FOR AIMBOT =====
+local function getValidTargets()
+    local targets = {}
+    local myChar = lp.Character
+    if not myChar then return targets end
     
-    if success and helplessObj then
-        return true
-    end
-    return false
-end
-
--- ===== AUTO BLOOD ORB FUNCTION =====
-local function bringBloodOrbsToPlayer()
-    if not autoBloodOrb then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return targets end
     
-    local isSixer = amISixer()
-    if not isSixer then return end
+    local myTeam, myCharacter = getMyCharacterInfo()
+    local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
     
-    -- Check if BloodUI exists
-    local bloodUI = PlayerGui:FindFirstChild("TemporaryUI")
-    if bloodUI then
-        bloodUI = bloodUI:FindFirstChild("BloodUI")
-    end
+    local viewportSize = Camera.ViewportSize
+    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
     
-    if bloodUI then
-        local blood = bloodUI:FindFirstChild("Blood")
-        local timer = bloodUI:FindFirstChild("Timer")
+    local function processTarget(obj)
+        local usernameAttr = obj:GetAttribute("Username")
+        if usernameAttr and usernameAttr == lp.Name then
+            return
+        end
         
-        if blood then
-            local bloodCount = blood:FindFirstChild("Count")
-            local bloodMax = blood:FindFirstChild("Max")
-            
-            if bloodCount and bloodMax then
-                local currentCount = bloodCount:FindFirstChild("ContentText")
-                local maxCount = bloodMax:FindFirstChild("ContextText")
+        local humanoid = obj:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            return
+        end
+        
+        local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
+        if not targetPart then return end
+        
+        local distance = (targetPart.Position - myRoot.Position).Magnitude
+        if distance > aimbotMaxDistance then
+            return
+        end
+        
+        if aimbotUseFOV then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+            if onScreen then
+                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                local distanceFromCenter = (screenVector - screenCenter).Magnitude
                 
-                if currentCount and maxCount then
-                    if currentCount.Text == maxCount.Text then
-                        return -- Storage is full
-                    end
+                if distanceFromCenter <= aimbotFOV then
+                    table.insert(targets, {
+                        obj = obj,
+                        part = targetPart,
+                        distance = distance,
+                        screenDistance = distanceFromCenter
+                    })
                 end
             end
+        else
+            table.insert(targets, {
+                obj = obj,
+                part = targetPart,
+                distance = distance,
+                screenDistance = 0
+            })
         end
-        
-        if timer then
-            local timeText = timer:FindFirstChild("Time")
-            if timeText then
-                local contentText = timeText:FindFirstChild("ContentText")
-                if contentText then
-                    local timeValue = contentText.Text
-                    if timeValue ~= "0" and timeValue ~= "TIME'S UP" then
-                        return -- Timer is active
+    end
+    
+    if isElliot then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            processTarget(survivor)
+        end
+    elseif myTeam == "Killer" then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            processTarget(survivor)
+        end
+    elseif myTeam == "Survivor" then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            processTarget(killer)
+        end
+    end
+    
+    if aimbotUseFOV then
+        table.sort(targets, function(a, b)
+            return a.screenDistance < b.screenDistance
+        end)
+    else
+        table.sort(targets, function(a, b)
+            return a.distance < b.distance
+        end)
+    end
+    
+    return targets
+end
+
+-- ===== GET NEAREST KILLER FOR TWOTIME =====
+local function getNearestKiller()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    local nearestKiller = nil
+    local nearestDistance = math.huge
+    
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local usernameAttr = killer:GetAttribute("Username")
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            local targetHrp = killer:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                local humanoid = killer:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestKiller = killer
                     end
                 end
             end
         end
     end
     
-    -- Bring blood orbs to player
-    local bloodOrbContainer = Workspace:FindFirstChild("Map")
-    if bloodOrbContainer then
-        bloodOrbContainer = bloodOrbContainer:FindFirstChild("vrrebluxBloodOrbContainer")
+    return nearestKiller
+end
+
+-- ===== TWOTIME FUNCTIONS =====
+local function isTwoTimeDaggerReady()
+    local mainUI = PlayerGui:FindFirstChild("MainUI")
+    if mainUI then
+        local abilityContainer = mainUI:FindFirstChild("AbilityContainer")
+        if abilityContainer then
+            local dagger = abilityContainer:FindFirstChild("Dagger")
+            if dagger then
+                local cooldownTime = dagger:FindFirstChild("CooldownTime")
+                if cooldownTime then
+                    local contentText = cooldownTime.ContentText
+                    return contentText == "" or contentText == "0" or contentText == "0.0" or contentText == "0.1"
+                end
+            end
+        end
+    end
+    return true
+end
+
+local function isCrouching()
+    local mainUI = PlayerGui:FindFirstChild("MainUI")
+    if mainUI then
+        local statusContainer = mainUI:FindFirstChild("StatusContainer")
+        if statusContainer then
+            local invisibility = statusContainer:FindFirstChild("Invisibility")
+            local undetectable = statusContainer:FindFirstChild("Undetectable")
+            
+            if invisibility and invisibility.Visible == true then
+                return true
+            end
+            
+            if undetectable and undetectable.Visible == true then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function stopAimbot()
+    aimbotActive = false
+    aimbotCurrentTarget = nil
+    
+    if aimbotActiveTimer then
+        pcall(function() task.cancel(aimbotActiveTimer) end)
+        aimbotActiveTimer = nil
     end
     
-    if not bloodOrbContainer then return end
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
+    end
+    setShiftLock(false)
+end
+
+-- ===== NORMAL STAB =====
+local function startNormalStab(targetKiller)
+    if not targetKiller then return end
     
     local char = lp.Character
     if not char then return end
@@ -1029,57 +1005,360 @@ local function bringBloodOrbsToPlayer()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    for _, orb in ipairs(bloodOrbContainer:GetChildren()) do
-        if orb.Name == "BloodOrb" and orb:IsA("BasePart") then
-            pcall(function()
-                local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
-                local tween = TweenService:Create(orb, tweenInfo, {Position = hrp.Position})
-                tween:Play()
-                tween.Completed:Wait()
-            end)
-        end
-    end
-end
-
--- ===== SILENT AIM HOOK SETUP =====
-local function setupSilentAim()
-    local success, module = pcall(function()
-        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
-    end)
-    
-    if not success then
-        success, module = pcall(function()
-            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
-        end)
-    end
-    
-    if success and module then
-        mousePositionModule = module
-        originalGetMousePos = module.GetMousePos
+    if faceSameSideAsKiller then
+        -- Mode 2: Face same side as killer (rotates CHARACTER, NO shiftlock)
+        setShiftLock(false)
+        createTargetSphere(targetKiller, Color3.fromRGB(255, 0, 0))
         
-        local function hookedGetMousePos(self, ...)
-            local args = {...}
-            
-            if silentAimActive and currentTargetSphere then
-                return currentTargetSphere.Position
+        local backstabConnection
+        backstabConnection = RunService.Heartbeat:Connect(function()
+            if not aimbotActive then
+                if backstabConnection then backstabConnection:Disconnect() end
+                return
             end
             
-            return originalGetMousePos(self, ...)
+            if not targetKiller or not targetKiller.Parent then
+                stopAimbot()
+                if backstabConnection then backstabConnection:Disconnect() end
+                return
+            end
+            
+            local killerHrp = targetKiller:FindFirstChild("HumanoidRootPart")
+            if killerHrp then
+                local killerLook = killerHrp.CFrame.LookVector
+                if killerLook.Magnitude > 0 then
+                    hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + killerLook)
+                end
+            end
+        end)
+        
+        if aimbotActiveTimer then
+            pcall(function() task.cancel(aimbotActiveTimer) end)
+        end
+        aimbotActiveTimer = task.delay(0.4, function()
+            aimbotActive = false
+            aimbotCurrentTarget = nil
+            if backstabConnection then backstabConnection:Disconnect() end
+            if currentTargetSphere then
+                pcall(function() currentTargetSphere:Destroy() end)
+                currentTargetSphere = nil
+            end
+        end)
+    else
+        -- Mode 1: Camera aims at killer (Shiftlock ON)
+        setShiftLock(true)
+        createTargetSphere(targetKiller, Color3.fromRGB(255, 0, 0))
+        
+        local cameraConnection
+        cameraConnection = RunService.RenderStepped:Connect(function()
+            if not aimbotActive then
+                if cameraConnection then cameraConnection:Disconnect() end
+                return
+            end
+            
+            if not targetKiller or not targetKiller.Parent then
+                stopAimbot()
+                if cameraConnection then cameraConnection:Disconnect() end
+                return
+            end
+            
+            local targetPos = nil
+            if currentTargetSphere and currentTargetSphere.Parent then
+                targetPos = currentTargetSphere.Position
+            else
+                local targetHrp = targetKiller:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    targetPos = targetHrp.Position
+                else
+                    stopAimbot()
+                    if cameraConnection then cameraConnection:Disconnect() end
+                    return
+                end
+            end
+            
+            local camera = Camera
+            local cameraPos = camera.CFrame.Position
+            local targetCFrame = CFrame.lookAt(cameraPos, targetPos)
+            local currentCFrame = camera.CFrame            
+            local currentLook = currentCFrame.LookVector
+            local targetLook = targetCFrame.LookVector
+            local smoothLook = currentLook:Lerp(targetLook, aimbotSmoothness)
+            local newCFrame = CFrame.new(cameraPos, cameraPos + smoothLook)
+            
+            camera.CFrame = newCFrame
+        end)
+        
+        if aimbotActiveTimer then
+            pcall(function() task.cancel(aimbotActiveTimer) end)
+        end
+        aimbotActiveTimer = task.delay(0.4, function()
+            aimbotActive = false
+            aimbotCurrentTarget = nil
+            if cameraConnection then cameraConnection:Disconnect() end
+            if currentTargetSphere then
+                pcall(function() currentTargetSphere:Destroy() end)
+                currentTargetSphere = nil
+            end
+            setShiftLock(false)
+        end)
+    end
+end
+
+-- ===== DASH STAB =====
+local function startDashStab(targetKiller)
+    if not targetKiller then return end
+    
+    local char = lp.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    aimbotActive = true
+    aimbotCurrentTarget = targetKiller
+    
+    -- Phase 1: Dash towards killer (0.35 seconds) - Camera aimbot
+    setShiftLock(true)
+    createTargetSphere(targetKiller, Color3.fromRGB(0, 255, 0))
+    
+    local dashConnection
+    dashConnection = RunService.RenderStepped:Connect(function()
+        if not aimbotActive then
+            if dashConnection then dashConnection:Disconnect() end
+            return
         end
         
-        module.GetMousePos = hookedGetMousePos
-        return true
-    end
-    return false
+        if not targetKiller or not targetKiller.Parent then
+            stopAimbot()
+            if dashConnection then dashConnection:Disconnect() end
+            return
+        end
+        
+        local targetPos = nil
+        if currentTargetSphere and currentTargetSphere.Parent then
+            targetPos = currentTargetSphere.Position
+        else
+            local targetHrp = targetKiller:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                targetPos = targetHrp.Position
+            else
+                stopAimbot()
+                if dashConnection then dashConnection:Disconnect() end
+                return
+            end
+        end
+        
+        local camera = Camera
+        local cameraPos = camera.CFrame.Position
+        local targetCFrame = CFrame.lookAt(cameraPos, targetPos)
+        local currentCFrame = camera.CFrame
+        
+        local currentLook = currentCFrame.LookVector
+        local targetLook = targetCFrame.LookVector
+        local smoothLook = currentLook:Lerp(targetLook, aimbotSmoothness)
+        local newCFrame = CFrame.new(cameraPos, cameraPos + smoothLook)
+        
+        camera.CFrame = newCFrame
+    end)
+    
+    -- After 0.35 seconds, switch to backstab mode
+    task.delay(0.35, function()
+        if not aimbotActive then return end
+        
+        -- Turn off shiftlock
+        setShiftLock(false)
+        
+        if dashConnection then
+            dashConnection:Disconnect()
+        end
+        
+        -- Phase 2: Face same side as killer (0.4 seconds)
+        if currentTargetSphere then
+            currentTargetSphere.Color = Color3.fromRGB(255, 0, 0)
+        end
+        
+        local backstabConnection
+        backstabConnection = RunService.Heartbeat:Connect(function()
+            if not aimbotActive then
+                if backstabConnection then backstabConnection:Disconnect() end
+                return
+            end
+            
+            if not targetKiller or not targetKiller.Parent then
+                stopAimbot()
+                if backstabConnection then backstabConnection:Disconnect() end
+                return
+            end
+            
+            local killerHrp = targetKiller:FindFirstChild("HumanoidRootPart")
+            if killerHrp then
+                local killerLook = killerHrp.CFrame.LookVector
+                if killerLook.Magnitude > 0 then
+                    hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + killerLook)
+                end
+            end
+        end)
+        
+        -- Stop after 0.4 seconds
+        task.delay(0.4, function()
+            aimbotActive = false
+            aimbotCurrentTarget = nil
+            if backstabConnection then backstabConnection:Disconnect() end
+            if currentTargetSphere then
+                pcall(function() currentTargetSphere:Destroy() end)
+                currentTargetSphere = nil
+            end
+        end)
+    end)
 end
 
-local function restoreSilentAim()
-    if mousePositionModule and originalGetMousePos then
-        mousePositionModule.GetMousePos = originalGetMousePos
+-- ===== SIXER CARVING SLASH CHARGES =====
+local function getSixerCarvingSlashCharges()
+    local success, charges = pcall(function()
+        local abilityContainer = lp.PlayerGui.MainUI.AbilityContainer
+        if abilityContainer then
+            local carvingSlash = abilityContainer:FindFirstChild("Carving Slash") or abilityContainer:FindFirstChild("CarvingSlash")
+            if carvingSlash then
+                local chargesObj = carvingSlash:FindFirstChild("Charges")
+                if chargesObj then
+                    local contextText = chargesObj:FindFirstChild("ContextText")
+                    if contextText then
+                        return tonumber(contextText.Text) or 0
+                    end
+                end
+            end
+        end
+        return 0
+    end)
+    if success then
+        return charges
+    end
+    return 0
+end
+
+-- ===== GENERAL AIMBOT FUNCTIONS =====
+local function startGeneralAimbot(duration, customSmoothness)
+    if not aimbotEnabled then return end
+    if aimbotActive then return end
+    
+    local targets = getValidTargets()
+    if #targets == 0 then return end
+    
+    local target = targets[1]
+    aimbotCurrentTarget = target.obj
+    aimbotActive = true
+    aimbotTargetCount = aimbotTargetCount + 1
+    
+    setShiftLock(true)
+    
+    local originalSmoothness = aimbotSmoothness
+    if customSmoothness then
+        aimbotSmoothness = customSmoothness
+    end
+    
+    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0))
+    
+    local cameraConnection
+    cameraConnection = RunService.RenderStepped:Connect(function()
+        if not aimbotActive or not aimbotCurrentTarget then
+            if cameraConnection then cameraConnection:Disconnect() end
+            return
+        end
+        
+        local myChar = lp.Character
+        if not myChar then return end
+        
+        local humanoid = aimbotCurrentTarget:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            stopAimbot()
+            if cameraConnection then cameraConnection:Disconnect() end
+            return
+        end
+        
+        local targetPos = getPredictedPosition(aimbotCurrentTarget)
+        if not targetPos then
+            stopAimbot()
+            if cameraConnection then cameraConnection:Disconnect() end
+            return
+        end
+        
+        local camera = Camera
+        local cameraPos = camera.CFrame.Position
+        local targetCFrame = CFrame.lookAt(cameraPos, targetPos)
+        local currentCFrame = camera.CFrame
+        
+        local currentLook = currentCFrame.LookVector
+        local targetLook = targetCFrame.LookVector
+        local smoothLook = currentLook:Lerp(targetLook, aimbotSmoothness)
+        local newCFrame = CFrame.new(cameraPos, cameraPos + smoothLook)
+        
+        camera.CFrame = newCFrame
+    end)
+    
+    if aimbotActiveTimer then
+        pcall(function() task.cancel(aimbotActiveTimer) end)
+    end
+    
+    aimbotActiveTimer = task.delay(duration, function()
+        if customSmoothness then
+            aimbotSmoothness = originalSmoothness
+        end
+        aimbotActive = false
+        aimbotCurrentTarget = nil
+        if cameraConnection then cameraConnection:Disconnect() end
+        if currentTargetSphere then
+            pcall(function() currentTargetSphere:Destroy() end)
+            currentTargetSphere = nil
+        end
+        setShiftLock(false)
+    end)
+end
+
+local function updateAimbot()
+    if not aimbotEnabled then
+        if aimbotConnection then
+            aimbotConnection:Disconnect()
+            aimbotConnection = nil
+        end
+        stopAimbot()
+        return
     end
 end
 
--- ===== DUSEKKAR FUNCTIONS =====
+local function createFOVCircle()
+    if aimbotFOVCircle then
+        pcall(function() aimbotFOVCircle:Destroy() end)
+        aimbotFOVCircle = nil
+    end
+    
+    if not aimbotEnabled or not aimbotUseFOV then return end
+    
+    local circle = Drawing.new("Circle")
+    circle.Transparency = 1
+    circle.Thickness = 2
+    circle.NumSides = 60
+    circle.Radius = aimbotFOV
+    circle.Color = Color3.fromRGB(255, 255, 255)
+    circle.Visible = true
+    circle.Filled = false
+    circle.Visible = aimbotEnabled and aimbotUseFOV
+    
+    aimbotFOVCircle = circle
+    
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if aimbotEnabled and aimbotUseFOV and aimbotFOVCircle then
+            local viewportSize = Camera.ViewportSize
+            aimbotFOVCircle.Position = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+            aimbotFOVCircle.Radius = aimbotFOV
+            aimbotFOVCircle.Visible = true
+        elseif aimbotFOVCircle then
+            aimbotFOVCircle.Visible = false
+        end
+    end)
+end
+
+-- ===== DUSEKKAR SILENT AIM FUNCTIONS =====
 local function isPlasmaBeamOnCooldown()
     local success, cooldownText = pcall(function()
         return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
@@ -1180,37 +1459,7 @@ local function getSurvivorClosestToCursor()
     return nearestByDistance
 end
 
-local function getNearestSurvivor()
-    local myChar = lp.Character
-    if not myChar then return nil end
-    
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-    
-    local nearestSurvivor = nil
-    local nearestDistance = math.huge
-    
-    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-        local usernameAttr = survivor:GetAttribute("Username")
-        if not (usernameAttr and usernameAttr == lp.Name) then
-            local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
-            if targetHrp then
-                local humanoid = survivor:FindFirstChildOfClass("Humanoid")
-                if humanoid and humanoid.Health > 0 then
-                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
-                    if distance < nearestDistance then
-                        nearestDistance = distance
-                        nearestSurvivor = survivor
-                    end
-                end
-            end
-        end
-    end
-    
-    return nearestSurvivor
-end
-
-local function getNearestKiller()
+local function getNearestKillerForDusekkar()
     local myChar = lp.Character
     if not myChar then return nil end
     
@@ -1238,6 +1487,40 @@ local function getNearestKiller()
     end
     
     return nearestKiller
+end
+
+local function setupSilentAim()
+    local success, module = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
+    end)
+    
+    if not success then
+        success, module = pcall(function()
+            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
+        end)
+    end
+    
+    if success and module then
+        mousePositionModule = module
+        originalGetMousePos = module.GetMousePos
+        
+        local function hookedGetMousePos(self, ...)
+            if silentAimActive and currentTargetSphere then
+                return currentTargetSphere.Position
+            end
+            return originalGetMousePos(self, ...)
+        end
+        
+        module.GetMousePos = hookedGetMousePos
+        return true
+    end
+    return false
+end
+
+local function restoreSilentAim()
+    if mousePositionModule and originalGetMousePos then
+        mousePositionModule.GetMousePos = originalGetMousePos
+    end
 end
 
 local function stopDusekkar()
@@ -1276,7 +1559,7 @@ local function useSilentAim()
             SendNotif("Dusekkar", "Targeting survivor: " .. target.Name, 1.5)
         end
     else
-        target = getNearestKiller()
+        target = getNearestKillerForDusekkar()
         if target then
             SendNotif("Dusekkar", "Targeting killer: " .. target.Name, 1.5)
         end
@@ -1314,475 +1597,91 @@ local function useSilentAim()
     end
 end
 
--- ===== CHANCE-BASED BLOCKING =====
-local function shouldBlock()
-    if blockChance >= 100 then return true end
-    if blockChance <= 0 then return false end
-    return math.random(1, 100) <= blockChance
-end
-
--- ===== FACING CHECK =====
-local function isFacing(localRoot, targetRoot)
-    if not facingCheckEnabled then return true end
+-- ===== AUTO BLOOD ORB FUNCTIONS =====
+local function bringBloodOrbsToPlayer()
+    if not autoBloodOrb then return end
     
-    local dx = localRoot.Position.X - targetRoot.Position.X
-    local dy = localRoot.Position.Y - targetRoot.Position.Y
-    local dz = localRoot.Position.Z - targetRoot.Position.Z
+    local isSixer = amISixer()
+    if not isSixer then return end
     
-    local mag = math.sqrt(dx*dx + dy*dy + dz*dz)
-    if mag == 0 then return true end
-    local invMag = 1 / mag
-    
-    local ux, uy, uz = dx * invMag, dy * invMag, dz * invMag
-    local lv = targetRoot.CFrame.LookVector
-    local dot = lv.X * ux + lv.Y * uy + lv.Z * uz
-    
-    return dot > customFacingDot
-end
-
--- ===== AUTO-SWITCH BLOCK/CHARGE =====
-local lastBlockCheckTime = 0
-local BLOCK_CHECK_INTERVAL = 0.2
-
-local function checkAndSwitchBlockType()
-    if not autoSwitchBlockCharge then return end
-    
-    local currentTime = tick()
-    if currentTime - lastBlockCheckTime < BLOCK_CHECK_INTERVAL then return end
-    lastBlockCheckTime = currentTime
-    
-    refreshUIRefs()
-    
-    if not cachedBlockBtn then return end
-    
-    local blockCooldown = cachedBlockBtn:FindFirstChild("CooldownTime")
-    if not blockCooldown then return end
-    
-    if blockCooldown.Text ~= "" and blockCooldown.Text ~= "0" then
-        if autoblocktype ~= "Charge" then
-            originalBlockType = autoblocktype
-            autoblocktype = "Charge"
-        end
-    else
-        if autoblocktype == "Charge" and originalBlockType ~= "Charge" then
-            autoblocktype = originalBlockType
-        end
-    end
-end
-
--- ===== SOUND CHECKING =====
-local lastBlockTime = 0
-local BLOCK_COOLDOWN = 0.7
-local lastCloneTime = 0
-local CLONE_COOLDOWN = 0.7
-local lastSpecialAbilityTime = 0
-local SPECIAL_ABILITY_COOLDOWN = 1.0
-
-local function extractNumericSoundId(sound)
-    if not sound then return nil end
-    local sid = tostring(sound.SoundId)
-    
-    local num = sid:match("rbxassetid://(%d+)") or
-                sid:match("://(%d+)") or
-                sid:match("^(%d+)$")
-    return num
-end
-
-local function extractNumericAnimationId(animationId)
-    if not animationId then return nil end
-    local id = tostring(animationId)
-    local num = id:match("rbxassetid://(%d+)") or
-                id:match("://(%d+)") or
-                id:match("^(%d+)$")
-    return num
-end
-
--- ===== GET ALL CHARACTERS WITH SPECIFIC NAME =====
-local function getAllCharactersByName(name)
-    local characters = {}
-    
-    if name == "Shedletsky" or name == "Guest1337" or name == "TwoTime" or name == "Chance" or name == "007n7" or name == "7n7" or name == "Elliot" or name == "JaneDoe" then
-        if SurvivorsFolder then
-            for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-                if survivor.Name == name then
-                    table.insert(characters, survivor)
-                end
-            end
-        end
-    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "c00lkidd" or name == "Noli" or name == "Sixer" then
-        if KillersFolder then
-            for _, killer in ipairs(KillersFolder:GetChildren()) do
-                if killer.Name == name then
-                    table.insert(characters, killer)
-                end
-            end
-        end
+    local bloodUI = PlayerGui:FindFirstChild("TemporaryUI")
+    if bloodUI then
+        bloodUI = bloodUI:FindFirstChild("BloodUI")
     end
     
-    return characters
-end
-
--- ===== SPECIAL KILLER AUTO PARRY/PUNISH =====
-local function checkSpecialKillerActions()
-    local isSlasher, slasherChar = amISlasher()
-    local isJohnDoe, johnDoeChar = amIJohnDoe()
-    local is1x1x1x1, onexChar = amI1x1x1x1()
-    
-    if not (isSlasher or isJohnDoe or is1x1x1x1) then return end
-    
-    local now = tick()
-    if now - lastSpecialAbilityTime < SPECIAL_ABILITY_COOLDOWN then return end
-    
-    local myChar = lp.Character
-    if not myChar then return end
-    
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-    
-    local triggerSoundIds = {
-        ["12222225"] = true,
-        ["132596270805754"] = true,
-        ["83851356262523"] = true,
-        ["111910850942168"] = true,
-        ["115267992424648"] = true,
-        ["99820161736138"] = true,
-        ["86710781315432"] = true,
-        ["139012439429121"] = true,
-        ["5569523548"] = true,
-        ["92445809840331"] = true,
-    }
-    
-    local guest1337BlockAnims = {
-        ["95802026624883"] = true,
-        ["82036084568393"] = true,
-        ["120748030255574"] = true,
-        ["72722244508749"] = true,
-        ["140671644163156"] = true,
-        ["100926346851492"] = true,
-        ["96959123077498"] = true,
-        ["87259391926321"] = true,
-    }
-    
-    local chanceAnimIds = {
-        ["133491532453922"] = true,
-        ["76649505662612"] = true,
-        ["86371356500204"] = true,
-        ["131189930305001"] = true,
-        ["73697316043485"] = true,
-    }
-    
-    if isSlasher and ragingPaceAutoPunish then
-        local allGuest1337s = getAllCharactersByName("Guest1337")
+    if bloodUI then
+        local blood = bloodUI:FindFirstChild("Blood")
+        local timer = bloodUI:FindFirstChild("Timer")
         
-        for _, guest1337 in ipairs(allGuest1337s) do
-            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
-            if guest1337Hrp then
-                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
-                if distance <= detectionRange then
-                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        local animator = hum:FindFirstChildOfClass("Animator")
-                        if animator then
-                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local id = extractNumericAnimationId(track.Animation.AnimationId)
-                                if id and guest1337BlockAnims[id] then
-                                    if blockdelay > 0 then
-                                        task.wait(blockdelay)
-                                    end
-                                    
-                                    pressKey(Enum.KeyCode.R)
-                                    lastSpecialAbilityTime = now
-                                    SendNotif("Slasher", "Raging Pace used on blocking Guest1337 (Pressed R)", 1)
-                                    return true
-                                end
-                            end
-                        end
+        if blood then
+            local bloodCount = blood:FindFirstChild("Count")
+            local bloodMax = blood:FindFirstChild("Max")
+            
+            if bloodCount and bloodMax then
+                local currentCount = bloodCount:FindFirstChild("ContentText")
+                local maxCount = bloodMax:FindFirstChild("ContextText")
+                
+                if currentCount and maxCount then
+                    if currentCount.Text == maxCount.Text then
+                        return
+                    end
+                end
+            end
+        end
+        
+        if timer then
+            local timeText = timer:FindFirstChild("Time")
+            if timeText then
+                local contentText = timeText:FindFirstChild("ContentText")
+                if contentText then
+                    local timeValue = contentText.Text
+                    if timeValue ~= "0" and timeValue ~= "TIME'S UP" then
+                        return
                     end
                 end
             end
         end
     end
     
-    if is1x1x1x1 and onexOnexOnexOneAutoPunish then
-        local allGuest1337s = getAllCharactersByName("Guest1337")
-        
-        for _, guest1337 in ipairs(allGuest1337s) do
-            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
-            if guest1337Hrp then
-                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
-                if distance <= detectionRange then
-                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        local animator = hum:FindFirstChildOfClass("Animator")
-                        if animator then
-                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local id = extractNumericAnimationId(track.Animation.AnimationId)
-                                if id and guest1337BlockAnims[id] then
-                                    if blockdelay > 0 then
-                                        task.wait(blockdelay)
-                                    end
-                                    
-                                    pressKey(Enum.KeyCode.Q)
-                                    lastSpecialAbilityTime = now
-                                    SendNotif("1x1x1x1", "Mass Infection used on blocking Guest1337 (Pressed Q)", 1)
-                                    return true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    local bloodOrbContainer = Workspace:FindFirstChild("Map")
+    if bloodOrbContainer then
+        bloodOrbContainer = bloodOrbContainer:FindFirstChild("vrrebluxBloodOrbContainer")
     end
     
-    if isSlasher and ragingPaceAutoParry then
-        local allShedletskies = getAllCharactersByName("Shedletsky")
-        for _, shedletsky in ipairs(allShedletskies) do
-            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
-            if shedletskyHrp then
-                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
-                if distance <= 20 then
-                    for _, sound in ipairs(shedletsky:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and triggerSoundIds[soundId] then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("Slasher", "Raging Pace used on Shedletsky ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        
-        local allTwoTimes = getAllCharactersByName("TwoTime")
-        for _, twotime in ipairs(allTwoTimes) do
-            local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
-            if twotimeHrp then
-                local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
-                if distance <= 30 then
-                    for _, sound in ipairs(twotime:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("Slasher", "Raging Pace used on TwoTime ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        
-        local allChances = getAllCharactersByName("Chance")
-        for _, chance in ipairs(allChances) do
-            local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
-            if chanceHrp then
-                local distance = (chanceHrp.Position - myRoot.Position).Magnitude
-                if distance <= 90 then
-                    for _, sound in ipairs(chance:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and soundId == "139012439429121" then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("Slasher", "Raging Pace used on Chance ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                    
-                    local hum = chance:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        local animator = hum:FindFirstChildOfClass("Animator")
-                        if animator then
-                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local animId = extractNumericAnimationId(track.Animation.AnimationId)
-                                if animId and chanceAnimIds[animId] then
-                                    if blockdelay > 0 then
-                                        task.wait(blockdelay)
-                                    end
-                                    
-                                    pressKey(Enum.KeyCode.R)
-                                    lastSpecialAbilityTime = now
-                                    SendNotif("Slasher", "Raging Pace used on Chance animation (Pressed R)", 1)
-                                    return true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        
-        local allJaneDoes = getAllCharactersByName("JaneDoe")
-        for _, janeDoe in ipairs(allJaneDoes) do
-            local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
-            if janeDoeHrp then
-                local distance = (janeDoeHrp.Position - myRoot.Position).Magnitude
-                if distance <= 20 then
-                    for _, sound in ipairs(janeDoe:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and (soundId == "92445809840331" or soundId == "83851356262523") then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("Slasher", "Raging Pace used on Jane Doe ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
+    if not bloodOrbContainer then return end
+    
+    local char = lp.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    for _, orb in ipairs(bloodOrbContainer:GetChildren()) do
+        if orb.Name == "BloodOrb" and orb:IsA("BasePart") then
+            pcall(function()
+                local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
+                local tween = TweenService:Create(orb, tweenInfo, {Position = hrp.Position})
+                tween:Play()
+                tween.Completed:Wait()
+            end)
         end
     end
-    
-    if isJohnDoe and error404AutoParry then
-        local allShedletskies = getAllCharactersByName("Shedletsky")
-        for _, shedletsky in ipairs(allShedletskies) do
-            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
-            if shedletskyHrp then
-                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
-                if distance <= 20 then
-                    for _, sound in ipairs(shedletsky:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and triggerSoundIds[soundId] then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("JohnDoe", "404 Error used on Shedletsky ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        
-        local allTwoTimes = getAllCharactersByName("TwoTime")
-        for _, twotime in ipairs(allTwoTimes) do
-            local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
-            if twotimeHrp then
-                local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
-                if distance <= 30 then
-                    for _, sound in ipairs(twotime:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("JohnDoe", "404 Error used on TwoTime ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        
-        local allChances = getAllCharactersByName("Chance")
-        for _, chance in ipairs(allChances) do
-            local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
-            if chanceHrp then
-                local distance = (chanceHrp.Position - myRoot.Position).Magnitude
-                if distance <= 90 then
-                    for _, sound in ipairs(chance:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and soundId == "139012439429121" then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("JohnDoe", "404 Error used on Chance ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                    
-                    local hum = chance:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        local animator = hum:FindFirstChildOfClass("Animator")
-                        if animator then
-                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                                local animId = extractNumericAnimationId(track.Animation.AnimationId)
-                                if animId and chanceAnimIds[animId] then
-                                    if blockdelay > 0 then
-                                        task.wait(blockdelay)
-                                    end
-                                    
-                                    pressKey(Enum.KeyCode.R)
-                                    lastSpecialAbilityTime = now
-                                    SendNotif("JohnDoe", "404 Error used on Chance animation (Pressed R)", 1)
-                                    return true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        
-        local allJaneDoes = getAllCharactersByName("JaneDoe")
-        for _, janeDoe in ipairs(allJaneDoes) do
-            local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
-            if janeDoeHrp then
-                local distance = (janeDoeHrp.Position - myRoot.Position).Magnitude
-                if distance <= 20 then
-                    for _, sound in ipairs(janeDoe:GetDescendants()) do
-                        if sound:IsA("Sound") and sound.IsPlaying then
-                            local soundId = extractNumericSoundId(sound)
-                            if soundId and (soundId == "92445809840331" or soundId == "83851356262523") then
-                                if blockdelay > 0 then
-                                    task.wait(blockdelay)
-                                end
-                                
-                                pressKey(Enum.KeyCode.R)
-                                lastSpecialAbilityTime = now
-                                SendNotif("JohnDoe", "404 Error used on Jane Doe ability (Pressed R)", 1)
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    return false
 end
 
--- ===== GUEST1337 AUTO BLOCK FUNCTION =====
+local function startBloodOrbLoop()
+    if bloodOrbConnection then
+        bloodOrbConnection:Disconnect()
+        bloodOrbConnection = nil
+    end
+    
+    if not autoBloodOrb then return end
+    
+    bloodOrbConnection = RunService.Heartbeat:Connect(function()
+        pcall(bringBloodOrbsToPlayer)
+    end)
+end
+
+-- ===== GUEST1337 AUTO BLOCK =====
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
     
@@ -1801,6 +1700,7 @@ local function checkForAttackSounds()
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
+            
             local killerHrp = killer:FindFirstChild("HumanoidRootPart")
             if killerHrp then
                 local distance = (killerHrp.Position - myRoot.Position).Magnitude
@@ -1808,43 +1708,61 @@ local function checkForAttackSounds()
                 if distance <= detectionRange then
                     if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
                         if shouldBlock() then
-                            for _, sound in ipairs(killer:GetDescendants()) do
-                                if sound:IsA("Sound") and sound.IsPlaying then
-                                    local soundId = extractNumericSoundId(sound)
-                                    if soundId and autoBlockTriggerSounds[soundId] then
-                                        
-                                        if blockdelay > 0 then
-                                            task.wait(blockdelay)
+                            
+                            local shouldBlockThisAttack = false
+                            
+                            -- Check for ANIMATIONS on Slasher ONLY
+                            if killer.Name == "Slasher" then
+                                local humanoid = killer:FindFirstChildOfClass("Humanoid")
+                                if humanoid then
+                                    local animator = humanoid:FindFirstChildOfClass("Animator")
+                                    if animator then
+                                        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                            local animId = extractNumericAnimationId(track.Animation.AnimationId)
+                                            if animId and autoBlockTriggerAnimations[animId] then
+                                                shouldBlockThisAttack = true
+                                                break
+                                            end
                                         end
-                                        
-                                        refreshUIRefs()
-                                        
-                                        if isHelpless() then
+                                    end
+                                end
+                            end
+                            
+                            -- Check for SOUNDS on ALL killers
+                            if not shouldBlockThisAttack then
+                                for _, sound in ipairs(killer:GetDescendants()) do
+                                    if sound:IsA("Sound") and sound.IsPlaying then
+                                        local soundId = extractNumericSoundId(sound)
+                                        if soundId and autoBlockTriggerSounds[soundId] then
+                                            shouldBlockThisAttack = true
                                             break
                                         end
-                                        
-                                        if autoblocktype == "Block" then
-                                            if cachedCooldown and cachedCooldown.Text == "" then
-                                                pressKey(Enum.KeyCode.Q)
-                                                if messageWhenAutoBlockOn and tick() - _lastBlockMessageTime > MESSAGE_BLOCK_COOLDOWN then
-                                                    _lastBlockMessageTime = tick()
-                                                end
-                                                lastBlockTime = now
-                                                return
-                                            end
-                                        elseif autoblocktype == "Charge" then
-                                            if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
-                                                pressKey(Enum.KeyCode.Q)
-                                                lastBlockTime = now
-                                                return
-                                            end
-                                        elseif autoblocktype == "7n7 Clone" then
-                                            if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
-                                                pressKey(Enum.KeyCode.Q)
-                                                lastCloneTime = now
-                                                return
-                                            end
-                                        end
+                                    end
+                                end
+                            end
+                            
+                            if shouldBlockThisAttack then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                refreshUIRefs()
+                                
+                                if isHelpless() then
+                                    break
+                                end
+                                
+                                if autoblocktype == "Block" then
+                                    if cachedCooldown and cachedCooldown.Text == "" then
+                                        pressKey(Enum.KeyCode.Q)
+                                        lastBlockTime = now
+                                        return
+                                    end
+                                elseif autoblocktype == "Charge" then
+                                    if cachedChargeBtn and cachedChargeBtn:FindFirstChild("CooldownTime") and cachedChargeBtn.CooldownTime.Text == "" then
+                                        pressKey(Enum.KeyCode.Q)
+                                        lastBlockTime = now
+                                        return
                                     end
                                 end
                             end
@@ -1856,7 +1774,7 @@ local function checkForAttackSounds()
     end
 end
 
--- ===== 7N7 AUTO CLONE FUNCTION WITH ROTATION =====
+-- ===== 7N7 AUTO CLONE =====
 local function checkForCloneTrigger()
     if not autoCloneFor7n7 then return end
     
@@ -1908,7 +1826,552 @@ local function checkForCloneTrigger()
     end
 end
 
--- ===== SPECIAL KILLER DETECTION =====
+-- ===== SIXER BLOOD HUNT AUTO PARRY =====
+local function checkSixerBloodHuntParry()
+    local isSixer = amISixer()
+    if not isSixer then return end
+    if not bloodHuntAutoParry then return end
+    
+    local now = tick()
+    if now - lastSpecialAbilityTime < SPECIAL_ABILITY_COOLDOWN then return end
+    
+    local myChar = lp.Character
+    if not myChar then return end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    -- Check if Blood Hunt is ready
+    local mainUI = PlayerGui:FindFirstChild("MainUI")
+    if mainUI then
+        local abilityContainer = mainUI:FindFirstChild("AbilityContainer")
+        if abilityContainer then
+            local bloodHunt = abilityContainer:FindFirstChild("BloodHunt")
+            if bloodHunt then
+                -- Check if Hunting is already active
+                local hunting = bloodHunt:FindFirstChild("Hunting")
+                if hunting then
+                    return -- Blood Hunt is already active
+                end
+                
+                -- Check if ability name says "Blood Hunt"
+                local abilityName = bloodHunt:FindFirstChild("AbilityName")
+                if abilityName then
+                    local contentText = abilityName.ContentText
+                    if contentText ~= "Blood Hunt" then
+                        return -- Not ready
+                    end
+                else
+                    return
+                end
+            else
+                return
+            end
+        else
+            return
+        end
+    else
+        return
+    end
+    
+    local triggerSoundIds = {
+        ["12222225"] = true,
+        ["132596270805754"] = true,
+        ["83851356262523"] = true,
+        ["111910850942168"] = true,
+        ["115267992424648"] = true,
+        ["99820161736138"] = true,
+        ["86710781315432"] = true,
+        ["139012439429121"] = true,
+        ["5569523548"] = true,
+        ["92445809840331"] = true,
+    }
+    
+    local chanceAnimIds = {
+        ["133491532453922"] = true,
+        ["76649505662612"] = true,
+        ["86371356500204"] = true,
+        ["131189930305001"] = true,
+        ["73697316043485"] = true,
+        ["103301489258021"] = true,
+    }
+    
+    -- Check Shedletsky
+    local allShedletskies = getAllCharactersByName("Shedletsky")
+    for _, shedletsky in ipairs(allShedletskies) do
+        local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
+        if shedletskyHrp then
+            local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
+            if distance <= 20 then
+                for _, sound in ipairs(shedletsky:GetDescendants()) do
+                    if sound:IsA("Sound") and sound.IsPlaying then
+                        local soundId = extractNumericSoundId(sound)
+                        if soundId and triggerSoundIds[soundId] then
+                            if blockdelay > 0 then
+                                task.wait(blockdelay)
+                            end
+                            
+                            pressKey(Enum.KeyCode.R)
+                            lastSpecialAbilityTime = now
+                            SendNotif("Sixer", "Blood Hunt used on Shedletsky", 1)
+                            return
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Check TwoTime
+    local allTwoTimes = getAllCharactersByName("TwoTime")
+    for _, twotime in ipairs(allTwoTimes) do
+        local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
+        if twotimeHrp then
+            local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
+            if distance <= 30 then
+                for _, sound in ipairs(twotime:GetDescendants()) do
+                    if sound:IsA("Sound") and sound.IsPlaying then
+                        local soundId = extractNumericSoundId(sound)
+                        if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
+                            if blockdelay > 0 then
+                                task.wait(blockdelay)
+                            end
+                            
+                            pressKey(Enum.KeyCode.R)
+                            lastSpecialAbilityTime = now
+                            SendNotif("Sixer", "Blood Hunt used on TwoTime", 1)
+                            return
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Check Chance
+    local allChances = getAllCharactersByName("Chance")
+    for _, chance in ipairs(allChances) do
+        local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
+        if chanceHrp then
+            local distance = (chanceHrp.Position - myRoot.Position).Magnitude
+            if distance <= 90 then
+                for _, sound in ipairs(chance:GetDescendants()) do
+                    if sound:IsA("Sound") and sound.IsPlaying then
+                        local soundId = extractNumericSoundId(sound)
+                        if soundId and soundId == "139012439429121" then
+                            if blockdelay > 0 then
+                                task.wait(blockdelay)
+                            end
+                            
+                            pressKey(Enum.KeyCode.R)
+                            lastSpecialAbilityTime = now
+                            SendNotif("Sixer", "Blood Hunt used on Chance ability", 1)
+                            return
+                        end
+                    end
+                end
+                
+                local hum = chance:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    local animator = hum:FindFirstChildOfClass("Animator")
+                    if animator then
+                        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                            local animId = extractNumericAnimationId(track.Animation.AnimationId)
+                            if animId and chanceAnimIds[animId] then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("Sixer", "Blood Hunt used on Chance animation", 1)
+                                return
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Check JaneDoe
+    local allJaneDoes = getAllCharactersByName("JaneDoe")
+    for _, janeDoe in ipairs(allJaneDoes) do
+        local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
+        if janeDoeHrp then
+            local distance = (janeDoeHrp.Position - myRoot.Position).Magnitude
+            if distance <= 20 then
+                for _, sound in ipairs(janeDoe:GetDescendants()) do
+                    if sound:IsA("Sound") and sound.IsPlaying then
+                        local soundId = extractNumericSoundId(sound)
+                        if soundId and (soundId == "92445809840331" or soundId == "83851356262523") then
+                            if blockdelay > 0 then
+                                task.wait(blockdelay)
+                            end
+                            
+                            pressKey(Enum.KeyCode.R)
+                            lastSpecialAbilityTime = now
+                            SendNotif("Sixer", "Blood Hunt used on Jane Doe", 1)
+                            return
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ===== SPECIAL KILLER ACTIONS =====
+local function checkSpecialKillerActions()
+    local isSlasher, slasherChar = amISlasher()
+    local isJohnDoe, johnDoeChar = amIJohnDoe()
+    local is1x1x1x1, onexChar = amI1x1x1x1()
+    
+    if not (isSlasher or isJohnDoe or is1x1x1x1) then return end
+    
+    local now = tick()
+    if now - lastSpecialAbilityTime < SPECIAL_ABILITY_COOLDOWN then return end
+    
+    local myChar = lp.Character
+    if not myChar then return end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    local triggerSoundIds = {
+        ["12222225"] = true,
+        ["132596270805754"] = true,
+        ["83851356262523"] = true,
+        ["111910850942168"] = true,
+        ["115267992424648"] = true,
+        ["99820161736138"] = true,
+        ["86710781315432"] = true,
+        ["139012439429121"] = true,
+        ["5569523548"] = true,
+        ["92445809840331"] = true,
+    }
+    
+    local chanceAnimIds = {
+        ["133491532453922"] = true,
+        ["76649505662612"] = true,
+        ["86371356500204"] = true,
+        ["131189930305001"] = true,
+        ["73697316043485"] = true,
+        ["103301489258021"] = true,
+    }
+    
+    if isSlasher and ragingPaceAutoPunish then
+        local allGuest1337s = getAllCharactersByName("Guest1337")
+        
+        for _, guest1337 in ipairs(allGuest1337s) do
+            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
+            if guest1337Hrp then
+                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local id = extractNumericAnimationId(track.Animation.AnimationId)
+                                if id and guest1337BlockAnims[id] then
+                                    if blockdelay > 0 then
+                                        task.wait(blockdelay)
+                                    end
+                                    
+                                    pressKey(Enum.KeyCode.R)
+                                    lastSpecialAbilityTime = now
+                                    SendNotif("Slasher", "Raging Pace used on Guest1337", 1)
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if is1x1x1x1 and onexOnexOnexOneAutoPunish then
+        local allGuest1337s = getAllCharactersByName("Guest1337")
+        
+        for _, guest1337 in ipairs(allGuest1337s) do
+            local guest1337Hrp = guest1337:FindFirstChild("HumanoidRootPart")
+            if guest1337Hrp then
+                local distance = (guest1337Hrp.Position - myRoot.Position).Magnitude
+                if distance <= detectionRange then
+                    local hum = guest1337:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local id = extractNumericAnimationId(track.Animation.AnimationId)
+                                if id and guest1337BlockAnims[id] then
+                                    if blockdelay > 0 then
+                                        task.wait(blockdelay)
+                                    end
+                                    
+                                    pressKey(Enum.KeyCode.Q)
+                                    lastSpecialAbilityTime = now
+                                    SendNotif("1x1x1x1", "Mass Infection used on Guest1337", 1)
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if isSlasher and ragingPaceAutoParry then
+        local allShedletskies = getAllCharactersByName("Shedletsky")
+        for _, shedletsky in ipairs(allShedletskies) do
+            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
+            if shedletskyHrp then
+                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
+                if distance <= 20 then
+                    for _, sound in ipairs(shedletsky:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and triggerSoundIds[soundId] then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("Slasher", "Raging Pace used on Shedletsky", 1)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        local allTwoTimes = getAllCharactersByName("TwoTime")
+        for _, twotime in ipairs(allTwoTimes) do
+            local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
+            if twotimeHrp then
+                local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 30 then
+                    for _, sound in ipairs(twotime:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("Slasher", "Raging Pace used on TwoTime", 1)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        local allChances = getAllCharactersByName("Chance")
+        for _, chance in ipairs(allChances) do
+            local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
+            if chanceHrp then
+                local distance = (chanceHrp.Position - myRoot.Position).Magnitude
+                if distance <= 90 then
+                    for _, sound in ipairs(chance:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and soundId == "139012439429121" then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("Slasher", "Raging Pace used on Chance ability", 1)
+                                return true
+                            end
+                        end
+                    end
+                    
+                    local hum = chance:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local animId = extractNumericAnimationId(track.Animation.AnimationId)
+                                if animId and chanceAnimIds[animId] then
+                                    if blockdelay > 0 then
+                                        task.wait(blockdelay)
+                                    end
+                                    
+                                    pressKey(Enum.KeyCode.R)
+                                    lastSpecialAbilityTime = now
+                                    SendNotif("Slasher", "Raging Pace used on Chance animation", 1)
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        local allJaneDoes = getAllCharactersByName("JaneDoe")
+        for _, janeDoe in ipairs(allJaneDoes) do
+            local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
+            if janeDoeHrp then
+                local distance = (janeDoeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 20 then
+                    for _, sound in ipairs(janeDoe:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and (soundId == "92445809840331" or soundId == "83851356262523") then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("Slasher", "Raging Pace used on Jane Doe", 1)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if isJohnDoe and error404AutoParry then
+        local allShedletskies = getAllCharactersByName("Shedletsky")
+        for _, shedletsky in ipairs(allShedletskies) do
+            local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
+            if shedletskyHrp then
+                local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
+                if distance <= 20 then
+                    for _, sound in ipairs(shedletsky:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and triggerSoundIds[soundId] then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("JohnDoe", "404 Error used on Shedletsky", 1)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        local allTwoTimes = getAllCharactersByName("TwoTime")
+        for _, twotime in ipairs(allTwoTimes) do
+            local twotimeHrp = twotime:FindFirstChild("HumanoidRootPart")
+            if twotimeHrp then
+                local distance = (twotimeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 30 then
+                    for _, sound in ipairs(twotime:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and (soundId == "99820161736138" or soundId == "86710781315432") then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("JohnDoe", "404 Error used on TwoTime", 1)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        local allChances = getAllCharactersByName("Chance")
+        for _, chance in ipairs(allChances) do
+            local chanceHrp = chance:FindFirstChild("HumanoidRootPart")
+            if chanceHrp then
+                local distance = (chanceHrp.Position - myRoot.Position).Magnitude
+                if distance <= 90 then
+                    for _, sound in ipairs(chance:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and soundId == "139012439429121" then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("JohnDoe", "404 Error used on Chance ability", 1)
+                                return true
+                            end
+                        end
+                    end
+                    
+                    local hum = chance:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                                local animId = extractNumericAnimationId(track.Animation.AnimationId)
+                                if animId and chanceAnimIds[animId] then
+                                    if blockdelay > 0 then
+                                        task.wait(blockdelay)
+                                    end
+                                    
+                                    pressKey(Enum.KeyCode.R)
+                                    lastSpecialAbilityTime = now
+                                    SendNotif("JohnDoe", "404 Error used on Chance animation", 1)
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        local allJaneDoes = getAllCharactersByName("JaneDoe")
+        for _, janeDoe in ipairs(allJaneDoes) do
+            local janeDoeHrp = janeDoe:FindFirstChild("HumanoidRootPart")
+            if janeDoeHrp then
+                local distance = (janeDoeHrp.Position - myRoot.Position).Magnitude
+                if distance <= 20 then
+                    for _, sound in ipairs(janeDoe:GetDescendants()) do
+                        if sound:IsA("Sound") and sound.IsPlaying then
+                            local soundId = extractNumericSoundId(sound)
+                            if soundId and (soundId == "92445809840331" or soundId == "83851356262523") then
+                                if blockdelay > 0 then
+                                    task.wait(blockdelay)
+                                end
+                                
+                                pressKey(Enum.KeyCode.R)
+                                lastSpecialAbilityTime = now
+                                SendNotif("JohnDoe", "404 Error used on Jane Doe", 1)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return false
+end
+
+-- ===== SPECIAL KILLER STATUS =====
 local function checkSpecialKillerStatus()
     local character = lp.Character
     if not character then 
@@ -1923,9 +2386,6 @@ local function checkSpecialKillerStatus()
     local allSlashers = getAllCharactersByName("Slasher")
     local allJohnDoes = getAllCharactersByName("JohnDoe")
     local allOnexOnexOnexOnes = getAllCharactersByName("1x1x1x1")
-    local allc00lkidds = getAllCharactersByName("c00lkidd")
-    local allNolis = getAllCharactersByName("Noli")
-    local allSixers = getAllCharactersByName("Sixer")
     
     for _, slasher in ipairs(allSlashers) do
         local usernameAttr = slasher:GetAttribute("Username")
@@ -1959,45 +2419,6 @@ local function checkSpecialKillerStatus()
             if not isPlayingAsSpecialKiller or currentKillerType ~= "1x1x1x1" then
                 isPlayingAsSpecialKiller = true
                 currentKillerType = "1x1x1x1"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-            end
-            return true
-        end
-    end
-    
-    for _, c00lkidd in ipairs(allc00lkidds) do
-        local usernameAttr = c00lkidd:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "c00lkidd" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "c00lkidd"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-            end
-            return true
-        end
-    end
-    
-    for _, noli in ipairs(allNolis) do
-        local usernameAttr = noli:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "Noli" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "Noli"
-                originalFacingCheckState = facingCheckEnabled
-                facingCheckEnabled = false
-            end
-            return true
-        end
-    end
-    
-    for _, sixer in ipairs(allSixers) do
-        local usernameAttr = sixer:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            if not isPlayingAsSpecialKiller or currentKillerType ~= "Sixer" then
-                isPlayingAsSpecialKiller = true
-                currentKillerType = "Sixer"
                 originalFacingCheckState = facingCheckEnabled
                 facingCheckEnabled = false
             end
@@ -2048,496 +2469,163 @@ local function updateDetectionRangeVisuals()
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
     
-    if isPlayingAsSpecialKiller and currentKillerType then
-        if SurvivorsFolder then
-            for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-                local survivorHrp = survivor:FindFirstChild("HumanoidRootPart")
-                if survivorHrp and not survivorHrp:FindFirstChild("DetectionCircle") then
-                    
-                    local visualRange = detectionRange
-                    local circleColor = Color3.fromRGB(255, 255, 0)
-                    
-                    if survivor.Name == "Chance" then
-                        visualRange = 90                        circleColor = Color3.fromRGB(255, 0, 255)
-                    elseif survivor.Name == "TwoTime" then
-                        visualRange = 30
-                        circleColor = Color3.fromRGB(0, 255, 255)
-                    elseif survivor.Name == "Shedletsky" then
-                        visualRange = 20
-                        circleColor = Color3.fromRGB(0, 255, 0)
-                    elseif survivor.Name == "JaneDoe" then
-                        visualRange = 20
-                        circleColor = Color3.fromRGB(255, 255, 0)
-                    elseif survivor.Name == "Guest1337" then
-                        visualRange = detectionRange
-                        circleColor = Color3.fromRGB(255, 165, 0)
-                    end
-                    
-                    local distance = (survivorHrp.Position - myRoot.Position).Magnitude
-                    local inRange = distance <= visualRange
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            local killerHrp = killer:FindFirstChild("HumanoidRootPart")
+            if killerHrp and not killerHrp:FindFirstChild("DetectionCircle") then
+                local usernameAttr = killer:GetAttribute("Username")
+                if not (usernameAttr and usernameAttr == lp.Name) then
+                    local distance = (killerHrp.Position - myRoot.Position).Magnitude
+                    local inRange = distance <= detectionRange
                     
                     pcall(function()
                         local circle = Instance.new("CylinderHandleAdornment")
                         circle.Name = "DetectionCircle"
-                        circle.Adornee = survivorHrp
-                        circle.Color3 = inRange and circleColor or Color3.fromRGB(128, 128, 128)
+                        circle.Adornee = killerHrp
+                        circle.Color3 = inRange and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 165, 0)
                         circle.AlwaysOnTop = true
                         circle.ZIndex = 1
                         circle.Transparency = 0.6
-                        circle.Radius = visualRange
+                        circle.Radius = detectionRange
                         circle.Height = 0.12
                         
-                        local yOffset = -(survivorHrp.Size.Y / 2 + 0.05)
+                        local yOffset = -(killerHrp.Size.Y / 2 + 0.05)
                         circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
                         
-                        circle.Parent = survivorHrp
-                        survivorCircles[survivor] = circle
+                        circle.Parent = killerHrp
+                        detectionCircles[killer] = circle
                     end)
                 end
             end
         end
-    else
-        if KillersFolder then
-            for _, killer in ipairs(KillersFolder:GetChildren()) do
-                local killerHrp = killer:FindFirstChild("HumanoidRootPart")
-                if killerHrp and not killerHrp:FindFirstChild("DetectionCircle") then
-                    local usernameAttr = killer:GetAttribute("Username")
-                    if not (usernameAttr and usernameAttr == lp.Name) then
-                        local distance = (killerHrp.Position - myRoot.Position).Magnitude
-                        local inRange = distance <= detectionRange
-                        
-                        pcall(function()
-                            local circle = Instance.new("CylinderHandleAdornment")
-                            circle.Name = "DetectionCircle"
-                            circle.Adornee = killerHrp
-                            circle.Color3 = inRange and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 165, 0)
-                            circle.AlwaysOnTop = true
-                            circle.ZIndex = 1
-                            circle.Transparency = 0.6
-                            circle.Radius = detectionRange
-                            circle.Height = 0.12
-                            
-                            local yOffset = -(killerHrp.Size.Y / 2 + 0.05)
-                            circle.CFrame = CFrame.new(0, yOffset, 0) * CFrame.Angles(math.rad(90), 0, 0)
-                            
-                            circle.Parent = killerHrp
-                            detectionCircles[killer] = circle
-                        end)
-                    end
-                end
-            end
-        end
     end
 end
 
--- ===== TWOTIME ROTATION AIMBOT FUNCTIONS =====
-local function stopTwotimeRotation()
-    if not twotimeRotationActive then return end
-    
-    twotimeRotationActive = false
-    
-    if twotimeRotationConnection then
-        pcall(function()
-            twotimeRotationConnection:Disconnect()
-        end)
-        twotimeRotationConnection = nil
-    end
-    
-    if currentTargetSphere then
-        pcall(function() currentTargetSphere:Destroy() end)
-        currentTargetSphere = nil
-    end
-    if currentSphereConnection then
-        pcall(function() currentSphereConnection:Disconnect() end)
-        currentSphereConnection = nil
-    end
-end
-
-local function startTwotimeRotation(targetModel, duration)
-    if twotimeRotationActive then return end
-    if not targetModel then return end
-    
-    local char = lp.Character
-    if not char then return end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+-- ===== STUN IMMUNE VISUAL FUNCTIONS =====
+local function updateStunImmuneIndicator(killer)
+    local hrp = killer:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    twotimeRotationActive = true
-    
-    if faceSameSideAsKiller then
-        twotimeRotationConnection = RunService.Heartbeat:Connect(function()
-            if not twotimeRotationActive then
-                if twotimeRotationConnection then
-                    pcall(function() twotimeRotationConnection:Disconnect() end)
-                    twotimeRotationConnection = nil
-                end
-                return
-            end
-            
-            if not targetModel or not targetModel.Parent then
-                stopTwotimeRotation()
-                return
-            end
-            
-            local killerHrp = targetModel:FindFirstChild("HumanoidRootPart")
-            if killerHrp then
-                local killerLook = killerHrp.CFrame.LookVector
-                if killerLook.Magnitude > 0 then
-                    hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + killerLook)
-                end
-            end
-        end)
-    else
-        createTargetSphere(targetModel, Color3.fromRGB(255, 0, 0))
-        
-        twotimeRotationConnection = RunService.Heartbeat:Connect(function()
-            if not twotimeRotationActive then
-                if twotimeRotationConnection then
-                    pcall(function() twotimeRotationConnection:Disconnect() end)
-                    twotimeRotationConnection = nil
-                end
-                return
-            end
-            
-            if not targetModel or not targetModel.Parent then
-                stopTwotimeRotation()
-                return
-            end
-            
-            local targetPos = nil
-            if currentTargetSphere and currentTargetSphere.Parent then
-                targetPos = currentTargetSphere.Position
-            else
-                local targetHrp = targetModel:FindFirstChild("HumanoidRootPart")
-                if targetHrp then
-                    targetPos = targetHrp.Position
-                else
-                    stopTwotimeRotation()
-                    return
-                end
-            end
-            
-            local myPos = hrp.Position
-            local direction = (Vector3.new(targetPos.X, myPos.Y, targetPos.Z) - myPos).Unit
-            
-            if direction.Magnitude > 0 then
-                local targetCF = CFrame.lookAt(myPos, myPos + direction)
-                hrp.CFrame = hrp.CFrame:Lerp(targetCF, aimbotSmoothness)
-            end
-        end)
+    -- Check if the killer is the local player
+    local usernameAttr = killer:GetAttribute("Username")
+    if usernameAttr and usernameAttr == lp.Name then
+        return -- Don't show on self
     end
     
-    task.delay(duration, function()
-        stopTwotimeRotation()
+    -- Check for stun immunity conditions
+    local isStunImmune = false
+    
+    -- Check for InvincibleFX (shield icon)
+    if hrp:FindFirstChild("InvincibleFX") then
+        isStunImmune = true
+    end
+    
+    -- Check for StunProtection
+    if hrp:FindFirstChild("StunProtection") then
+        isStunImmune = true
+    end
+    
+    -- Find existing BillboardGui
+    local existingBillboard = hrp:FindFirstChild("StunImmuneBillboard")
+    
+    if isStunImmune then
+        if not existingBillboard then
+            -- Create new BillboardGui
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "StunImmuneBillboard"
+            billboard.Size = UDim2.new(0, 120, 0, 30)
+            billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = hrp
+            
+            -- Create TextLabel
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = "⚡ STUN IMMUNE ⚡"
+            textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+            textLabel.TextStrokeTransparency = 0
+            textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            textLabel.TextScaled = true
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.Parent = billboard
+        end
+    else
+        if existingBillboard then
+            existingBillboard:Destroy()
+        end
+    end
+end
+
+local function scanAllKillersForStunImmune()
+    if not stunImmuneEnabled then return end
+    
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            updateStunImmuneIndicator(killer)
+        end
+    end
+end
+
+local function startStunImmuneLoop()
+    if stunImmuneLoop then
+        task.cancel(stunImmuneLoop)
+        stunImmuneLoop = nil
+    end
+    
+    if not stunImmuneEnabled then return end
+    
+    stunImmuneLoop = task.spawn(function()
+        while stunImmuneEnabled do
+            task.wait(0.5)
+            scanAllKillersForStunImmune()
+        end
     end)
 end
 
--- ===== AIMBOT FUNCTIONS =====
-local function stopAimbot()
-    aimbotActive = false
-    aimbotCurrentTarget = nil
-    aimbotTargetCount = math.max(0, aimbotTargetCount - 1)
+local function setupStunImmuneListeners()
+    if not KillersFolder then return end
     
-    if twotimeRotationActive then
-        stopTwotimeRotation()
-    end
-    
-    if aimbotActiveTimer then
-        pcall(function()
-            task.cancel(aimbotActiveTimer)
-        end)
-        aimbotActiveTimer = nil
-    end
-    
-    if currentTargetSphere then
-        pcall(function() currentTargetSphere:Destroy() end)
-        currentTargetSphere = nil
-    end
-    if currentSphereConnection then
-        pcall(function() currentSphereConnection:Disconnect() end)
-        currentSphereConnection = nil
-    end
-end
-
-local function getValidTargets()
-    local targets = {}
-    local myChar = lp.Character
-    if not myChar then return targets end
-    
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return targets end
-    
-    local myTeam, myCharacter = getMyCharacterInfo()
-    local isElliot = (myTeam == "Survivor" and myCharacter == "Elliot")
-    
-    local viewportSize = Camera.ViewportSize
-    local screenCenter = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-    
-    local function processTarget(obj)
-        local usernameAttr = obj:GetAttribute("Username")
-        if usernameAttr and usernameAttr == lp.Name then
-            return
-        end
-        
-        local humanoid = obj:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            return
-        end
-        
-        local targetPart = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso")
-        if not targetPart then return end
-        
-        local distance = (targetPart.Position - myRoot.Position).Magnitude
-        if distance > aimbotMaxDistance then
-            return
-        end
-        
-        if aimbotUseFOV then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-            if onScreen then
-                local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                local distanceFromCenter = (screenVector - screenCenter).Magnitude
-                
-                if distanceFromCenter <= aimbotFOV then
-                    table.insert(targets, {
-                        obj = obj,
-                        part = targetPart,
-                        distance = distance,
-                        screenDistance = distanceFromCenter
-                    })
-                end
-            end
-        else
-            table.insert(targets, {
-                obj = obj,
-                part = targetPart,
-                distance = distance,
-                screenDistance = 0
-            })
-        end
-    end
-    
-    if isElliot then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            processTarget(survivor)
-        end
-    elseif myTeam == "Killer" then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            processTarget(survivor)
-        end
-    elseif myTeam == "Survivor" then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
-            processTarget(killer)
-        end
-    end
-    
-    if aimbotUseFOV then
-        table.sort(targets, function(a, b)
-            return a.screenDistance < b.screenDistance
-        end)
-    else
-        table.sort(targets, function(a, b)
-            return a.distance < b.distance
-        end)
-    end
-    
-    return targets
-end
-
--- Get Sixer Carving Slash charges
-local function getSixerCarvingSlashCharges()
-    local success, charges = pcall(function()
-        local abilityContainer = lp.PlayerGui.MainUI.AbilityContainer
-        if abilityContainer then
-            local carvingSlash = abilityContainer:FindFirstChild("Carving Slash") or abilityContainer:FindFirstChild("CarvingSlash")
-            if carvingSlash then
-                local chargesObj = carvingSlash:FindFirstChild("Charges")
-                if chargesObj then
-                    local contextText = chargesObj:FindFirstChild("ContextText")
-                    if contextText then
-                        return tonumber(contextText.Text) or 0
+    -- Watch for new killers
+    KillersFolder.ChildAdded:Connect(function(newKiller)
+        task.wait(0.5)
+        if stunImmuneEnabled then
+            updateStunImmuneIndicator(newKiller)
+            
+            -- Watch for changes to InvincibleFX and StunProtection
+            local hrp = newKiller:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local function onChildAdded(child)
+                    if child.Name == "InvincibleFX" or child.Name == "StunProtection" then
+                        updateStunImmuneIndicator(newKiller)
                     end
                 end
+                
+                local function onChildRemoved(child)
+                    if child.Name == "InvincibleFX" or child.Name == "StunProtection" then
+                        updateStunImmuneIndicator(newKiller)
+                    end
+                end
+                
+                hrp.ChildAdded:Connect(onChildAdded)
+                hrp.ChildRemoved:Connect(onChildRemoved)
             end
         end
-        return 0
     end)
-    if success then
-        return charges
-    end
-    return 0
-end
-
-local function startAimbotForDuration(duration, customSmoothness)
-    if not aimbotEnabled then return end
-    if aimbotActive then return end
     
-    local myTeam, myCharacter = getMyCharacterInfo()
-    local isTwotime = (myTeam == "Survivor" and myCharacter == "TwoTime")
-    
-    local targets = getValidTargets()
-    if #targets == 0 then return end
-    
-    local target = targets[1]
-    aimbotCurrentTarget = target.obj
-    aimbotActive = true
-    aimbotTargetCount = aimbotTargetCount + 1
-    
-    if isTwotime then
-        startTwotimeRotation(aimbotCurrentTarget, duration)
-        task.delay(duration, function()
-            aimbotActive = false
-            aimbotCurrentTarget = nil
-        end)
-        return
-    end
-    
-    setShiftLock(true)
-    
-    local originalSmoothness = aimbotSmoothness
-    if customSmoothness then
-        aimbotSmoothness = customSmoothness
-    end
-    
-    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0))
-    
-    if aimbotActiveTimer then
-        pcall(function()
-            task.cancel(aimbotActiveTimer)
-        end)
-        aimbotActiveTimer = nil
-    end
-    
-    aimbotActiveTimer = task.delay(duration, function()
-        if customSmoothness then
-            aimbotSmoothness = originalSmoothness
-        end
-        stopAimbot()
-    end)
-end
-
-local function updateAimbot()
-    if not aimbotEnabled then
-        if aimbotConnection then
-            aimbotConnection:Disconnect()
-            aimbotConnection = nil
-        end
-        stopAimbot()
-        return
-    end
-    
-    if aimbotConnection then return end
-    
-    aimbotConnection = RunService.RenderStepped:Connect(function()
-        local myTeam, myCharacter = getMyCharacterInfo()
-        local isTwotime = (myTeam == "Survivor" and myCharacter == "TwoTime")
-        
-        if isTwotime then
-            return
-        end
-        
-        if not aimbotEnabled or not aimbotActive or not aimbotCurrentTarget then
-            return
-        end
-        
-        local myChar = lp.Character
-        if not myChar then return end
-        
-        local humanoid = aimbotCurrentTarget:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            stopAimbot()
-            return
-        end
-        
-        local targetPos = getPredictedPosition(aimbotCurrentTarget)
-        if not targetPos then
-            stopAimbot()
-            return
-        end
-        
-        local camera = Camera
-        local cameraPos = camera.CFrame.Position
-        
-        local targetCFrame = CFrame.lookAt(cameraPos, targetPos)
-        local currentCFrame = camera.CFrame
-        
-        local currentLook = currentCFrame.LookVector
-        local targetLook = targetCFrame.LookVector
-        
-        local smoothLook = currentLook:Lerp(targetLook, aimbotSmoothness)
-        local newCFrame = CFrame.new(cameraPos, cameraPos + smoothLook)
-        
-        camera.CFrame = newCFrame
-    end)
-end
-
-local function createFOVCircle()
-    if aimbotFOVCircle then
-        pcall(function() aimbotFOVCircle:Destroy() end)
-        aimbotFOVCircle = nil
-    end
-    
-    if not aimbotEnabled or not aimbotUseFOV then return end
-    
-    local circle = Drawing.new("Circle")
-    circle.Transparency = 1
-    circle.Thickness = 2
-    circle.NumSides = 60
-    circle.Radius = aimbotFOV
-    circle.Color = Color3.fromRGB(255, 255, 255)
-    circle.Visible = true
-    circle.Filled = false
-    circle.Visible = aimbotEnabled and aimbotUseFOV
-    
-    aimbotFOVCircle = circle
-    
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if aimbotEnabled and aimbotUseFOV and aimbotFOVCircle then
-            local viewportSize = Camera.ViewportSize
-            aimbotFOVCircle.Position = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-            aimbotFOVCircle.Radius = aimbotFOV
-            aimbotFOVCircle.Visible = true
-        elseif aimbotFOVCircle then
-            aimbotFOVCircle.Visible = false
+    -- Watch for killer removal
+    KillersFolder.ChildRemoved:Connect(function(killer)
+        local hrp = killer:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local billboard = hrp:FindFirstChild("StunImmuneBillboard")
+            if billboard then
+                billboard:Destroy()
+            end
         end
     end)
 end
 
--- ===== SIXER LEFT CLICK HANDLER (Based on Carving Slash charges) =====
-local function handleSixerLeftClick()
-    local charges = getSixerCarvingSlashCharges()
-    
-    if charges >= 1 then
-        -- Has at least 1 charge -> 2 second aimbot
-        startAimbotForDuration(2.0)
-    else
-        -- No charges -> 0.8 second aimbot
-        startAimbotForDuration(0.8)
-    end
-end
-
--- ===== NOLI Q HANDLER =====
-local function startNoliQAimbot()
-    startAimbotForDuration(2.5)
-end
-
--- ===== AUTO BLOOD ORB LOOP =====
-local function startBloodOrbLoop()
-    if bloodOrbConnection then
-        bloodOrbConnection:Disconnect()
-        bloodOrbConnection = nil
-    end
-    
-    if not autoBloodOrb then return end
-    
-    bloodOrbConnection = RunService.Heartbeat:Connect(function()
-        pcall(bringBloodOrbsToPlayer)
-    end)
-end
-
--- ===== INPUT HOOK =====
+-- ===== INPUT HOOK FOR AIMBOT =====
 local function setupInputHook()
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
@@ -2561,10 +2649,51 @@ local function setupInputHook()
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if not aimbotEnabled then return end
             
-            if isSixer then
-                handleSixerLeftClick()
-            elseif isKiller then
-                startAimbotForDuration(0.65)
+            -- Silent M1 cooldown check for killers
+            if myTeam == "Killer" then
+                local abilityContainer = lp.PlayerGui.MainUI.AbilityContainer
+                if abilityContainer then
+                    local cooldownTime = nil
+                    
+                    if myCharacter == "Slasher" then
+                        local slash = abilityContainer:FindFirstChild("Slash")
+                        if slash then cooldownTime = slash:FindFirstChild("CooldownTime") end
+                    elseif myCharacter == "c00lkidd" then
+                        local punch = abilityContainer:FindFirstChild("Punch")
+                        if punch then cooldownTime = punch:FindFirstChild("CooldownTime") end
+                    elseif myCharacter == "JohnDoe" then
+                        local slash = abilityContainer:FindFirstChild("Slash")
+                        if slash then cooldownTime = slash:FindFirstChild("CooldownTime") end
+                    elseif myCharacter == "Noli" then
+                        local stab = abilityContainer:FindFirstChild("Stab")
+                        if stab then cooldownTime = stab:FindFirstChild("CooldownTime") end
+                    elseif myCharacter == "1x1x1x1" then
+                        local slash = abilityContainer:FindFirstChild("Slash")
+                        if slash then cooldownTime = slash:FindFirstChild("CooldownTime") end
+                    elseif myCharacter == "Sixer" then
+                        local carvingSlash = abilityContainer:FindFirstChild("Carving Slash")
+                        if carvingSlash then cooldownTime = carvingSlash:FindFirstChild("CooldownTime") end
+                    end
+                    
+                    if cooldownTime then
+                        local contentText = cooldownTime.ContentText
+                        if contentText ~= "" and contentText ~= "0" and contentText ~= "0.0" and contentText ~= "0.1" then
+                            return -- Silently exit, no aimbot
+                        end
+                    end
+                end
+            end
+            
+            -- Continue with normal left click aimbot
+            if myCharacter == "Sixer" then
+                local charges = getSixerCarvingSlashCharges()
+                if charges >= 1 then
+                    startGeneralAimbot(2.0)
+                else
+                    startGeneralAimbot(0.8)
+                end
+            elseif myTeam == "Killer" then
+                startGeneralAimbot(0.65)
             end
         end
         
@@ -2572,22 +2701,47 @@ local function setupInputHook()
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Q then
             if not aimbotEnabled then return end
             
-            if isNoli then
-                startNoliQAimbot()
+            if isTwoTime then
+                -- TwoTime special handling with cooldown check (HAS notification)
+                if not isTwoTimeDaggerReady() then
+                    SendNotif("TwoTime", "Dagger is on cooldown!", 1)
+                    return
+                end
+                
+                local targetKiller = getNearestKiller()
+                if not targetKiller then
+                    SendNotif("TwoTime", "No killer found!", 1)
+                    return
+                end
+                
+                if isCrouching() then
+                    SendNotif("TwoTime", "DASH STAB!", 1)
+                    startDashStab(targetKiller)
+                else
+                    aimbotActive = true
+                    aimbotCurrentTarget = targetKiller
+                    
+                    if faceSameSideAsKiller then
+                        SendNotif("TwoTime", "Backstab mode!", 1)
+                    else
+                        SendNotif("TwoTime", "Normal stab!", 1)
+                    end
+                    startNormalStab(targetKiller)
+                end
+            elseif isNoli then
+                startGeneralAimbot(2.5)
             elseif isSixer then
-                startAimbotForDuration(1.45)
+                startGeneralAimbot(1.45)
             elseif isJohnDoe then
-                startAimbotForDuration(4.5)
+                startGeneralAimbot(4.5)
             elseif isShedletsky then
-                startAimbotForDuration(1.1)
-            elseif isTwoTime then
-                startAimbotForDuration(0.4)
+                startGeneralAimbot(1.1)
             elseif is1x1x1x1 then
-                startAimbotForDuration(2.1)
+                startGeneralAimbot(2.1)
             elseif isSlasher then
-                startAimbotForDuration(0.95)
+                startGeneralAimbot(0.95)
             elseif isElliot then
-                startAimbotForDuration(0.5)
+                startGeneralAimbot(0.5)
             end
         end
         
@@ -2596,17 +2750,17 @@ local function setupInputHook()
             if not aimbotEnabled then return end
             
             if isc00lkidd then
-                startAimbotForDuration(0.6)
+                startGeneralAimbot(0.6)
             elseif isSixer then
-                startAimbotForDuration(1.0)
+                startGeneralAimbot(1.0)
             elseif isChance then
-                startAimbotForDuration(1.1)
+                startGeneralAimbot(1.1)
             elseif is1x1x1x1 then
-                startAimbotForDuration(1.2)
+                startGeneralAimbot(1.2)
             elseif isSlasher then
-                startAimbotForDuration(0.5)
+                startGeneralAimbot(0.5)
             elseif isJaneDoe then
-                startAimbotForDuration(0.9)
+                startGeneralAimbot(0.9)
             end
         end
         
@@ -2614,9 +2768,28 @@ local function setupInputHook()
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.R then
             if not aimbotEnabled then return end
             if isGuest1337 then
-                startAimbotForDuration(0.95)
+                startGeneralAimbot(0.95)
             end
         end
+    end)
+end
+
+-- ===== DUSEKKAR INPUT =====
+local function setupDusekkarInput()
+    if dusekkarInputConnection then
+        dusekkarInputConnection:Disconnect()
+        dusekkarInputConnection = nil
+    end
+    
+    dusekkarInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if not dusekkarEnabled then return end
+        if not amIDusekkar() then return end
+        
+        -- Only use the keybind from the UI (no hardcoded F key)
+        -- The actual keybind is handled by the UI's Fire Plasma Beam keybind
+        -- This function is just for additional input if needed
     end)
 end
 
@@ -2627,6 +2800,9 @@ local mainLoopConn = RunService.Heartbeat:Connect(function()
     if isPlayingAsSpecialKiller then
         pcall(checkSpecialKillerActions)
     end
+    
+    -- Check Sixer Blood Hunt Auto Parry
+    pcall(checkSixerBloodHuntParry)
     
     if autoSwitchBlockCharge and not isPlayingAsSpecialKiller then
         pcall(checkAndSwitchBlockType)
@@ -2647,48 +2823,75 @@ end)
 
 -- ===== UI =====
 local Window = Rayfield:CreateWindow({
-    Name = "time for say gex",
-    LoadingTitle = "loading gaming chair",
-    LoadingSubtitle = "allat features (matthew gay included)",
+    Name = "Pillager Cheats",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "All Features Included",
     ConfigurationSaving = {
         Enabled = true,
-        FolderName = "AutoBlockHub",
+        FolderName = "PillagerCheats",
         FileName = "Settings"
     },
     Discord = {Enabled = false},
     KeySystem = false
 })
 
+-- ===== AUTO BLOCK TAB =====
 local AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
-local TechTab = Window:CreateTab("Techs", 4483362458)
-local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
-local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
--- Auto Block Tab
-AutoBlockTab:CreateKeybind({
-    Name = "1. Guest Auto Block (Presses Q)",
-    CurrentKeybind = "G",
-    HoldToInteract = false,
-    Flag = "GuestAutoBlockKey",
-    Callback = function()
+GuestToggle = AutoBlockTab:CreateToggle({
+    Name = "1. Guest Auto Block (All killers) - Presses Q",
+    CurrentValue = false,
+    Flag = "GuestAutoBlockToggle",
+    Callback = function(Value)
         local isGuest1337 = amIGuest1337()
         if isGuest1337 then
-            autoBlockForGuest = not autoBlockForGuest
-            SendNotif("Guest Auto Block", autoBlockForGuest and "Enabled (Presses Q)" or "Disabled", 1)
+            autoBlockForGuest = Value
+            SendNotif("Guest Auto Block", Value and "Enabled" or "Disabled", 1)
         end
     end
 })
 
 AutoBlockTab:CreateKeybind({
-    Name = "2. 7n7 Auto Clone + Rotation (0.3s) (Presses Q)",
-    CurrentKeybind = "H",
+    Name = "Guest Auto Block Keybind",
+    CurrentKeybind = "T",
+    HoldToInteract = false,
+    Flag = "GuestAutoBlockKey",
+    Callback = function()
+        local isGuest1337 = amIGuest1337()
+        if isGuest1337 then
+            local newValue = not autoBlockForGuest
+            GuestToggle:Set(newValue)
+            autoBlockForGuest = newValue
+            SendNotif("Guest Auto Block", newValue and "Enabled" or "Disabled", 1)
+        end
+    end
+})
+
+SevenNToggle = AutoBlockTab:CreateToggle({
+    Name = "2. 7n7 Auto Clone + Rotation - Presses Q",
+    CurrentValue = false,
+    Flag = "SevenNAutoCloneToggle",
+    Callback = function(Value)
+        local is7n7 = amI7n7()
+        if is7n7 then
+            autoCloneFor7n7 = Value
+            SendNotif("7n7 Auto Clone", Value and "Enabled" or "Disabled", 1)
+        end
+    end
+})
+
+AutoBlockTab:CreateKeybind({
+    Name = "7n7 Auto Clone Keybind",
+    CurrentKeybind = "Y",
     HoldToInteract = false,
     Flag = "SevenNAutoCloneKey",
     Callback = function()
         local is7n7 = amI7n7()
         if is7n7 then
-            autoCloneFor7n7 = not autoCloneFor7n7
-            SendNotif("7n7 Auto Clone", autoCloneFor7n7 and "Enabled (Rotates to killer for 0.3s, Presses Q)" or "Disabled", 1)
+            local newValue = not autoCloneFor7n7
+            SevenNToggle:Set(newValue)
+            autoCloneFor7n7 = newValue
+            SendNotif("7n7 Auto Clone", newValue and "Enabled" or "Disabled", 1)
         end
     end
 })
@@ -2699,7 +2902,7 @@ AutoBlockTab:CreateToggle({
     Flag = "RagingPaceAutoParry",
     Callback = function(Value)
         ragingPaceAutoParry = Value
-        SendNotif("Slasher", "Raging Pace Auto Parry " .. (Value and "Enabled (Presses R)" or "Disabled"), 1)
+        SendNotif("Slasher", "Raging Pace Auto Parry " .. (Value and "Enabled" or "Disabled"), 1)
     end
 })
 
@@ -2709,27 +2912,37 @@ AutoBlockTab:CreateToggle({
     Flag = "Error404AutoParry",
     Callback = function(Value)
         error404AutoParry = Value
-        SendNotif("JohnDoe", "Error 404 Auto Parry " .. (Value and "Enabled (Presses R)" or "Disabled"), 1)
+        SendNotif("JohnDoe", "Error 404 Auto Parry " .. (Value and "Enabled" or "Disabled"), 1)
     end
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "5. Raging Pace Auto Punish (Slasher vs Guest1337 block) - Presses R",
+    Name = "5. Blood Hunt Auto Parry (Sixer) - Presses R",
+    CurrentValue = false,
+    Flag = "BloodHuntAutoParry",
+    Callback = function(Value)
+        bloodHuntAutoParry = Value
+        SendNotif("Sixer", "Blood Hunt Auto Parry " .. (Value and "Enabled" or "Disabled"), 1)
+    end
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "6. Raging Pace Auto Punish (Slasher) - Presses R",
     CurrentValue = false,
     Flag = "RagingPaceAutoPunish",
     Callback = function(Value)
         ragingPaceAutoPunish = Value
-        SendNotif("Slasher", "Raging Pace Auto Punish " .. (Value and "Enabled (Presses R)" or "Disabled"), 1)
+        SendNotif("Slasher", "Raging Pace Auto Punish " .. (Value and "Enabled" or "Disabled"), 1)
     end
 })
 
 AutoBlockTab:CreateToggle({
-    Name = "6. Mass Infection Auto Punish (1x1x1x1 vs Guest1337 block) - Presses Q",
+    Name = "7. Mass Infection Auto Punish (1x1x1x1) - Presses Q",
     CurrentValue = false,
     Flag = "OnexOnexOnexOneAutoPunish",
     Callback = function(Value)
         onexOnexOnexOneAutoPunish = Value
-        SendNotif("1x1x1x1", "Mass Infection Auto Punish " .. (Value and "Enabled (Presses Q)" or "Disabled"), 1)
+        SendNotif("1x1x1x1", "Mass Infection Auto Punish " .. (Value and "Enabled" or "Disabled"), 1)
     end
 })
 
@@ -2765,45 +2978,22 @@ AutoBlockTab:CreateButton({
         if autoblocktype == "Block" then
             autoblocktype = "Charge"
             originalBlockType = "Charge"
-            SendNotif("Block Type", "Switched to Charge (Presses Q)", 1.5)
+            SendNotif("Block Type", "Switched to Charge", 1.5)
         elseif autoblocktype == "Charge" then
-            autoblocktype = "7n7 Clone"
-            originalBlockType = "7n7 Clone"
-            SendNotif("Block Type", "Switched to 7n7 Clone (Presses Q)", 1.5)
-        elseif autoblocktype == "7n7 Clone" then
             autoblocktype = "Block"
             originalBlockType = "Block"
-            SendNotif("Block Type", "Switched to Block (Presses Q)", 1.5)
+            SendNotif("Block Type", "Switched to Block", 1.5)
         end
     end
 })
 
-AutoBlockTab:CreateToggle({
-    Name = "Message When Blocking",
-    CurrentValue = false,
-    Flag = "MessageWhenBlockToggle",
-    Callback = function(Value)
-        messageWhenAutoBlockOn = Value
-    end
-})
-
 AutoBlockTab:CreateInput({
-    Name = "Block Delay",
+    Name = "Block Delay (seconds)",
     PlaceholderText = "0",
     RemoveTextAfterFocusLost = false,
     Flag = "blockdelaynumber",
     Callback = function(Text)
         blockdelay = tonumber(Text) or 0
-    end
-})
-
-AutoBlockTab:CreateInput({
-    Name = "Message when blocking",
-    PlaceholderText = "im gonna block ya",
-    RemoveTextAfterFocusLost = false,
-    Flag = "MessageWhenBlockText",
-    Callback = function(Text)
-        messageWhenAutoBlock = Text
     end
 })
 
@@ -2836,7 +3026,6 @@ AutoBlockTab:CreateInput({
     Flag = "DetectionRange",
     Callback = function(Text)
         detectionRange = tonumber(Text) or 18
-        detectionRangeSq = detectionRange * detectionRange
     end
 })
 
@@ -2851,16 +3040,13 @@ AutoBlockTab:CreateToggle({
                 safeDestroyCircle(circle)
             end
             detectionCircles = {}
-            
-            for _, circle in pairs(survivorCircles) do
-                safeDestroyCircle(circle)
-            end
-            survivorCircles = {}
         end
     end
 })
 
--- Tech Tab (Only Auto Blood Orb)
+-- ===== TECH TAB =====
+local TechTab = Window:CreateTab("Tech", 4483362458)
+
 TechTab:CreateToggle({
     Name = "Auto Blood Orb (Sixer)",
     CurrentValue = false,
@@ -2889,8 +3075,8 @@ TechTab:CreateParagraph({
               "• You are not playing as Sixer"
 })
 
--- Aimbot Tab
-local AimbotSection = AimbotTab:CreateSection("Aimbot Settings")
+-- ===== AIMBOT TAB =====
+local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 
 local AimbotToggle = AimbotTab:CreateToggle({
     Name = "Enable Aimbot",
@@ -2933,15 +3119,20 @@ AimbotTab:CreateKeybind({
 })
 
 AimbotTab:CreateToggle({
-    Name = "Face same side as killer (Backstab mode)",
+    Name = "TwoTime: Face Same Side As Killer (Backstab Mode)",
     CurrentValue = false,
-    Flag = "BackstabMode",
+    Flag = "FaceKillerSideToggle",
     Callback = function(Value)
         faceSameSideAsKiller = Value
+        if Value then
+            SendNotif("TwoTime", "Normal stab will now ROTATE CHARACTER to face killer side (NO shiftlock)", 1)
+        else
+            SendNotif("TwoTime", "Normal stab will now move CAMERA to aim at killer (Shiftlock ON)", 1)
+        end
     end
 })
 
-local AimbotSmoothness = AimbotTab:CreateSlider({
+AimbotTab:CreateSlider({
     Name = "Aimbot Smoothness",
     Range = {0.01, 0.5},
     Increment = 0.01,
@@ -2953,7 +3144,7 @@ local AimbotSmoothness = AimbotTab:CreateSlider({
     end
 })
 
-local PredictionMultiplierSlider = AimbotTab:CreateSlider({
+AimbotTab:CreateSlider({
     Name = "Prediction Distance Multiplier",
     Range = {1, 3},
     Increment = 0.1,
@@ -2966,7 +3157,7 @@ local PredictionMultiplierSlider = AimbotTab:CreateSlider({
     end
 })
 
-local AimbotMaxDistance = AimbotTab:CreateSlider({
+AimbotTab:CreateSlider({
     Name = "Max Distance",
     Range = {10, 200},
     Increment = 5,
@@ -2999,7 +3190,7 @@ local FOVModeToggle = AimbotTab:CreateToggle({
     end
 })
 
-local AimbotFOV = AimbotTab:CreateSlider({
+AimbotTab:CreateSlider({
     Name = "Field of View Size",
     Range = {30, 360},
     Increment = 5,
@@ -3017,20 +3208,21 @@ local AimbotFOV = AimbotTab:CreateSlider({
 AimbotTab:CreateParagraph({
     Title = "Aimbot Features",
     Content = "• LEFT CLICK:\n" ..
-              "  - Sixer: 2s if Carving Slash has charges, 0.8s if no charges (NO NOTIFICATIONS)\n" ..
+              "  - Silent M1 cooldown check for ALL killers (0, 0.0, 0.1 = ready)\n" ..
+              "  - Sixer: 2s if Carving Slash has charges, 0.8s if no charges\n" ..
               "  - Other Killers: 0.65s\n" ..
               "• Q ABILITY:\n" ..
-              "  - Noli: 2.5s (NO NOTIFICATIONS)\n" ..
-              "  - Sixer: 1.45s (NO NOTIFICATIONS)\n" ..
+              "  - Noli: 2.5s\n" ..
+              "  - Sixer: 1.45s\n" ..
               "  - Slasher: 0.95s\n" ..
               "  - JohnDoe: 4.5s\n" ..
               "  - 1x1x1x1: 2.1s\n" ..
               "  - Shedletsky: 1.1s\n" ..
-              "  - TwoTime: 0.4s\n" ..
+              "  - TwoTime: 0.4s (with cooldown check & crouch dash stab!)\n" ..
               "  - Elliot: 0.5s\n" ..
               "• E ABILITY:\n" ..
-              "  - c00lkidd: 0.6s (NO NOTIFICATIONS)\n" ..
-              "  - Sixer: 1.0s (NO NOTIFICATIONS)\n" ..
+              "  - c00lkidd: 0.6s\n" ..
+              "  - Sixer: 1.0s\n" ..
               "  - Chance: 1.1s\n" ..
               "  - 1x1x1x1: 1.2s\n" ..
               "  - Slasher: 0.5s\n" ..
@@ -3039,7 +3231,8 @@ AimbotTab:CreateParagraph({
               "  - Guest1337: 0.95s\n" ..
               "• Press Z to toggle Aimbot on/off\n" ..
               "• PREDICTION: Red sphere appears when targeting\n" ..
-              "• FOV circle appears only in FOV Mode"
+              "• TwoTime: Crouch + Q = Dash Stab (0.35s dash, 0.4s backstab)\n" ..
+              "• Sixer: Blood Hunt Auto Parry (presses R) available in Auto Block tab"
 })
 
 local CharacterInfoButton = AimbotTab:CreateButton({
@@ -3053,7 +3246,9 @@ local CharacterInfoButton = AimbotTab:CreateButton({
     end
 })
 
--- Dusekkar Tab
+-- ===== DUSEKKAR SILENT AIM TAB =====
+local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
+
 local DusekkarToggle = DusekkarTab:CreateToggle({
     Name = "Enable Dusekkar Silent Aim",
     CurrentValue = false,
@@ -3061,11 +3256,17 @@ local DusekkarToggle = DusekkarTab:CreateToggle({
     Callback = function(Value)
         dusekkarEnabled = Value
         if Value then
-            SendNotif("Dusekkar", "Enabled - Press F to fire", 2)
+            setupSilentAim()
+            setupDusekkarInput()
+            SendNotif("Dusekkar", "Enabled - Use the Fire keybind", 2)
         else
             restoreSilentAim()
             silentAimActive = false
             currentTarget = nil
+            if dusekkarInputConnection then
+                dusekkarInputConnection:Disconnect()
+                dusekkarInputConnection = nil
+            end
             SendNotif("Dusekkar", "Disabled", 1)
         end
     end
@@ -3078,7 +3279,6 @@ DusekkarTab:CreateDropdown({
     Flag = "DusekkarTargetMode",
     Callback = function(Option)
         dusekkarTargetMode = Option
-        SendNotif("Dusekkar", "Now targeting: " .. Option, 1)
     end
 })
 
@@ -3091,7 +3291,6 @@ DusekkarTab:CreateSlider({
     Flag = "DusekkarPrediction",
     Callback = function(Value)
         aimbotPredictionMultiplier = Value
-        SendNotif("Prediction", "Multiplier set to " .. Value .. "x", 1)
     end
 })
 
@@ -3124,16 +3323,75 @@ DusekkarTab:CreateKeybind({
         if not dusekkarEnabled then
             return
         end
+        if not amIDusekkar() then
+            return
+        end
         useSilentAim()
     end
 })
 
 DusekkarTab:CreateParagraph({
     Title = "Dusekkar Silent Aim Features",
-    Content = "• PURE SILENT AIM: NO camera movement, NO shiftlock\n• Blue prediction sphere appears when firing\n• TARGETS THE BLUE SPHERE (predicted position)\n• Prediction uses same multiplier as main aimbot\n• Sphere stays for full 2.5 seconds (plasma beam duration)\n• SURVIVOR MODE: Targets survivor closest to cursor\n• KILLER MODE: Targets nearest killer\n• Press Q to switch modes\n• Press F to fire at target"
+    Content = "• PURE SILENT AIM: NO camera movement, NO shiftlock\n• Blue prediction sphere appears when firing\n• TARGETS THE BLUE SPHERE (predicted position)\n• Prediction uses same multiplier as main aimbot\n• Sphere stays for full 2.5 seconds (plasma beam duration)\n• SURVIVOR MODE: Targets survivor closest to cursor\n• KILLER MODE: Targets nearest killer\n• Press Q to switch modes\n• Use the FIRE keybind above to fire (default: F)"
 })
 
--- Character listeners for position tracking
+-- ===== VISUALS TAB =====
+local VisualsTab = Window:CreateTab("Visuals", 4483362458)
+
+VisualsTab:CreateToggle({
+    Name = "Show Stun Immune Indicator",
+    CurrentValue = false,
+    Flag = "StunImmuneToggle",
+    Callback = function(Value)
+        stunImmuneEnabled = Value
+        if Value then
+            -- Clean up any existing indicators first
+            if KillersFolder then
+                for _, killer in ipairs(KillersFolder:GetChildren()) do
+                    local hrp = killer:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local billboard = hrp:FindFirstChild("StunImmuneBillboard")
+                        if billboard then
+                            billboard:Destroy()
+                        end
+                    end
+                end
+            end
+            startStunImmuneLoop()
+            setupStunImmuneListeners()
+            SendNotif("Stun Immune", "Enabled - Shows ⚡ STUN IMMUNE ⚡ above stunned killers", 2)
+        else
+            if stunImmuneLoop then
+                task.cancel(stunImmuneLoop)
+                stunImmuneLoop = nil
+            end
+            -- Clean up all indicators
+            if KillersFolder then
+                for _, killer in ipairs(KillersFolder:GetChildren()) do
+                    local hrp = killer:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local billboard = hrp:FindFirstChild("StunImmuneBillboard")
+                        if billboard then
+                            billboard:Destroy()
+                        end
+                    end
+                end
+            end
+            SendNotif("Stun Immune", "Disabled", 1)
+        end
+    end
+})
+
+VisualsTab:CreateParagraph({
+    Title = "Stun Immune Indicator Info",
+    Content = "Shows a ⚡ STUN IMMUNE ⚡ text above killers who are currently stun immune.\n\n" ..
+              "Detects:\n" ..
+              "• InvincibleFX (shield icon)\n" ..
+              "• StunProtection\n\n" ..
+              "Does not show on yourself if playing as killer."
+})
+
+-- ===== INITIALIZATION =====
 local function setupCharacterListeners()
     if SurvivorsFolder then
         SurvivorsFolder.ChildAdded:Connect(function(newSurvivor)
@@ -3176,9 +3434,8 @@ end
 setupCharacterListeners()
 task.spawn(setupInputHook)
 setupSilentAim()
-
+refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-refreshUIRefs()
-
-print("wahoo wario time - Noli Q is now 2.5s tap aimbot! Sixer left click uses Carving Slash charges! Auto Blood Orb added!")
+print("All tabs loaded - Auto Block, Tech, Aimbot, Dusekkar Silent Aim, and Visuals (Stun Immune Indicator)!")
+print("Dusekkar Silent Aim: Use the FIRE keybind (default: F) - NO hardcoded F key anymore!")
