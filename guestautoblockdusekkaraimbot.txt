@@ -188,9 +188,6 @@ local aimbotActiveTimer = nil
 local aimbotTargetCount = 0
 local aimbotPredictionMultiplier = 1
 
--- ===== BACKSTAB MODE TOGGLE =====
-local faceSameSideAsKiller = false
-
 -- ===== DUSEKKAR SILENT AIM VARIABLES =====
 local dusekkarEnabled = false
 local dusekkarTargetMode = "Survivors"
@@ -200,7 +197,9 @@ local mousePositionModule = nil
 local currentTarget = nil
 local dusekkarActive = false
 local dusekkarTimer = nil
-local dusekkarInputConnection = nil
+
+-- ===== BACKSTAB MODE TOGGLE =====
+local faceSameSideAsKiller = false
 
 -- ===== PREDICTION VARIABLES =====
 local BASE_PREDICTION_DISTANCE = 4
@@ -551,20 +550,6 @@ local function amITwoTime()
     return false, nil
 end
 
-local function amIDusekkar()
-    if SurvivorsFolder then
-        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
-            if survivor.Name == "Dusekkar" then
-                local usernameAttr = survivor:GetAttribute("Username")
-                if usernameAttr and usernameAttr == lp.Name then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
 local function amISixer()
     if KillersFolder then
         for _, killer in ipairs(KillersFolder:GetChildren()) do
@@ -577,6 +562,20 @@ local function amISixer()
         end
     end
     return false, nil
+end
+
+local function amIDusekkar()
+    if SurvivorsFolder then
+        for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+            if survivor.Name == "Dusekkar" then
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true
+                end
+            end
+        end
+    end
+    return false
 end
 
 local function getAllCharactersByName(name)
@@ -1358,7 +1357,45 @@ local function createFOVCircle()
     end)
 end
 
--- ===== DUSEKKAR SILENT AIM FUNCTIONS =====
+-- ===== SILENT AIM HOOK SETUP =====
+local function setupSilentAim()
+    local success, module = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
+    end)
+    
+    if not success then
+        success, module = pcall(function()
+            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
+        end)
+    end
+    
+    if success and module then
+        mousePositionModule = module
+        originalGetMousePos = module.GetMousePos
+        
+        local function hookedGetMousePos(self, ...)
+            local args = {...}
+            
+            if silentAimActive and currentTargetSphere then
+                return currentTargetSphere.Position
+            end
+            
+            return originalGetMousePos(self, ...)
+        end
+        
+        module.GetMousePos = hookedGetMousePos
+        return true
+    end
+    return false
+end
+
+local function restoreSilentAim()
+    if mousePositionModule and originalGetMousePos then
+        mousePositionModule.GetMousePos = originalGetMousePos
+    end
+end
+
+-- ===== DUSEKKAR FUNCTIONS =====
 local function isPlasmaBeamOnCooldown()
     local success, cooldownText = pcall(function()
         return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
@@ -1459,6 +1496,36 @@ local function getSurvivorClosestToCursor()
     return nearestByDistance
 end
 
+local function getNearestSurvivor()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    
+    local nearestSurvivor = nil
+    local nearestDistance = math.huge
+    
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestSurvivor = survivor
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestSurvivor
+end
+
 local function getNearestKillerForDusekkar()
     local myChar = lp.Character
     if not myChar then return nil end
@@ -1487,40 +1554,6 @@ local function getNearestKillerForDusekkar()
     end
     
     return nearestKiller
-end
-
-local function setupSilentAim()
-    local success, module = pcall(function()
-        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
-    end)
-    
-    if not success then
-        success, module = pcall(function()
-            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
-        end)
-    end
-    
-    if success and module then
-        mousePositionModule = module
-        originalGetMousePos = module.GetMousePos
-        
-        local function hookedGetMousePos(self, ...)
-            if silentAimActive and currentTargetSphere then
-                return currentTargetSphere.Position
-            end
-            return originalGetMousePos(self, ...)
-        end
-        
-        module.GetMousePos = hookedGetMousePos
-        return true
-    end
-    return false
-end
-
-local function restoreSilentAim()
-    if mousePositionModule and originalGetMousePos then
-        mousePositionModule.GetMousePos = originalGetMousePos
-    end
 end
 
 local function stopDusekkar()
@@ -1566,10 +1599,12 @@ local function useSilentAim()
     end
     
     if not target then 
+        SendNotif("Dusekkar", "No target found!", 1.5)
         return false 
     end
     
     if isPlasmaBeamOnCooldown() then 
+        SendNotif("Dusekkar", "Plasma Beam on cooldown!", 1.5)
         return false 
     end
     
@@ -2774,25 +2809,6 @@ local function setupInputHook()
     end)
 end
 
--- ===== DUSEKKAR INPUT =====
-local function setupDusekkarInput()
-    if dusekkarInputConnection then
-        dusekkarInputConnection:Disconnect()
-        dusekkarInputConnection = nil
-    end
-    
-    dusekkarInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if not dusekkarEnabled then return end
-        if not amIDusekkar() then return end
-        
-        -- Only use the keybind from the UI (no hardcoded F key)
-        -- The actual keybind is handled by the UI's Fire Plasma Beam keybind
-        -- This function is just for additional input if needed
-    end)
-end
-
 -- ===== MAIN LOOP =====
 local mainLoopConn = RunService.Heartbeat:Connect(function()
     pcall(checkSpecialKillerStatus)
@@ -3246,7 +3262,7 @@ local CharacterInfoButton = AimbotTab:CreateButton({
     end
 })
 
--- ===== DUSEKKAR SILENT AIM TAB =====
+-- ===== DUSEKKAR TAB =====
 local DusekkarTab = Window:CreateTab("Dusekkar Silent Aim", 4483362458)
 
 local DusekkarToggle = DusekkarTab:CreateToggle({
@@ -3257,16 +3273,11 @@ local DusekkarToggle = DusekkarTab:CreateToggle({
         dusekkarEnabled = Value
         if Value then
             setupSilentAim()
-            setupDusekkarInput()
             SendNotif("Dusekkar", "Enabled - Use the Fire keybind", 2)
         else
             restoreSilentAim()
             silentAimActive = false
             currentTarget = nil
-            if dusekkarInputConnection then
-                dusekkarInputConnection:Disconnect()
-                dusekkarInputConnection = nil
-            end
             SendNotif("Dusekkar", "Disabled", 1)
         end
     end
@@ -3279,6 +3290,7 @@ DusekkarTab:CreateDropdown({
     Flag = "DusekkarTargetMode",
     Callback = function(Option)
         dusekkarTargetMode = Option
+        SendNotif("Dusekkar", "Now targeting: " .. Option, 1)
     end
 })
 
@@ -3291,6 +3303,7 @@ DusekkarTab:CreateSlider({
     Flag = "DusekkarPrediction",
     Callback = function(Value)
         aimbotPredictionMultiplier = Value
+        SendNotif("Prediction", "Multiplier set to " .. Value .. "x", 1)
     end
 })
 
@@ -3323,16 +3336,21 @@ DusekkarTab:CreateKeybind({
         if not dusekkarEnabled then
             return
         end
-        if not amIDusekkar() then
-            return
-        end
         useSilentAim()
     end
 })
 
 DusekkarTab:CreateParagraph({
     Title = "Dusekkar Silent Aim Features",
-    Content = "• PURE SILENT AIM: NO camera movement, NO shiftlock\n• Blue prediction sphere appears when firing\n• TARGETS THE BLUE SPHERE (predicted position)\n• Prediction uses same multiplier as main aimbot\n• Sphere stays for full 2.5 seconds (plasma beam duration)\n• SURVIVOR MODE: Targets survivor closest to cursor\n• KILLER MODE: Targets nearest killer\n• Press Q to switch modes\n• Use the FIRE keybind above to fire (default: F)"
+    Content = "• PURE SILENT AIM: NO camera movement, NO shiftlock\n" ..
+              "• Blue prediction sphere appears when firing\n" ..
+              "• TARGETS THE BLUE SPHERE (predicted position)\n" ..
+              "• Prediction uses same multiplier as main aimbot\n" ..
+              "• Sphere stays for full 2.5 seconds (plasma beam duration)\n" ..
+              "• SURVIVOR MODE: Targets survivor closest to cursor\n" ..
+              "• KILLER MODE: Targets nearest killer\n" ..
+              "• Press Q to switch modes\n" ..
+              "• Press F to fire at target"
 })
 
 -- ===== VISUALS TAB =====
@@ -3433,9 +3451,7 @@ end
 
 setupCharacterListeners()
 task.spawn(setupInputHook)
-setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
 print("All tabs loaded - Auto Block, Tech, Aimbot, Dusekkar Silent Aim, and Visuals (Stun Immune Indicator)!")
-print("Dusekkar Silent Aim: Use the FIRE keybind (default: F) - NO hardcoded F key anymore!")
