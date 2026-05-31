@@ -1,13 +1,13 @@
 -- Auto Reset when Killer - Only after all generators done
--- ONLY EXECUTES FOR: lvl2crookboss OR CandyTombstone
+-- ONLY EXECUTES FOR: chimeracos OR lvl2crookboss
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- Check if this script should run for this user
 local ALLOWED_USERNAMES = {
-    "guragurababala",
-    "candytombstone"
+    "chimeracos",
+    "lvl2crookboss"
 }
 
 local function IsAllowedUser()
