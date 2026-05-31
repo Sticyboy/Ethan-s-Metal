@@ -273,6 +273,8 @@ local PRE_TELEPORT_DELAY = 4 -- Wait 4 seconds BEFORE teleporting to each genera
 local POST_TELEPORT_DELAY = 4 -- Wait 4 seconds AFTER teleporting, BEFORE firing prompt
 local PUZZLE_DELAY = 2.8 -- seconds between each puzzle
 local LOOP_DELAY = 0.5
+local UI_RETRY_ATTEMPTS = 5 -- Number of times to retry firing prompt if UI doesn't open
+local UI_RETRY_DELAY = 1 -- Seconds between retry attempts
 
 -- Configuration - KILLER MODE (Left Click Spam)
 local CLICK_DELAY = 0.15
@@ -293,6 +295,13 @@ local function LeftClick()
         task.wait(0.02)
         UserInputService:SendMouseButtonEvent(Enum.UserInputType.MouseButton1, 0, 0, false)
     end)
+end
+
+-- Function to check if generator UI is open
+local function IsGeneratorUIOpen()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return false end
+    return playerGui:FindFirstChild("PuzzleUI") ~= nil
 end
 
 -- Function to check if local player is a survivor
@@ -422,7 +431,7 @@ local function CompletePuzzle(generator)
     return false
 end
 
--- Function to complete a generator (with pre-teleport and post-teleport delays)
+-- Function to complete a generator (with UI detection and retry logic)
 local function CompleteGenerator(generator, generatorNumber, totalGenerators)
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then
@@ -446,9 +455,30 @@ local function CompleteGenerator(generator, generatorNumber, totalGenerators)
     print("  Waiting " .. POST_TELEPORT_DELAY .. " seconds after teleport BEFORE firing prompt...")
     task.wait(POST_TELEPORT_DELAY)
     
-    -- Fire proximity prompt to enter
-    FireProximityPrompt(generator)
-    task.wait(0.5)
+    -- Fire proximity prompt and retry until UI opens
+    local uiOpened = false
+    
+    for attempt = 1, UI_RETRY_ATTEMPTS do
+        -- Fire the prompt
+        FireProximityPrompt(generator)
+        
+        -- Wait 1 second for UI to appear
+        task.wait(1)
+        
+        -- Check if UI is open
+        if IsGeneratorUIOpen() then
+            print("  ✓ Generator UI detected (attempt " .. attempt .. "/" .. UI_RETRY_ATTEMPTS .. ")")
+            uiOpened = true
+            break
+        else
+            print("  ⚠ UI not detected (attempt " .. attempt .. "/" .. UI_RETRY_ATTEMPTS .. "), retrying...")
+        end
+    end
+    
+    if not uiOpened then
+        print("  ✗ Failed to open generator UI after " .. UI_RETRY_ATTEMPTS .. " attempts. Skipping this generator.")
+        return false
+    end
     
     -- Keep completing puzzles every 2.8 seconds until generator is 100%
     local puzzlesCompleted = 0
@@ -562,6 +592,7 @@ local function StartLoop()
     print("    Survivor: Initial " .. SURVIVOR_START_DELAY .. "s delay ONCE when first entering survivor mode")
     print("    Survivor: " .. PRE_TELEPORT_DELAY .. "s delay BEFORE each teleport")
     print("    Survivor: " .. POST_TELEPORT_DELAY .. "s delay AFTER teleport BEFORE prompt")
+    print("    Survivor: UI Retry: " .. UI_RETRY_ATTEMPTS .. " attempts with " .. UI_RETRY_DELAY .. "s delay")
     print("    Killer: Auto-hunts survivors (LEFT CLICK SPAM)")
     print("    Auto Character Leveling: ACTIVE")
     print("══════════════════════════════════════════════════════════════════")
@@ -676,6 +707,7 @@ end
 
 print("Script loaded!")
 print("  - As Survivor: Waits 4s ONCE when first entering survivor mode")
-print("  - As Survivor: Then for EACH generator: waits 4s → teleport → waits 4s → fire prompt → do puzzles")
+print("  - As Survivor: Then for EACH generator: waits 4s → teleport → waits 4s → fire prompt → check UI → do puzzles")
+print("  - As Survivor: If UI doesn't open, retries up to 5 times")
 print("  - As Killer: Teleports to survivors and spams left click")
 print("  - Auto Character Leveling: Will switch characters when they reach level 100")
