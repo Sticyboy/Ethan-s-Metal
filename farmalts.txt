@@ -1,7 +1,7 @@
 -- Auto Generator/Survivor Hunter Loop - ULTRA FAST
 -- With Auto Character Leveling System
 -- Does generators as survivor (puzzle every 2.8s), hunts survivors as killer (left click spam)
--- ONLY WORKS FOR: vrreblux OR matthewjee332
+-- ONLY WORKS FOR: vrreblux OR gwgfdghydvh
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,7 +12,7 @@ local LocalPlayer = Players.LocalPlayer
 -- Check if this script should run for this user
 local ALLOWED_USERNAMES = {
     "vrreblux",
-    "matthewjee332"
+    "gwgfdghydvh"
 }
 
 local function IsAllowedUser()
@@ -55,44 +55,45 @@ local currentUsername = LocalPlayer.Name:lower()
 local survivorsOrder = {}
 local killersOrder = {}
 
-if currentUsername == "matthewjee332" then
-    -- Original order for matthewjee332
+if currentUsername == "gwgfdghydvh" then
+    -- Custom order for gwgfdghydvh
     survivorsOrder = {
         "Noob",
-        "Builderman",
         "Elliot",
-        "Veeronica",
         "Taph",
-        "Dusekkar",
         "007n7",
         "Chance",
-        "Guest1337",
-        "JaneDoe",
+        "Builderman",
         "Shedletsky",
-        "TwoTime"
+        "Guest1337",
+        "Veeronica",
+        "Dusekkar",
+        "TwoTime",
+        "JaneDoe"
     }
     
     killersOrder = {
-        "Slasher",
-        "Sixer",
-        "1x1x1x1",
-        "JohnDoe",
-        "Noli",
         "Nosferatu",
-        "c00lkidd"
+        "Noli",
+        "Sixer",
+        "c00lkidd",
+        "Slasher",
+        "1x1x1x1",
+        "JohnDoe"
     }
     
-    print("📋 Using ORIGINAL priority order for matthewjee332")
+    print("📋 Using CUSTOM priority order for gwgfdghydvh")
+    print("   Survivor order: Noob → Elliot → Taph → 007n7 → Chance → Builderman → Shedletsky → Guest1337 → Veeronica → Dusekkar → TwoTime → JaneDoe")
+    print("   Killer order: Nosferatu → Noli → Sixer → c00lkidd → Slasher → 1x1x1x1 → JohnDoe")
     
 elseif currentUsername == "vrreblux" then
-    -- Custom order for vrreblux
+    -- Custom order for vrreblux (Updated: TwoTime first, Noob removed - already level 100)
     survivorsOrder = {
+        "TwoTime",
         "Builderman",
         "Veeronica",
         "Elliot",
         "Shedletsky",
-        "Noob",
-        "TwoTime",
         "Taph"
     }
     
@@ -107,34 +108,35 @@ elseif currentUsername == "vrreblux" then
     }
     
     print("📋 Using CUSTOM priority order for vrreblux")
-    print("   Survivor order: Builderman → Veeronica → Elliot → Shedletsky → Noob → TwoTime → Taph")
-    print("   🎉 Congratulations! All Killers are level 100!")
+    print("   Survivor order: TwoTime → Builderman → Veeronica → Elliot → Shedletsky → Taph")
+    print("   (Noob removed - already level 100)")
+    print("   Killer order: Slasher → Sixer → 1x1x1x1 → JohnDoe → Noli → Nosferatu → c00lkidd")
     
 else
-    -- Fallback
+    -- Fallback (should never reach here due to allowed users check)
     survivorsOrder = {
         "Noob",
-        "Builderman",
         "Elliot",
-        "Veeronica",
         "Taph",
-        "Dusekkar",
         "007n7",
         "Chance",
-        "Guest1337",
-        "JaneDoe",
+        "Builderman",
         "Shedletsky",
-        "TwoTime"
+        "Guest1337",
+        "Veeronica",
+        "Dusekkar",
+        "TwoTime",
+        "JaneDoe"
     }
     
     killersOrder = {
-        "Slasher",
-        "Sixer",
-        "1x1x1x1",
-        "JohnDoe",
-        "Noli",
         "Nosferatu",
-        "c00lkidd"
+        "Noli",
+        "Sixer",
+        "c00lkidd",
+        "Slasher",
+        "1x1x1x1",
+        "JohnDoe"
     }
     
     print("📋 Using DEFAULT priority order for: " .. LocalPlayer.Name)
@@ -217,9 +219,6 @@ local function switchToNonLevel100Killer()
         switchToKiller(targetKiller)
     else
         print("All Killers are level 100 or above!")
-        if currentUsername == "vrreblux" then
-            print("🎉 Great job! All your Killers are already max level!")
-        end
     end
 end
 
@@ -258,6 +257,7 @@ local function startLevelingMonitor()
     
     print("Monitoring all Survivors and Killers for level 100...")
     print("Survivor priority order: " .. table.concat(survivorsOrder, " → "))
+    print("Killer priority order: " .. table.concat(killersOrder, " → "))
 end
 
 -- Start the leveling monitor
