@@ -282,6 +282,8 @@ local BETWEEN_SURVIVORS_DELAY = 0.2
 
 -- Track if we've already done the initial survivor delay
 local survivorInitialDelayDone = false
+local generatorsCompletedThisRound = 0
+local waitingForRoundEnd = false
 
 -- Function to simulate left click
 local function LeftClick()
@@ -593,6 +595,7 @@ local function StartLoop()
     print("    Survivor: " .. PRE_TELEPORT_DELAY .. "s delay BEFORE each teleport")
     print("    Survivor: " .. POST_TELEPORT_DELAY .. "s delay AFTER teleport BEFORE prompt")
     print("    Survivor: UI Retry: " .. UI_RETRY_ATTEMPTS .. " attempts with " .. UI_RETRY_DELAY .. "s delay")
+    print("    Survivor: Will stop after completing 5 generators and wait for round end")
     print("    Killer: Auto-hunts survivors (LEFT CLICK SPAM)")
     print("    Auto Character Leveling: ACTIVE")
     print("══════════════════════════════════════════════════════════════════")
@@ -603,15 +606,37 @@ local function StartLoop()
         local killerName = GetKillerName()
         
         if isSurvivor then
-            -- Check if this is the first time entering survivor mode
+            -- Reset round tracking when entering survivor mode
+            if waitingForRoundEnd then
+                print("▶ New round started! Resetting generator counter.")
+                waitingForRoundEnd = false
+                generatorsCompletedThisRound = 0
+                survivorInitialDelayDone = false
+            end
+            
+            -- Check if we've already completed all 5 generators this round
+            if generatorsCompletedThisRound >= 5 then
+                if not waitingForRoundEnd then
+                    print("══════════════════════════════════════════════")
+                    print("✅ All 5 generators completed this round!")
+                    print("⏳ Waiting for round to end...")
+                    print("══════════════════════════════════════════════")
+                    waitingForRoundEnd = true
+                end
+                task.wait(LOOP_DELAY)
+                continue
+            end
+            
+            -- Check if this is the first time entering survivor mode this round
             if not survivorInitialDelayDone then
-                print("▶ FIRST TIME ENTERING SURVIVOR MODE - Waiting " .. SURVIVOR_START_DELAY .. " seconds...")
+                print("▶ FIRST TIME ENTERING SURVIVOR MODE THIS ROUND - Waiting " .. SURVIVOR_START_DELAY .. " seconds...")
                 task.wait(SURVIVOR_START_DELAY)
                 survivorInitialDelayDone = true
                 print("  Initial delay complete! Now starting generator work.")
             end
             
             print("▶ SURVIVOR MODE (doing generators)")
+            print("   Generators completed this round: " .. generatorsCompletedThisRound .. "/5")
             
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 local character = LocalPlayer.Character
@@ -624,14 +649,25 @@ local function StartLoop()
                     print("Found " .. #generators .. " generators to complete")
                     
                     for i, generator in ipairs(generators) do
+                        -- Stop if we've already done 5 generators
+                        if generatorsCompletedThisRound >= 5 then
+                            print("  Already completed 5 generators this round, stopping.")
+                            break
+                        end
+                        
                         print("\n  Generator " .. i .. "/" .. #generators .. " (Progress: " .. generator.Progress.Value .. "%)")
                         
-                        pcall(function()
+                        local success = pcall(function()
                             CompleteGenerator(generator, i, #generators)
                         end)
                         
+                        if success then
+                            generatorsCompletedThisRound = generatorsCompletedThisRound + 1
+                            print("  ✓ Total generators completed this round: " .. generatorsCompletedThisRound .. "/5")
+                        end
+                        
                         -- No delay between generators
-                        if i < #generators then
+                        if i < #generators and generatorsCompletedThisRound < 5 then
                             print("  Moving to next generator immediately...")
                         end
                     end
@@ -639,7 +675,13 @@ local function StartLoop()
                     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                         hrp.CFrame = originalPosition
                     end
-                    print("\n✓ All generators done!")
+                    
+                    if generatorsCompletedThisRound >= 5 then
+                        print("\n✓ All 5 generators completed this round! Waiting for round end.")
+                        waitingForRoundEnd = true
+                    else
+                        print("\n✓ No more incomplete generators found!")
+                    end
                 else
                     print("No incomplete generators found")
                 end
@@ -650,8 +692,10 @@ local function StartLoop()
             task.wait(LOOP_DELAY)
             
         elseif isKiller then
-            -- Reset the survivor delay flag when switching to killer
+            -- Reset all survivor tracking when switching to killer
             survivorInitialDelayDone = false
+            generatorsCompletedThisRound = 0
+            waitingForRoundEnd = false
             
             print("▶ KILLER MODE - Playing as: " .. (killerName or "Unknown") .. " (LEFT CLICK SPAM)")
             
@@ -691,8 +735,10 @@ local function StartLoop()
             task.wait(LOOP_DELAY)
             
         else
-            -- Not survivor or killer, reset the delay flag
+            -- Not survivor or killer, reset all tracking
             survivorInitialDelayDone = false
+            generatorsCompletedThisRound = 0
+            waitingForRoundEnd = false
             print("▶ WAITING (not survivor or killer)")
             task.wait(LOOP_DELAY)
         end
@@ -706,8 +752,9 @@ if not success then
 end
 
 print("Script loaded!")
-print("  - As Survivor: Waits 4s ONCE when first entering survivor mode")
+print("  - As Survivor: Waits 4s ONCE when first entering survivor mode each round")
 print("  - As Survivor: Then for EACH generator: waits 4s → teleport → waits 4s → fire prompt → check UI → do puzzles")
 print("  - As Survivor: If UI doesn't open, retries up to 5 times")
+print("  - As Survivor: STOPS after completing 5 generators and waits for round to end")
 print("  - As Killer: Teleports to survivors and spams left click")
 print("  - Auto Character Leveling: Will switch characters when they reach level 100")
