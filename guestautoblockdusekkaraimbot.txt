@@ -135,14 +135,10 @@ local guest1337AllAnims = {
     ["140671644163156"] = true,
     ["100926346851492"] = true,
     ["96959123077498"] = true,
-    ["87259391926321"] = true,
     ["82605295530067"] = true,
-    ["138040001965654"] = true,
     ["127040663332045"] = true,
-    ["72007882634344"] = true,
 }
 
--- Specific punch animations
 local guest1337PunchAnims = {
     ["87259391926321"] = true,
     ["138040001965654"] = true,
@@ -249,6 +245,7 @@ local shedletskySwingSounds = {
     ["139012439429121"] = true,
     ["5569523548"] = true,
     ["92445809840331"] = true,
+    ["81714228693719"] = true,
 }
 
 -- TwoTime sounds
@@ -1709,6 +1706,7 @@ local function checkSixerBloodHuntParry()
         ["139012439429121"] = true,
         ["5569523548"] = true,
         ["92445809840331"] = true,
+        ["81714228693719"] = true,
     }
     
     local allGuest1337s = getAllCharactersByName("Guest1337")
@@ -1724,7 +1722,7 @@ local function checkSixerBloodHuntParry()
                         if animator then
                             for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                 local animId = extractNumericAnimationId(track.Animation.AnimationId)
-                                if animId and guest1337AllAnims[animId] then
+                                if animId and (guest1337AllAnims[animId] or guest1337PunchAnims[animId]) then
                                     if blockdelay > 0 then
                                         task.wait(blockdelay)
                                     end
@@ -1899,6 +1897,7 @@ local function checkSpecialKillerActions()
         ["139012439429121"] = true,
         ["5569523548"] = true,
         ["92445809840331"] = true,
+        ["81714228693719"] = true,
     }
     
     if isSlasher and ragingPaceAutoPunish then
