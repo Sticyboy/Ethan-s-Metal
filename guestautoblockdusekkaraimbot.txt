@@ -3737,6 +3737,9 @@ DusekkarTab:CreateDropdown({
     CurrentOption = "Survivors",
     Flag = "DusekkarTargetMode",
     Callback = function(Option)
+        if not amIDusekkar() then
+            return
+        end
         dusekkarTargetMode = Option
         SendNotif("Dusekkar", "Now targeting: " .. Option, 1)
     end
@@ -3761,6 +3764,10 @@ DusekkarTab:CreateKeybind({
     HoldToInteract = false,
     Flag = "DusekkarSwitchKey",
     Callback = function()
+        if not amIDusekkar() then
+            return
+        end
+        
         if dusekkarTargetMode == "Survivors" then
             dusekkarTargetMode = "Killers"
         else
@@ -3778,6 +3785,10 @@ DusekkarTab:CreateKeybind({
     Flag = "DusekkarFireKey",
     Callback = function()
         if not dusekkarEnabled then
+            return
+        end
+        
+        if not amIDusekkar() then
             return
         end
         
