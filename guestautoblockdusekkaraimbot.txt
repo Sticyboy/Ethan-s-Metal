@@ -268,6 +268,7 @@ local janeDoeSounds = {
 -- Elliot throw animation
 local elliotThrowAnimation = {
     ["114155003741146"] = true,
+    ["126625530013840"] = true,
 }
 
 -- ===== DUSEKKAR SILENT AIM VARIABLES =====
