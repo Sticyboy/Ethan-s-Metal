@@ -216,6 +216,11 @@ local originalFacingCheckState = true
 local stunImmuneEnabled = false
 local stunImmuneLoop = nil
 
+-- ===== INVENTORY ESP VARIABLES =====
+local inventoryEspEnabled = false
+local inventoryEspBillboards = {}
+local inventoryEspConnection = nil
+
 -- ===== ABILITY COOLDOWN TRACKER VARIABLES =====
 local cooldownTrackerEnabled = false
 local activeCooldownTimers = {}
@@ -676,6 +681,80 @@ local function getAllCharactersByName(name)
     end
     
     return characters
+end
+
+-- ===== INVENTORY ESP FUNCTIONS =====
+local function getPlayerItems(player)
+    local items = {}
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") or item:IsA("HopperBin") then
+                table.insert(items, item.Name)
+            end
+        end
+    end
+    return items
+end
+
+local function updateInventoryESP()
+    -- Clear old billboards
+    for survivor, billboard in pairs(inventoryEspBillboards) do
+        pcall(function() billboard:Destroy() end)
+    end
+    inventoryEspBillboards = {}
+    
+    if not inventoryEspEnabled then return end
+    
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return end
+    
+    local survivorsFolder = playersFolder:FindFirstChild("Survivors")
+    if not survivorsFolder then return end
+    
+    for _, survivor in ipairs(survivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr ~= lp.Name then
+            local player = Players:FindFirstChild(usernameAttr)
+            if player then
+                local items = getPlayerItems(player)
+                
+                if #items > 0 then
+                    local hrp = survivor:FindFirstChild("HumanoidRootPart") or survivor:FindFirstChild("Head") or survivor:FindFirstChild("Torso")
+                    if hrp then
+                        local billboard = Instance.new("BillboardGui")
+                        billboard.Name = "InventoryESP"
+                        billboard.Size = UDim2.new(0, 150, 0, 50)
+                        billboard.StudsOffset = Vector3.new(0, -3, 0)
+                        billboard.AlwaysOnTop = true
+                        billboard.Parent = hrp
+                        
+                        local layout = Instance.new("UIListLayout")
+                        layout.FillDirection = Enum.FillDirection.Vertical
+                        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                        layout.VerticalAlignment = Enum.VerticalAlignment.Top
+                        layout.Padding = UDim.new(0, 2)
+                        layout.Parent = billboard
+                        
+                        for _, itemName in ipairs(items) do
+                            local textLabel = Instance.new("TextLabel")
+                            textLabel.Size = UDim2.new(0, 100, 0, 20)
+                            textLabel.BackgroundTransparency = 1
+                            textLabel.Text = itemName
+                            textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                            textLabel.TextStrokeTransparency = 0
+                            textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                            textLabel.TextScaled = true
+                            textLabel.Font = Enum.Font.GothamBold
+                            textLabel.Parent = billboard
+                        end
+                        
+                        inventoryEspBillboards[survivor] = billboard
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- ===== ROTATION FUNCTION =====
@@ -2848,7 +2927,7 @@ local function listenForCooldownAbility(survivor)
         head:GetPropertyChangedSignal("Transparency"):Connect(function()
             if head.Transparency ~= lastTransparency then
                 lastTransparency = head.Transparency
-                if head.Transparency ~= 0 then  -- Clone ability used
+                if head.Transparency ~= 0 then
                     onAbilityDetected(SEVENN7_COOLDOWN)
                 end
             end
@@ -3709,6 +3788,35 @@ local CooldownTrackerToggle = VisualsTab:CreateToggle({
     end
 })
 
+-- Inventory ESP Toggle
+VisualsTab:CreateToggle({
+    Name = "Inventory ESP - Shows items below survivors",
+    CurrentValue = false,
+    Flag = "InventoryEspToggle",
+    Callback = function(Value)
+        inventoryEspEnabled = Value
+        if Value then
+            updateInventoryESP()
+            if not inventoryEspConnection then
+                inventoryEspConnection = RunService.Heartbeat:Connect(function()
+                    updateInventoryESP()
+                end)
+            end
+            SendNotif("Inventory ESP", "Enabled - Items will appear below survivors", 2)
+        else
+            for survivor, billboard in pairs(inventoryEspBillboards) do
+                pcall(function() billboard:Destroy() end)
+            end
+            inventoryEspBillboards = {}
+            if inventoryEspConnection then
+                inventoryEspConnection:Disconnect()
+                inventoryEspConnection = nil
+            end
+            SendNotif("Inventory ESP", "Disabled", 1)
+        end
+    end
+})
+
 VisualsTab:CreateParagraph({
     Title = "Ability Cooldown Tracker Info",
     Content = "Shows a timer above survivors when they use their abilities.\n\n" ..
@@ -3727,6 +3835,15 @@ VisualsTab:CreateParagraph({
               "  - White: >10 seconds remaining\n" ..
               "  - Orange: 5-10 seconds remaining\n" ..
               "  - Red: <5 seconds remaining"
+})
+
+VisualsTab:CreateParagraph({
+    Title = "Inventory ESP Info",
+    Content = "• Shows items that survivors have in their backpack\n" ..
+              "• Items appear BELOW the survivor (not above like cooldowns)\n" ..
+              "• Only shows items for OTHER survivors (not yourself)\n" ..
+              "• If a survivor has no items, nothing is shown\n" ..
+              "• Updates automatically when items change"
 })
 
 -- ===== DUSEKKAR SILENT AIM TAB =====
@@ -3894,5 +4011,6 @@ print("========================================")
 print("Auto Block: Guest1337, 7n7, Slasher, JohnDoe, 1x1x1x1, Sixer")
 print("Aimbot: All killers and survivors with prediction")
 print("Visuals: Stun Immune Indicator + Ability Cooldown Tracker (Now includes 007n7 Clone!)")
+print("Visuals: Inventory ESP - Shows items below survivors")
 print("Dusekkar: Silent Aim for Plasma Beam (Press F to fire)")
 print("========================================")
