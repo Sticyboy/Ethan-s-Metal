@@ -1,3 +1,6 @@
+-- Pillager Cheats - Full Script
+-- Includes: Auto Block, Aimbot, Visuals (Stun Immune, Cooldown Tracker, Inventory ESP, Slasher Tracker), Dusekkar Silent Aim
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -155,6 +158,37 @@ local chanceAnimIds = {
     ["103301489258021"] = true,
 }
 
+-- ===== SLASHER ANIMATION IDs FOR ABILITY TRACKER =====
+local BEHEAD_ANIMATIONS = {
+    "126355327951215",
+    "126727756047566",
+    "110702884830060",
+    "82113744478546",
+    "126681776859538",
+    "116250166603410",
+}
+
+local GASHING_WOUND_ANIMATIONS = {
+    "121086746534252",
+    "104980456408239",
+    "70483423693126",
+    "131642454238375",
+    "93284670378212",
+    "129976080405072",
+    "135349868049670",
+    "106847695270773",
+}
+
+local RAGING_PACE_STARTUP_ANIMATIONS = {
+    "85591573377728",
+    "91775045514793",
+    "140541272981448",
+    "115819010915990",
+    "88786572272093",
+    "71800868265962",
+    "126217710453897",
+}
+
 -- ===== AUTO BLOCK STATE VARIABLES =====
 local autoBlockForGuest = false
 local autoCloneFor7n7 = false
@@ -221,7 +255,20 @@ local inventoryEspEnabled = false
 local inventoryEspBillboards = {}
 local inventoryEspConnection = nil
 
--- ===== ABILITY COOLDOWN TRACKER VARIABLES =====
+-- ===== SLASHER ABILITY TRACKER VARIABLES =====
+local slasherTrackerEnabled = false
+local slasherActiveCooldownTimers = {}
+local slasherIsEnraged = {}
+local slasherUpdateConnection = nil
+
+-- Slasher cooldown config
+local SLASHER_BEHEAD_NORMAL = 18
+local SLASHER_BEHEAD_ENRAGED = 12
+local SLASHER_GASHING_WOUND_NORMAL = 32
+local SLASHER_GASHING_WOUND_ENRAGED = 24
+local SLASHER_RAGING_PACE_COOLDOWN = 30
+
+-- ===== ABILITY COOLDOWN TRACKER VARIABLES (Survivors) =====
 local cooldownTrackerEnabled = false
 local activeCooldownTimers = {}
 local lastGuest1337Trigger = {}
@@ -528,8 +575,8 @@ local function getMyCharacterInfo()
     return nil, nil, nil
 end
 
-local function isLocalPlayer(survivor)
-    local usernameAttr = survivor:GetAttribute("Username")
+local function isLocalPlayer(character)
+    local usernameAttr = character:GetAttribute("Username")
     return usernameAttr and usernameAttr == lp.Name
 end
 
@@ -724,7 +771,7 @@ local function updateInventoryESP()
                         local billboard = Instance.new("BillboardGui")
                         billboard.Name = "InventoryESP"
                         billboard.Size = UDim2.new(0, 150, 0, 50)
-                        billboard.StudsOffset = Vector3.new(0, -5, 0)  -- Changed from -3 to -5 (lower)
+                        billboard.StudsOffset = Vector3.new(0, -5, 0)
                         billboard.AlwaysOnTop = true
                         billboard.Parent = hrp
                         
@@ -754,6 +801,368 @@ local function updateInventoryESP()
             end
         end
     end
+end
+
+-- ===== SLASHER ABILITY TRACKER FUNCTIONS =====
+local function getSlasherAllSlashers()
+    local slashers = {}
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if playersFolder then
+        local killersFolder = playersFolder:FindFirstChild("Killers")
+        if killersFolder then
+            for _, killer in ipairs(killersFolder:GetChildren()) do
+                if killer.Name == "Slasher" then
+                    table.insert(slashers, killer)
+                end
+            end
+        end
+    end
+    return slashers
+end
+
+local function isSlasherEnraged(slasher)
+    local head = slasher:FindFirstChild("Head")
+    
+    -- Method 1: RagingPaceAttachment.RagingPace (ParticleEmitter)
+    if head then
+        local ragingPaceAttachment = head:FindFirstChild("RagingPaceAttachment")
+        if ragingPaceAttachment then
+            local ragingPace = ragingPaceAttachment:FindFirstChild("RagingPace")
+            if ragingPace and ragingPace:IsA("ParticleEmitter") then
+                return ragingPace.Enabled == true
+            end
+        end
+    end
+    
+    -- Method 2: Head.RagingPace (Object)
+    if head then
+        local ragingPace = head:FindFirstChild("RagingPace")
+        if ragingPace then
+            return ragingPace.Enabled == true
+        end
+    end
+    
+    -- Method 3: Plate.String Transparency
+    local plate = slasher:FindFirstChild("Plate")
+    if plate then
+        local stringObj = plate:FindFirstChild("String")
+        if stringObj then
+            return stringObj.Transparency == 1
+        end
+    end
+    
+    return false
+end
+
+local function setupSlasherEnrageTracking(slasher)
+    local head = slasher:FindFirstChild("Head")
+    
+    local function updateEnrageState()
+        slasherIsEnraged[slasher] = isSlasherEnraged(slasher)
+    end
+    
+    if head then
+        local ragingPaceAttachment = head:FindFirstChild("RagingPaceAttachment")
+        if ragingPaceAttachment then
+            local ragingPace = ragingPaceAttachment:FindFirstChild("RagingPace")
+            if ragingPace and ragingPace:IsA("ParticleEmitter") then
+                ragingPace:GetPropertyChangedSignal("Enabled"):Connect(updateEnrageState)
+            end
+        end
+    end
+    
+    if head then
+        local ragingPace = head:FindFirstChild("RagingPace")
+        if ragingPace then
+            ragingPace:GetPropertyChangedSignal("Enabled"):Connect(updateEnrageState)
+        end
+    end
+    
+    local plate = slasher:FindFirstChild("Plate")
+    if plate then
+        local stringObj = plate:FindFirstChild("String")
+        if stringObj then
+            stringObj:GetPropertyChangedSignal("Transparency"):Connect(updateEnrageState)
+        end
+    end
+    
+    updateEnrageState()
+end
+
+local function formatSlasherCooldownTime(remainingSeconds)
+    if remainingSeconds <= 0 then
+        return "0.0"
+    elseif remainingSeconds < 10 then
+        return string.format("%.1f", remainingSeconds)
+    else
+        return tostring(math.floor(remainingSeconds))
+    end
+end
+
+local function createSlasherCooldownDisplay(slasher, cooldownEndTime, abilityName)
+    if slasherActiveCooldownTimers[slasher] and slasherActiveCooldownTimers[slasher][abilityName] then
+        local existing = slasherActiveCooldownTimers[slasher][abilityName]
+        if existing.billboard then
+            pcall(function() existing.billboard:Destroy() end)
+        end
+        if existing.connection then
+            existing.connection:Disconnect()
+        end
+        slasherActiveCooldownTimers[slasher][abilityName] = nil
+    end
+    
+    local hrp = slasher:FindFirstChild("HumanoidRootPart") or slasher:FindFirstChild("Head") or slasher:FindFirstChild("Torso")
+    if not hrp then return end
+    
+    local offsetY = 3
+    local abilityCount = 0
+    
+    if slasherActiveCooldownTimers[slasher] then
+        for _, existing in pairs(slasherActiveCooldownTimers[slasher]) do
+            if existing and existing.billboard and existing.billboard.Parent then
+                abilityCount = abilityCount + 1
+            end
+        end
+    end
+    
+    offsetY = offsetY + (abilityCount * 1.5)
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "SlasherCooldown_" .. abilityName
+    billboard.Size = UDim2.new(0, 120, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, offsetY, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = hrp
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Name = "CooldownText"
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = abilityName .. ": " .. formatSlasherCooldownTime(cooldownEndTime - tick())
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = billboard
+    
+    if not slasherActiveCooldownTimers[slasher] then
+        slasherActiveCooldownTimers[slasher] = {}
+    end
+    
+    local timerData = {
+        endTime = cooldownEndTime,
+        billboard = billboard,
+        textLabel = textLabel,
+        abilityName = abilityName,
+        connection = nil
+    }
+    
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not slasher or not slasher.Parent then
+            if connection then connection:Disconnect() end
+            if billboard then pcall(function() billboard:Destroy() end) end
+            if slasherActiveCooldownTimers[slasher] then
+                slasherActiveCooldownTimers[slasher][abilityName] = nil
+            end
+            return
+        end
+        
+        local currentTime = tick()
+        local remaining = timerData.endTime - currentTime
+        
+        if remaining <= 0.1 then
+            if connection then connection:Disconnect() end
+            if billboard then pcall(function() billboard:Destroy() end) end
+            if slasherActiveCooldownTimers[slasher] then
+                slasherActiveCooldownTimers[slasher][abilityName] = nil
+            end
+            if slasherActiveCooldownTimers[slasher] then
+                local newOffset = 3
+                for _, existing in pairs(slasherActiveCooldownTimers[slasher]) do
+                    if existing and existing.billboard then
+                        existing.billboard.StudsOffset = Vector3.new(0, newOffset, 0)
+                        newOffset = newOffset + 1.5
+                    end
+                end
+            end
+        else
+            local formattedTime = formatSlasherCooldownTime(remaining)
+            textLabel.Text = abilityName .. ": " .. formattedTime
+            
+            if remaining < 5 then
+                textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            elseif remaining < 10 then
+                textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+            else
+                textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end
+    end)
+    
+    timerData.connection = connection
+    slasherActiveCooldownTimers[slasher][abilityName] = timerData
+    
+    local newOffset = 3
+    for _, existing in pairs(slasherActiveCooldownTimers[slasher]) do
+        if existing and existing.billboard then
+            existing.billboard.StudsOffset = Vector3.new(0, newOffset, 0)
+            newOffset = newOffset + 1.5
+        end
+    end
+end
+
+local function listenForSlasherAbilities(slasher)
+    if not slasher then return end
+    
+    if slasher:GetAttribute("SlasherListener") then
+        return
+    end
+    
+    slasher:SetAttribute("SlasherListener", true)
+    
+    setupSlasherEnrageTracking(slasher)
+    
+    local function onAbilityDetected(cooldown, abilityName)
+        local cooldownEndTime = tick() + cooldown
+        createSlasherCooldownDisplay(slasher, cooldownEndTime, abilityName)
+    end
+    
+    local function getBeheadCooldown()
+        if isSlasherEnraged(slasher) then
+            return SLASHER_BEHEAD_ENRAGED
+        end
+        return SLASHER_BEHEAD_NORMAL
+    end
+    
+    local function getGashingWoundCooldown()
+        if isSlasherEnraged(slasher) then
+            return SLASHER_GASHING_WOUND_ENRAGED
+        end
+        return SLASHER_GASHING_WOUND_NORMAL
+    end
+    
+    local function onRagingPaceUsed()
+        local cooldownEndTime = tick() + SLASHER_RAGING_PACE_COOLDOWN
+        createSlasherCooldownDisplay(slasher, cooldownEndTime, "Raging Pace")
+    end
+    
+    local humanoid = slasher:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        local function setupAnimator(animator)
+            if not animator then return end
+            
+            animator.AnimationPlayed:Connect(function(animationTrack)
+                local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+                
+                local isBehead = false
+                for _, id in ipairs(BEHEAD_ANIMATIONS) do
+                    if animId == id then
+                        isBehead = true
+                        break
+                    end
+                end
+                if isBehead then
+                    onAbilityDetected(getBeheadCooldown(), "Behead")
+                end
+                
+                local isGashingWound = false
+                for _, id in ipairs(GASHING_WOUND_ANIMATIONS) do
+                    if animId == id then
+                        isGashingWound = true
+                        break
+                    end
+                end
+                if isGashingWound then
+                    onAbilityDetected(getGashingWoundCooldown(), "Gashing Wound")
+                end
+                
+                local isRagingPaceStartup = false
+                for _, id in ipairs(RAGING_PACE_STARTUP_ANIMATIONS) do
+                    if animId == id then
+                        isRagingPaceStartup = true
+                        break
+                    end
+                end
+                if isRagingPaceStartup then
+                    onRagingPaceUsed()
+                end
+            end)
+        end
+        
+        local animator = humanoid:FindFirstChildOfClass("Animator")
+        if animator then
+            setupAnimator(animator)
+        end
+        
+        humanoid.ChildAdded:Connect(function(child)
+            if child:IsA("Animator") then
+                setupAnimator(child)
+            end
+        end)
+    end
+end
+
+local function scanForAllSlashers()
+    local slashers = getSlasherAllSlashers()
+    for _, slasher in ipairs(slashers) do
+        if not isLocalPlayer(slasher) then
+            listenForSlasherAbilities(slasher)
+        end
+    end
+end
+
+local function watchForNewSlashers()
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return end
+    
+    local killersFolder = playersFolder:FindFirstChild("Killers")
+    if not killersFolder then return end
+    
+    killersFolder.ChildAdded:Connect(function(child)
+        if child.Name == "Slasher" then
+            task.wait(0.5)
+            if not isLocalPlayer(child) then
+                listenForSlasherAbilities(child)
+            end
+        end
+    end)
+end
+
+local function startSlasherTracking()
+    if slasherUpdateConnection then return end
+    
+    scanForAllSlashers()
+    watchForNewSlashers()
+    
+    slasherUpdateConnection = RunService.Heartbeat:Connect(function()
+        if slasherTrackerEnabled then
+            scanForAllSlashers()
+        end
+    end)
+end
+
+local function stopSlasherTracking()
+    if slasherUpdateConnection then
+        slasherUpdateConnection:Disconnect()
+        slasherUpdateConnection = nil
+    end
+    
+    for slasher, abilities in pairs(slasherActiveCooldownTimers) do
+        for _, data in pairs(abilities) do
+            if data.billboard then
+                pcall(function() data.billboard:Destroy() end)
+            end
+            if data.connection then
+                data.connection:Disconnect()
+            end
+        end
+        if slasher then
+            slasher:SetAttribute("SlasherListener", nil)
+        end
+    end
+    slasherActiveCooldownTimers = {}
+    slasherIsEnraged = {}
 end
 
 -- ===== ROTATION FUNCTION =====
@@ -2597,14 +3006,14 @@ local function updateStunImmuneIndicator(killer)
             local billboard = Instance.new("BillboardGui")
             billboard.Name = "StunImmuneBillboard"
             billboard.Size = UDim2.new(0, 120, 0, 30)
-            billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+            billboard.StudsOffset = Vector3.new(0, -5, 0)
             billboard.AlwaysOnTop = true
             billboard.Parent = hrp
             
             local textLabel = Instance.new("TextLabel")
             textLabel.Size = UDim2.new(1, 0, 1, 0)
             textLabel.BackgroundTransparency = 1
-            textLabel.Text = "⚡ STUN IMMUNE ⚡"
+            textLabel.Text = "STUN IMMUNE"
             textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
             textLabel.TextStrokeTransparency = 0
             textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -2826,7 +3235,7 @@ local function setupInputHook()
     end)
 end
 
--- ===== ABILITY COOLDOWN TRACKER FUNCTIONS =====
+-- ===== ABILITY COOLDOWN TRACKER FUNCTIONS (Survivors) =====
 local function formatCooldownTime(remainingSeconds)
     if remainingSeconds <= 0 then
         return "0.0"
@@ -2954,7 +3363,6 @@ end
 local function listenForCooldownAbility(survivor)
     if not survivor then return end
     
-    -- Don't track abilities on yourself
     if isLocalPlayer(survivor) then
         return
     end
@@ -3016,7 +3424,6 @@ local function listenForCooldownAbility(survivor)
         end
     end)
     
-    -- 7n7 Clone detection (Head transparency change)
     local head = survivor:FindFirstChild("Head")
     if head then
         local lastTransparency = head.Transparency
@@ -3314,7 +3721,6 @@ local function useSilentAim()
     silentAimActive = true
     dusekkarActive = true
     
-    -- Use dedicated Dusekkar sphere with its own prediction multiplier
     createDusekkarTargetSphere(target, Color3.fromRGB(0, 170, 255), dusekkarPredictionMultiplier)
     
     local success = firePlasmaBeam()
@@ -3820,7 +4226,7 @@ VisualsTab:CreateToggle({
             end
             startStunImmuneLoop()
             setupStunImmuneListeners()
-            SendNotif("Stun Immune", "Enabled - Shows ⚡ STUN IMMUNE ⚡ above stunned killers", 2)
+            SendNotif("Stun Immune", "Enabled - Shows STUN IMMUNE below stunned killers", 2)
         else
             if stunImmuneLoop then
                 task.cancel(stunImmuneLoop)
@@ -3842,9 +4248,9 @@ VisualsTab:CreateToggle({
     end
 })
 
--- Ability Cooldown Tracker Toggle
+-- Ability Cooldown Tracker Toggle (Survivors)
 local CooldownTrackerToggle = VisualsTab:CreateToggle({
-    Name = "Show Ability Cooldowns",
+    Name = "Show Ability Cooldowns (Survivors)",
     CurrentValue = false,
     Flag = "ShowCooldowns",
     Callback = function(Value)
@@ -3882,6 +4288,24 @@ local CooldownTrackerToggle = VisualsTab:CreateToggle({
     end
 })
 
+-- Slasher Ability Tracker Toggle
+local SlasherTrackerToggle = VisualsTab:CreateToggle({
+    Name = "Show Slasher Ability Cooldowns",
+    CurrentValue = false,
+    Flag = "SlasherCooldownToggle",
+    Callback = function(Value)
+        slasherTrackerEnabled = Value
+        
+        if Value then
+            startSlasherTracking()
+            SendNotif("Slasher Tracker", "Enabled - Tracking Slasher abilities", 2)
+        else
+            stopSlasherTracking()
+            SendNotif("Slasher Tracker", "Disabled", 1)
+        end
+    end
+})
+
 -- Inventory ESP Toggle
 VisualsTab:CreateToggle({
     Name = "Inventory ESP - Shows items below survivors",
@@ -3912,7 +4336,7 @@ VisualsTab:CreateToggle({
 })
 
 VisualsTab:CreateParagraph({
-    Title = "Ability Cooldown Tracker Info",
+    Title = "Ability Cooldown Tracker Info (Survivors)",
     Content = "Shows a timer above survivors when they use their abilities.\n\n" ..
               "• Shedletsky (Sword): 40 second cooldown\n" ..
               "• TwoTime (Dagger): 30 second cooldown\n" ..
@@ -3932,9 +4356,29 @@ VisualsTab:CreateParagraph({
 })
 
 VisualsTab:CreateParagraph({
+    Title = "Slasher Ability Tracker Info",
+    Content = "Shows timers ABOVE Slasher when they use abilities (STACKED).\n\n" ..
+              "• BEHEAD:\n" ..
+              "  - Normal: 18 seconds\n" ..
+              "  - ENRAGED: 12 seconds\n" ..
+              "  - Detected by 6 animations\n\n" ..
+              "• GASHING WOUND:\n" ..
+              "  - Normal: 32 seconds\n" ..
+              "  - ENRAGED: 24 seconds\n" ..
+              "  - Detected by 8 animations\n\n" ..
+              "• RAGING PACE (Enrage):\n" ..
+              "  - Cooldown: 30 seconds\n" ..
+              "  - Detected by 7 startup animations\n" ..
+              "  - Enrage state detected via 3 methods (works for all skins)\n" ..
+              "  - Cooldowns are reduced while enraged\n\n" ..
+              "• Does NOT show timers on your own character\n" ..
+              "• Color changes: White (>10s), Orange (5-10s), Red (<5s)"
+})
+
+VisualsTab:CreateParagraph({
     Title = "Inventory ESP Info",
     Content = "• Shows items that survivors have in their backpack\n" ..
-              "• Items appear BELOW the survivor (not above like cooldowns)\n" ..
+              "• Items appear BELOW the survivor (5 studs down)\n" ..
               "• Only shows items for OTHER survivors (not yourself)\n" ..
               "• If a survivor has no items, nothing is shown\n" ..
               "• Updates automatically when items change"
@@ -4084,6 +4528,17 @@ local function setupCharacterListeners()
                     end
                     activeCooldownTimers[character] = nil
                 end
+                if slasherActiveCooldownTimers[character] then
+                    for _, data in pairs(slasherActiveCooldownTimers[character]) do
+                        if data.billboard then
+                            pcall(function() data.billboard:Destroy() end)
+                        end
+                        if data.connection then
+                            data.connection:Disconnect()
+                        end
+                    end
+                    slasherActiveCooldownTimers[character] = nil
+                end
             end)
         end
     end
@@ -4104,7 +4559,9 @@ print("Tabs: Auto Block, Tech, Aimbot, Visuals, Dusekkar")
 print("========================================")
 print("Auto Block: Guest1337, 7n7, Slasher, JohnDoe, 1x1x1x1, Sixer")
 print("Aimbot: All killers and survivors with prediction")
-print("Visuals: Stun Immune Indicator + Ability Cooldown Tracker (Now includes 007n7 Clone!)")
-print("Visuals: Inventory ESP - Shows items below survivors")
-print("Dusekkar: Silent Aim for Plasma Beam (Press F to fire) - FIXED prediction!")
+print("Visuals: Stun Immune Indicator (below killers)")
+print("Visuals: Ability Cooldown Tracker (above survivors)")
+print("Visuals: Slasher Ability Tracker (above Slasher - STACKED)")
+print("Visuals: Inventory ESP (below survivors)")
+print("Dusekkar: Silent Aim for Plasma Beam (Press F to fire)")
 print("========================================")
