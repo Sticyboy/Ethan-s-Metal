@@ -231,6 +231,7 @@ local CHANCE_COOLDOWN = 45
 local JANEDOE_COOLDOWN = 35
 local GUEST1337_COOLDOWN = 27
 local ELLIOT_COOLDOWN = 45
+local SEVENN7_COOLDOWN = 27
 local DECIMAL_START = 10
 
 -- Shedletsky sounds
@@ -656,7 +657,7 @@ end
 local function getAllCharactersByName(name)
     local characters = {}
     
-    if name == "Guest1337" or name == "Shedletsky" or name == "TwoTime" or name == "Chance" or name == "JaneDoe" or name == "Elliot" then
+    if name == "Guest1337" or name == "Shedletsky" or name == "TwoTime" or name == "Chance" or name == "JaneDoe" or name == "Elliot" or name == "007n7" or name == "7n7" then
         if SurvivorsFolder then
             for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
                 if survivor.Name == name then
@@ -2674,6 +2675,8 @@ local function getAbilityName(survivorName)
         return "Block"
     elseif survivorName == "Elliot" then
         return "Pizza"
+    elseif survivorName == "007n7" or survivorName == "7n7" then
+        return "Clone"
     end
     return "Ability"
 end
@@ -2691,6 +2694,8 @@ local function getCooldown(survivorName)
         return GUEST1337_COOLDOWN
     elseif survivorName == "Elliot" then
         return ELLIOT_COOLDOWN
+    elseif survivorName == "007n7" or survivorName == "7n7" then
+        return SEVENN7_COOLDOWN
     end
     return 40
 end
@@ -2836,6 +2841,20 @@ local function listenForCooldownAbility(survivor)
         end
     end)
     
+    -- 7n7 Clone detection (Head transparency change)
+    local head = survivor:FindFirstChild("Head")
+    if head then
+        local lastTransparency = head.Transparency
+        head:GetPropertyChangedSignal("Transparency"):Connect(function()
+            if head.Transparency ~= lastTransparency then
+                lastTransparency = head.Transparency
+                if head.Transparency ~= 0 then  -- Clone ability used
+                    onAbilityDetected(SEVENN7_COOLDOWN)
+                end
+            end
+        end)
+    end
+    
     local humanoid = survivor:FindFirstChildOfClass("Humanoid")
     if humanoid then
         local function setupAnimator(animator)
@@ -2868,7 +2887,7 @@ local function listenForCooldownAbility(survivor)
 end
 
 local function scanForAllCooldownSurvivors()
-    local survivorsToTrack = {"Shedletsky", "TwoTime", "Chance", "JaneDoe", "Guest1337", "Elliot"}
+    local survivorsToTrack = {"Shedletsky", "TwoTime", "Chance", "JaneDoe", "Guest1337", "Elliot", "007n7"}
     for _, survivorName in ipairs(survivorsToTrack) do
         local survivors = getAllCharactersByName(survivorName)
         for _, survivor in ipairs(survivors) do
@@ -2885,7 +2904,7 @@ local function watchForNewCooldownSurvivors()
     if not survivorsFolder then return end
     
     survivorsFolder.ChildAdded:Connect(function(child)
-        local survivorsToTrack = {"Shedletsky", "TwoTime", "Chance", "JaneDoe", "Guest1337", "Elliot"}
+        local survivorsToTrack = {"Shedletsky", "TwoTime", "Chance", "JaneDoe", "Guest1337", "Elliot", "007n7"}
         for _, survivorName in ipairs(survivorsToTrack) do
             if child.Name == survivorName then
                 task.wait(0.5)
@@ -3698,7 +3717,8 @@ VisualsTab:CreateParagraph({
               "• Chance (Gun): 45 second cooldown (3s anti-spam)\n" ..
               "• JaneDoe (Hatchet): 35 second cooldown\n" ..
               "• Guest1337 (Block): 27 second cooldown (3s anti-spam)\n" ..
-              "• Elliot (Pizza): 45 second cooldown\n\n" ..
+              "• Elliot (Pizza): 45 second cooldown\n" ..
+              "• 007n7 (Clone): 27 second cooldown (detected by Head transparency change)\n\n" ..
               "• Does NOT show timers on your own character\n" ..
               "• Anti-spam prevents double-triggering from lag\n" ..
               "• Last 10 seconds show decimals (9.9, 9.8, etc.)\n" ..
@@ -3873,6 +3893,6 @@ print("Tabs: Auto Block, Tech, Aimbot, Visuals, Dusekkar")
 print("========================================")
 print("Auto Block: Guest1337, 7n7, Slasher, JohnDoe, 1x1x1x1, Sixer")
 print("Aimbot: All killers and survivors with prediction")
-print("Visuals: Stun Immune Indicator + Ability Cooldown Tracker")
+print("Visuals: Stun Immune Indicator + Ability Cooldown Tracker (Now includes 007n7 Clone!)")
 print("Dusekkar: Silent Aim for Plasma Beam (Press F to fire)")
 print("========================================")
