@@ -698,7 +698,6 @@ local function getPlayerItems(player)
 end
 
 local function updateInventoryESP()
-    -- Clear old billboards
     for survivor, billboard in pairs(inventoryEspBillboards) do
         pcall(function() billboard:Destroy() end)
     end
@@ -848,7 +847,7 @@ local function getInstantaneousDirection(character, currentPos)
     return Vector3.new(0,0,0)
 end
 
-local function getPredictedPosition(character)
+local function getPredictedPosition(character, predictionMultiplier)
     if not character then return nil end
     
     local root = character:FindFirstChild("HumanoidRootPart") or 
@@ -868,7 +867,7 @@ local function getPredictedPosition(character)
         finalDir = moveDir
     end
     
-    local currentPredictionDistance = BASE_PREDICTION_DISTANCE * aimbotPredictionMultiplier
+    local currentPredictionDistance = BASE_PREDICTION_DISTANCE * (predictionMultiplier or aimbotPredictionMultiplier)
     
     if finalDir.Magnitude > MOVE_THRESHOLD then
         return currentPos + (finalDir * currentPredictionDistance)
@@ -956,6 +955,103 @@ local function createTargetSphere(targetCharacter, sphereColor)
         end
         
         local currentPredictionDistance = BASE_PREDICTION_DISTANCE * aimbotPredictionMultiplier
+
+        local targetPosition
+
+        if finalDir.Magnitude > MOVE_THRESHOLD then
+            targetPosition = currentPos + (finalDir * currentPredictionDistance)
+        else
+            targetPosition = currentPos
+        end
+
+        sphere.Position = sphere.Position:Lerp(targetPosition, SPHERE_SMOOTHNESS)
+    end)
+
+    currentTargetSphere = sphere
+    currentSphereConnection = connection
+    return sphere, connection
+end
+
+-- ===== DUSEKKAR SPHERE WITH DEDICATED PREDICTION =====
+local function createDusekkarTargetSphere(targetCharacter, sphereColor, predictionMultiplier)
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
+    end
+    
+    if not targetCharacter then return nil end
+    
+    local root = targetCharacter:FindFirstChild("HumanoidRootPart") or 
+                 targetCharacter:FindFirstChild("Head") or 
+                 targetCharacter:FindFirstChild("Torso")
+    if not root then return nil end
+
+    local sphere = Instance.new("Part")
+    sphere.Shape = Enum.PartType.Ball
+    sphere.Size = Vector3.new(2, 2, 2)
+    sphere.Material = Enum.Material.Neon
+    sphere.Color = sphereColor or Color3.fromRGB(0, 170, 255)
+    sphere.Anchored = true
+    sphere.CanCollide = false
+    sphere.Name = "TargetSphere"
+    sphere.Parent = workspace
+    sphere.Position = root.Position
+
+    updatePositionHistory(targetCharacter, root.Position)
+
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not targetCharacter or not targetCharacter.Parent or not sphere.Parent then
+            sphere:Destroy()
+            if connection then
+                connection:Disconnect()
+            end
+            currentTargetSphere = nil
+            currentSphereConnection = nil
+            return
+        end
+
+        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            sphere:Destroy()
+            if connection then
+                connection:Disconnect()
+            end
+            currentTargetSphere = nil
+            currentSphereConnection = nil
+            return
+        end
+
+        root = targetCharacter:FindFirstChild("HumanoidRootPart") or 
+               targetCharacter:FindFirstChild("Head") or 
+               targetCharacter:FindFirstChild("Torso")
+        if not root then
+            sphere:Destroy()
+            if connection then
+                connection:Disconnect()
+            end
+            currentTargetSphere = nil
+            currentSphereConnection = nil
+            return
+        end
+
+        local currentPos = root.Position
+        
+        updatePositionHistory(targetCharacter, currentPos)
+        
+        local moveDir = getMovementDirectionFromHistory(targetCharacter)
+        local instantDir = getInstantaneousDirection(targetCharacter, currentPos)
+        
+        local finalDir = instantDir
+        if instantDir.Magnitude <= MOVE_THRESHOLD then
+            finalDir = moveDir
+        end
+        
+        local currentPredictionDistance = BASE_PREDICTION_DISTANCE * predictionMultiplier
 
         local targetPosition
 
@@ -1422,7 +1518,7 @@ local function startGeneralAimbot(duration, customSmoothness)
             return
         end
         
-        local targetPos = getPredictedPosition(aimbotCurrentTarget)
+        local targetPos = getPredictedPosition(aimbotCurrentTarget, aimbotPredictionMultiplier)
         if not targetPos then
             stopAimbot()
             if cameraConnection then cameraConnection:Disconnect() end
@@ -3218,10 +3314,8 @@ local function useSilentAim()
     silentAimActive = true
     dusekkarActive = true
     
-    local oldPrediction = aimbotPredictionMultiplier
-    aimbotPredictionMultiplier = dusekkarPredictionMultiplier
-    createTargetSphere(target, Color3.fromRGB(0, 170, 255))
-    aimbotPredictionMultiplier = oldPrediction
+    -- Use dedicated Dusekkar sphere with its own prediction multiplier
+    createDusekkarTargetSphere(target, Color3.fromRGB(0, 170, 255), dusekkarPredictionMultiplier)
     
     local success = firePlasmaBeam()
     
@@ -4012,5 +4106,5 @@ print("Auto Block: Guest1337, 7n7, Slasher, JohnDoe, 1x1x1x1, Sixer")
 print("Aimbot: All killers and survivors with prediction")
 print("Visuals: Stun Immune Indicator + Ability Cooldown Tracker (Now includes 007n7 Clone!)")
 print("Visuals: Inventory ESP - Shows items below survivors")
-print("Dusekkar: Silent Aim for Plasma Beam (Press F to fire)")
+print("Dusekkar: Silent Aim for Plasma Beam (Press F to fire) - FIXED prediction!")
 print("========================================")
