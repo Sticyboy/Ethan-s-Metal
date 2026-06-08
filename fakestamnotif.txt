@@ -7,11 +7,6 @@ local lp = Players.LocalPlayer
 local TARGET_USERNAME = "vrreblux"
 local TRIGGER_ANIMATION = "134229395028226"
 
--- Don't run if I am vrreblux
-if lp.Name == TARGET_USERNAME then
-    return
-end
-
 local isFrozen = false
 local myAnchoredParts = {}
 local currentAnimationTrack = nil
@@ -226,6 +221,11 @@ local function updateSkateboardState()
 end
 
 local function isTargetPlayingAnimation()
+    -- Don't freeze myself
+    if lp.Name == TARGET_USERNAME then
+        return false
+    end
+    
     local targetCharacter = nil
     local playersFolder = Workspace:FindFirstChild("Players")
     if playersFolder then
