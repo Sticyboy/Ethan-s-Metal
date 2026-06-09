@@ -1,64 +1,29 @@
+--// Stamina System GUI (Skateboard transparency + Trick audio detection)
+
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local lp = Players.LocalPlayer
 
-local TARGET_USERNAME = "vrreblux"
-local TRIGGER_ANIMATION = "134229395028226"
-
-local isFrozen = false
-local myAnchoredParts = {}
-local currentAnimationTrack = nil
-local freezeTimer = nil
-local SAFETY_DURATION = 15
-
-local currentMode = "Survivor"
-local maxStamina = 100
-local stamina = 100
-local drainRate = 10
-local regenRate = 20
-local SKATING_DRAIN_MULTIPLIER = 1.35
-
-local isSkating = false
-local skateboardPart = nil
-local veeronicaChar = nil
-
-local TRICK_AUDIO_ID = "rbxassetid://91937289286100"
-local trickSound = nil
-
-local timeUntilStaminaRecovers = 0
-local staminaPenaltyActive = false
-local holdingShift = false
-local isSprinting = false
-local wasSprinting = false
-
-local localCharacter = lp.Character or lp.CharacterAdded:Wait()
-local humanoid = localCharacter:WaitForChild("Humanoid")
-local humanoidRootPart = localCharacter:WaitForChild("HumanoidRootPart")
-
-local isMoving = false
-local VELOCITY_THRESHOLD = 0.4
-
-local KILLER_CHECK_RANGE = 110
-local isInKillerRange = false
-
+-- ScreenGui Setup
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "StaminaGui"
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 ScreenGui.Parent = game:GetService("CoreGui")
 
+-- Stamina Label
 local StaminaLabel = Instance.new("TextLabel")
 StaminaLabel.Parent = ScreenGui
 StaminaLabel.Size = UDim2.new(0, 350, 0, 30)
 StaminaLabel.Position = UDim2.new(0, 20, 1, -50)
-StaminaLabel.BackgroundTransparency = 0.3
+StaminaLabel.BackgroundTransparency = 0.3	
 StaminaLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 StaminaLabel.TextScaled = true
 StaminaLabel.Font = Enum.Font.SourceSansBold
 StaminaLabel.Text = "Stamina: 100"
 
+-- Buttons
 local SurvivorButton = Instance.new("TextButton")
 SurvivorButton.Parent = ScreenGui
 SurvivorButton.Size = UDim2.new(0, 80, 0, 30)
@@ -75,81 +40,153 @@ KillerButton.Text = "Killer"
 KillerButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 KillerButton.TextColor3 = Color3.new(1,1,1)
 
+-- Vars
+local currentMode = "Survivor"
+local maxStamina = 100
+local stamina = 100
+local drainRate = 10
+local regenRate = 20
+local SKATING_DRAIN_MULTIPLIER = 1.35  -- 1.35x drain when skating
+
+-- Skating state (based on skateboard transparency)
+local isSkating = false
+local skateboardPart = nil
+local veeronicaChar = nil
+
+-- Trick audio ID
+local TRICK_AUDIO_ID = "rbxassetid://91937289286100"
+local trickSound = nil
+
+-- Module variables
+local timeUntilStaminaRecovers = 0
+local staminaPenaltyActive = false
+local holdingShift = false
+local isSprinting = false
+local wasSprinting = false
+
+local localPlayer = Players.LocalPlayer
+local localCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local humanoid = localCharacter:WaitForChild("Humanoid")
+local humanoidRootPart = localCharacter:WaitForChild("HumanoidRootPart")
+
+local isMoving = false
+local VELOCITY_THRESHOLD = 0.4
+
+local KILLER_CHECK_RANGE = 110
+local isInKillerRange = false
+
+-- Function to get the skateboard directly from the path
 local function getSkateboard()
+    -- Try direct path: workspace.Players.Survivors.Veeronica
     local survivors = Workspace:FindFirstChild("Players") and 
                      Workspace.Players:FindFirstChild("Survivors")
+    
     if not survivors then return nil end
+    
+    -- Look for Veeronica in Survivors
     veeronicaChar = survivors:FindFirstChild("Veeronica")
     if not veeronicaChar then return nil end
-    if veeronicaChar:GetAttribute("Username") == lp.Name then
+    
+    -- Check if this Veeronica is you (Username attribute with capital U)
+    if veeronicaChar:GetAttribute("Username") == localPlayer.Name then
+        -- Find the Skateboard
         local skateboard = veeronicaChar:FindFirstChild("Skateboard")
         return skateboard
     end
+    
     return nil
 end
 
+-- Function to detect trick audio in HumanoidRootPart
 local function setupTrickAudioDetection()
+    -- Look for your Veeronica character
     local survivors = Workspace:FindFirstChild("Players") and 
                      Workspace.Players:FindFirstChild("Survivors")
+    
     if not survivors then return end
+    
     veeronicaChar = survivors:FindFirstChild("Veeronica")
     if not veeronicaChar then return end
-    if veeronicaChar:GetAttribute("Username") ~= lp.Name then return end
+    
+    -- Check if this Veeronica is you
+    if veeronicaChar:GetAttribute("Username") ~= localPlayer.Name then return end
+    
+    -- Look in HumanoidRootPart for the sound
     local humanoidRootPart = veeronicaChar:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return end
+    
+    -- Find the trick sound
     for _, child in ipairs(humanoidRootPart:GetChildren()) do
         if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
             trickSound = child
             break
         end
     end
+    
     if not trickSound then
+        -- If not found, wait for it to be added
         humanoidRootPart.ChildAdded:Connect(function(child)
             if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
                 trickSound = child
+                -- Connect to the sound playing
                 trickSound.Played:Connect(function()
+                    -- Give 4 stamina immediately
                     stamina = math.min(stamina + 4, maxStamina)
+                    print("🎮 +4 stamina gained from trick! (Total:", stamina, ")")
                 end)
             end
         end)
         return
     end
+    
+    -- Connect to the sound playing
     trickSound.Played:Connect(function()
+        -- Give 4 stamina immediately
         stamina = math.min(stamina + 4, maxStamina)
+        print("🎮 +4 stamina gained from trick! (Total:", stamina, ")")
     end)
 end
 
-lp.CharacterAdded:Connect(function(character)
+-- Update character references when character respawns
+localPlayer.CharacterAdded:Connect(function(character)
     localCharacter = character
     humanoid = character:WaitForChild("Humanoid")
     humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    
     stamina = maxStamina
     timeUntilStaminaRecovers = 0
     staminaPenaltyActive = false
     isSprinting = false
     isSkating = false
+    
+    -- Reset references
     skateboardPart = nil
     veeronicaChar = nil
     trickSound = nil
 end)
 
+-- Function to check if player is moving
 local function updateMovementCheck()
     if humanoidRootPart and humanoidRootPart:IsDescendantOf(workspace) then
         isMoving = humanoidRootPart.Velocity.Magnitude > VELOCITY_THRESHOLD
     end
 end
 
+-- Function to check if killer is near other players
 local function updateKillerRangeCheck()
     if not localCharacter or not humanoidRootPart then 
         isInKillerRange = false
         return 
     end
+    
     local killerPosition = humanoidRootPart.Position
     local foundPlayer = false
+    
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= lp and player.Character then
+        if player ~= localPlayer and player.Character then
             local targetCharacter = player.Character
             local targetRootPart = targetCharacter:FindFirstChild("HumanoidRootPart")
+            
             if targetRootPart then
                 local distance = (killerPosition - targetRootPart.Position).Magnitude
                 if distance <= KILLER_CHECK_RANGE then
@@ -159,13 +196,16 @@ local function updateKillerRangeCheck()
             end
         end
     end
+    
     isInKillerRange = foundPlayer
 end
 
+-- Function to check if we can regenerate stamina
 local function canRegenStamina()
     return timeUntilStaminaRecovers <= 0 and not staminaPenaltyActive
 end
 
+-- Switch Modes
 local function setMode(mode)
     if mode == "Survivor" then
         maxStamina = 100
@@ -199,6 +239,7 @@ KillerButton.MouseButton1Click:Connect(function()
     setMode("Killer")
 end)
 
+-- Input events
 UserInputService.InputBegan:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.LeftShift then
         holdingShift = true
@@ -211,163 +252,50 @@ UserInputService.InputEnded:Connect(function(input, gp)
     end
 end)
 
+-- Monitor skateboard transparency changes
 local function updateSkateboardState()
     if not skateboardPart or not skateboardPart:IsDescendantOf(Workspace) then
         skateboardPart = getSkateboard()
     end
+    
     if skateboardPart then
         isSkating = (skateboardPart.Transparency == 0)
     end
 end
 
-local function isTargetPlayingAnimation()
-    -- Don't freeze myself
-    if lp.Name == TARGET_USERNAME then
-        return false
-    end
-    
-    local targetCharacter = nil
-    local playersFolder = Workspace:FindFirstChild("Players")
-    if playersFolder then
-        local survivors = playersFolder:FindFirstChild("Survivors")
-        if survivors then
-            for _, survivor in ipairs(survivors:GetChildren()) do
-                if survivor:GetAttribute("Username") == TARGET_USERNAME then
-                    targetCharacter = survivor
-                    break
-                end
-            end
-        end
-        if not targetCharacter then
-            local killers = playersFolder:FindFirstChild("Killers")
-            if killers then
-                for _, killer in ipairs(killers:GetChildren()) do
-                    if killer:GetAttribute("Username") == TARGET_USERNAME then
-                        targetCharacter = killer
-                        break
-                    end
-                end
-            end
-        end
-    end
-    if not targetCharacter then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player.Name == TARGET_USERNAME and player.Character then
-                targetCharacter = player.Character
-                break
-            end
-        end
-    end
-    if not targetCharacter then return false end
-    local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                local animId = tostring(track.Animation.AnimationId)
-                if animId:match(TRIGGER_ANIMATION) or animId:match("rbxassetid://" .. TRIGGER_ANIMATION) then
-                    currentAnimationTrack = track
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
-local function freezeMyself()
-    if isFrozen then return end
-    local myCharacter = lp.Character
-    if not myCharacter then return end
-    isFrozen = true
-    myAnchoredParts = {}
-    for _, part in ipairs(myCharacter:GetDescendants()) do
-        if part:IsA("BasePart") and not part.Anchored then
-            table.insert(myAnchoredParts, {
-                part = part,
-                wasAnchored = part.Anchored
-            })
-            part.Anchored = true
-        end
-    end
-    local hrp = myCharacter:FindFirstChild("HumanoidRootPart")
-    if hrp and not hrp.Anchored then
-        table.insert(myAnchoredParts, {
-            part = hrp,
-            wasAnchored = hrp.Anchored
-        })
-        hrp.Anchored = true
-    end
-    if freezeTimer then
-        task.cancel(freezeTimer)
-    end
-    freezeTimer = task.delay(SAFETY_DURATION, function()
-        if isFrozen then
-            unfreezeMyself()
-        end
-    end)
-end
-
-local function unfreezeMyself()
-    if not isFrozen then return end
-    for _, data in ipairs(myAnchoredParts) do
-        if data.part and data.part.Parent then
-            data.part.Anchored = data.wasAnchored
-        end
-    end
-    myAnchoredParts = {}
-    isFrozen = false
-    currentAnimationTrack = nil
-    if freezeTimer then
-        task.cancel(freezeTimer)
-        freezeTimer = nil
-    end
-end
-
+-- Initial setup
 updateSkateboardState()
 setupTrickAudioDetection()
 
-local lastAnimationState = false
-
+-- Heartbeat loop (runs every frame for fast detection)
 RunService.Heartbeat:Connect(function(dt)
+    -- Update checks
     updateMovementCheck()
-    updateSkateboardState()
+    updateSkateboardState()  -- Check skateboard every frame
     
     if currentMode == "Killer" then
         updateKillerRangeCheck()
     end
     
-    local isPlaying = isTargetPlayingAnimation()
-    
-    if isPlaying and not lastAnimationState then
-        freezeMyself()
-    end
-    
-    if not isPlaying and lastAnimationState then
-        unfreezeMyself()
-    end
-    
-    if isFrozen and currentAnimationTrack then
-        if not currentAnimationTrack.IsPlaying then
-            unfreezeMyself()
-        end
-    end
-    
-    lastAnimationState = isPlaying
-    
+    -- Determine if we should be draining stamina
     local shouldDrain = false
     
     if isSkating then
+        -- When skating, drain stamina while moving (shift state doesn't matter)
         shouldDrain = isMoving
     elseif currentMode == "Survivor" then
+        -- Normal sprinting requires shift + moving
         shouldDrain = holdingShift and isMoving and stamina > 0
     elseif currentMode == "Killer" then
+        -- Killer sprinting requires shift + moving + in range
         shouldDrain = holdingShift and isMoving and isInKillerRange and stamina > 0
     end
     
+    -- Track sprinting state changes (for UI only)
     wasSprinting = isSprinting
     isSprinting = shouldDrain
     
+    -- Handle sprinting ended (applies to both normal sprinting and skating)
     if wasSprinting and not isSprinting then
         if timeUntilStaminaRecovers > 0.1 then
             timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + 0.1, 0, 3)
@@ -376,14 +304,19 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
     
+    -- Handle stamina changes
     if shouldDrain and stamina > 0 then
+        -- Calculate drain rate (1.35x for skating)
         local currentDrainRate = drainRate
         if isSkating then
-            currentDrainRate = drainRate * SKATING_DRAIN_MULTIPLIER
+            currentDrainRate = drainRate * SKATING_DRAIN_MULTIPLIER  -- 1.35x drain when skating
         end
         stamina = stamina - currentDrainRate * dt
         stamina = math.max(stamina, 0)
+        
+        -- Increase recovery timer while draining (for both skating and sprinting)
         timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + dt * 0.05, 0.2, 3)
+        
         if stamina <= 0 then
             stamina = 0
             isSprinting = false
@@ -392,21 +325,28 @@ RunService.Heartbeat:Connect(function(dt)
             localCharacter:SetAttribute("StaminaPenaltyActive", true)
         end
     else
+        -- Not draining, decrement recovery timer
         if timeUntilStaminaRecovers > 0 then
             timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers - dt, 0, 3)
         end
+        
+        -- Clear penalty when timer runs out
         if timeUntilStaminaRecovers <= 0 and staminaPenaltyActive then
             staminaPenaltyActive = false
             localCharacter:SetAttribute("StaminaPenaltyActive", nil)
         end
+        
+        -- Regenerate stamina if allowed (not while skating)
         if not isSkating and canRegenStamina() and stamina < maxStamina then
             stamina = stamina + regenRate * dt
             stamina = math.min(stamina, maxStamina)
         end
     end
     
+    -- Update label
     local statusText = ""
     
+    -- Add skating status
     if isSkating then
         statusText = statusText .. " (SKATING)"
     end
@@ -451,6 +391,7 @@ RunService.Heartbeat:Connect(function(dt)
     
     StaminaLabel.Text = string.format("Stamina: %d%s", math.floor(stamina), statusText)
     
+    -- Color coding
     if stamina < 20 then
         StaminaLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
         StaminaLabel.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
@@ -462,8 +403,10 @@ RunService.Heartbeat:Connect(function(dt)
         StaminaLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     end
     
+    -- Update button transparency
     SurvivorButton.BackgroundTransparency = currentMode == "Survivor" and 0.1 or 0.3
     KillerButton.BackgroundTransparency = currentMode == "Killer" and 0.1 or 0.3
 end)
 
+-- Initial setup
 setMode("Survivor")
