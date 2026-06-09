@@ -1,6 +1,6 @@
 -- Pillager Cheats - Full Script (OPTIMIZED: Globals for config, Locals for functions)
 -- FIXED POSITION ESP: All ability cooldowns have permanent Y-offsets (text NEVER shifts)
--- INCLUDES: Noli Ability Tracker (Void Rush 20s, Nova 12s)
+-- INCLUDES: Noli Ability Tracker (Void Rush 20s, Nova 12s) - NO NOTIFICATIONS
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -79,14 +79,25 @@ autoBlockTriggerAnimations = {
     ["94958041603347"] = true, ["108196996477620"] = true,
 }
 
+-- Guest1337 Animations (UPDATED with new animations)
 guest1337AllAnims = {
-    ["95802026624883"] = true, ["82036084568393"] = true, ["120748030255574"] = true,
-    ["72722244508749"] = true, ["140671644163156"] = true, ["100926346851492"] = true,
-    ["96959123077498"] = true, ["82605295530067"] = true, ["127040663332045"] = true,
+    ["95802026624883"] = true,
+    ["82036084568393"] = true,
+    ["120748030255574"] = true,
+    ["72722244508749"] = true,
+    ["140671644163156"] = true,
+    ["100926346851492"] = true,
+    ["96959123077498"] = true,
+    ["82605295530067"] = true,
+    ["127040663332045"] = true,
+    ["123548100869928"] = true,  -- NEW block animation
 }
 
 guest1337PunchAnims = {
-    ["87259391926321"] = true, ["138040001965654"] = true, ["72007882634344"] = true,
+    ["87259391926321"] = true,
+    ["138040001965654"] = true,
+    ["72007882634344"] = true,
+    ["132010205222516"] = true,  -- NEW punch animation
 }
 
 chanceAnimIds = {
@@ -162,6 +173,7 @@ BLOOD_ORB_REDUCTION = 3
 VOID_RUSH_COOLDOWN = 20
 NOVA_COOLDOWN = 12
 VOID_RUSH_WINDOW = 2.85
+VOID_RUSH_ANTI_SPAM = 3
 
 -- FIXED POSITIONS FOR KILLER ABILITIES (global config - NEVER CHANGES)
 SLASHER_ABILITY_OFFSETS = {
@@ -289,6 +301,7 @@ noliPendingTimer = nil
 noliPendingNoli = nil
 noliVoidstarWatcher = nil
 noliLastVoidstarState = false
+noliLastVoidRushTrigger = 0
 
 -- Ability Cooldown Tracker Variables
 cooldownTrackerEnabled = false
@@ -2945,7 +2958,7 @@ function stopSixerTracking()
     sixerActiveCooldownTimers = {}
 end
 
--- ===== NOLI ABILITY TRACKER FUNCTIONS =====
+-- ===== NOLI ABILITY TRACKER FUNCTIONS (NO NOTIFICATIONS) =====
 local function getOtherNolis()
     local nolis = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -3059,10 +3072,13 @@ local function listenForNoliVoidRush(noli)
             -- Instant trigger animations
             for _, id in ipairs(VOID_RUSH_INSTANT_ANIMATIONS) do
                 if animId == id then
-                    clearPendingNoliVoidRush()
-                    local cooldownEndTime = tick() + VOID_RUSH_COOLDOWN
-                    createNoliCooldownDisplay(noli, cooldownEndTime, "Void Rush")
-                    SendNotif("Noli", "Void Rush used! 20s cooldown", 1.5)
+                    local now = tick()
+                    if now - noliLastVoidRushTrigger >= VOID_RUSH_ANTI_SPAM then
+                        noliLastVoidRushTrigger = now
+                        clearPendingNoliVoidRush()
+                        local cooldownEndTime = tick() + VOID_RUSH_COOLDOWN
+                        createNoliCooldownDisplay(noli, cooldownEndTime, "Void Rush")
+                    end
                     return
                 end
             end
@@ -3073,9 +3089,12 @@ local function listenForNoliVoidRush(noli)
                     clearPendingNoliVoidRush()
                     noliPendingNoli = noli
                     noliPendingTimer = task.delay(VOID_RUSH_WINDOW, function()
-                        local cooldownEndTime = tick() + VOID_RUSH_COOLDOWN
-                        createNoliCooldownDisplay(noli, cooldownEndTime, "Void Rush")
-                        SendNotif("Noli", "Void Rush used! 20s cooldown", 1.5)
+                        local now = tick()
+                        if now - noliLastVoidRushTrigger >= VOID_RUSH_ANTI_SPAM then
+                            noliLastVoidRushTrigger = now
+                            local cooldownEndTime = tick() + VOID_RUSH_COOLDOWN
+                            createNoliCooldownDisplay(noli, cooldownEndTime, "Void Rush")
+                        end
                         clearPendingNoliVoidRush()
                     end)
                     return
@@ -3158,7 +3177,6 @@ local function startNoliVoidstarWatcher()
             for _, noli in ipairs(otherNolis) do
                 local cooldownEndTime = tick() + NOVA_COOLDOWN
                 createNoliCooldownDisplay(noli, cooldownEndTime, "Nova")
-                SendNotif("Noli", "Nova used! 12s cooldown", 1.5)
             end
         end
         
@@ -3508,7 +3526,8 @@ local function setupCharacterListeners()
                     noliActiveCooldownTimers[character] = nil
                 end
             end)
-        end    end
+        end
+    end
     watchCharacterRemoval(KillersFolder)
     watchCharacterRemoval(SurvivorsFolder)
 end
@@ -3526,10 +3545,12 @@ print("Performance: Local functions for frequent calls")
 print("Tabs: Auto Block, Tech, Aimbot, Visuals, Dusekkar")
 print("========================================")
 print("Auto Block: Guest1337, 7n7, Slasher, JohnDoe, 1x1x1x1, Sixer")
+print("Guest1337 Animations UPDATED: +1 block, +1 punch")
 print("Aimbot: All killers and survivors with prediction")
 print("Visuals: Stun Immune Indicator (below killers)")
 print("Visuals: Ability Cooldown Tracker (above survivors)")
 print("Visuals: Slasher, 1x1x1x1, Sixer & Noli Ability Trackers - FIXED POSITIONS")
+print("Visuals: Noli Tracker - NO NOTIFICATIONS")
 print("Visuals: Inventory ESP (below survivors)")
 print("Dusekkar: Silent Aim for Plasma Beam (Press F to fire)")
 print("========================================")
