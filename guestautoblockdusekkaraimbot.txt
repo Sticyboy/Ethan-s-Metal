@@ -1513,8 +1513,7 @@ local function checkSpecialKillerActions()
                         local hum = guest1337:FindFirstChildOfClass("Humanoid")
                         if hum then
                             local animator = hum:FindFirstChildOfClass("Animator")
-                            if animator then
-                                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                            if animator then                                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                     local id = extractNumericAnimationId(track.Animation.AnimationId)
                                     if id and guest1337AllAnims[id] then
                                         if blockdelay > 0 then task.wait(blockdelay) end
@@ -2485,7 +2484,9 @@ local function watchForNewSlashers()
     killersFolder.ChildAdded:Connect(function(child)
         if child.Name == "Slasher" then
             task.wait(0.5)
-            if not isLocalPlayer(child) then listenForSlasherAbilities(child) end
+            if not isLocalPlayer(child) then
+                listenForSlasherAbilities(child)
+            end
         end
     end)
 end
@@ -2495,24 +2496,31 @@ function startSlasherTracking()
     scanForAllSlashers()
     watchForNewSlashers()
     slasherUpdateConnection = RunService.Heartbeat:Connect(function()
-        if slasherTrackerEnabled then scanForAllSlashers() end
+        if slasherTrackerEnabled then
+            scanForAllSlashers()
+        end
     end)
 end
 
 function stopSlasherTracking()
-    if slasherUpdateConnection then slasherUpdateConnection:Disconnect(); slasherUpdateConnection = nil end
+    if slasherUpdateConnection then
+        slasherUpdateConnection:Disconnect()
+        slasherUpdateConnection = nil
+    end
     for slasher, abilities in pairs(slasherActiveCooldownTimers) do
         for _, data in pairs(abilities) do
             if data.billboard then pcall(function() data.billboard:Destroy() end) end
             if data.connection then data.connection:Disconnect() end
         end
-        if slasher then slasher:SetAttribute("SlasherListener", nil) end
+        if slasher then
+            slasher:SetAttribute("SlasherListener", nil)
+        end
     end
     slasherActiveCooldownTimers = {}
     slasherIsEnraged = {}
 end
 
--- ===== 1x1x1x1 ABILITY TRACKER FUNCTIONS =====
+-- ===== 1x1x1x1 ABILITY TRACKER FUNCTIONS (FIXED for new players) =====
 local function getAllOnex()
     local onexList = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -2645,7 +2653,9 @@ end
 local function scanForAllOnex()
     local onexList = getAllOnex()
     for _, onex in ipairs(onexList) do
-        if not isLocalPlayer(onex) then listenForOnexAbilities(onex) end
+        if not isLocalPlayer(onex) then
+            listenForOnexAbilities(onex)
+        end
     end
 end
 
@@ -2654,10 +2664,14 @@ local function watchForNewOnex()
     if not playersFolder then return end
     local killersFolder = playersFolder:FindFirstChild("Killers")
     if not killersFolder then return end
+    
     killersFolder.ChildAdded:Connect(function(child)
         if child.Name == "1x1x1x1" then
-            task.wait(0.5)
-            if not isLocalPlayer(child) then listenForOnexAbilities(child) end
+            task.wait(1)
+            local usernameAttr = child:GetAttribute("Username")
+            if usernameAttr and usernameAttr ~= lp.Name then
+                listenForOnexAbilities(child)
+            end
         end
     end)
 end
@@ -2667,18 +2681,25 @@ function startOnexTracking()
     scanForAllOnex()
     watchForNewOnex()
     onexUpdateConnection = RunService.Heartbeat:Connect(function()
-        if onexTrackerEnabled then scanForAllOnex() end
+        if onexTrackerEnabled then
+            scanForAllOnex()
+        end
     end)
 end
 
 function stopOnexTracking()
-    if onexUpdateConnection then onexUpdateConnection:Disconnect(); onexUpdateConnection = nil end
+    if onexUpdateConnection then
+        onexUpdateConnection:Disconnect()
+        onexUpdateConnection = nil
+    end
     for onex, abilities in pairs(onexActiveCooldownTimers) do
         for _, data in pairs(abilities) do
             if data.billboard then pcall(function() data.billboard:Destroy() end) end
             if data.connection then data.connection:Disconnect() end
         end
-        if onex then onex:SetAttribute("OnexListener", nil) end
+        if onex then
+            onex:SetAttribute("OnexListener", nil)
+        end
     end
     onexActiveCooldownTimers = {}
 end
@@ -2713,64 +2734,48 @@ local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
         if existing.connection then existing.connection:Disconnect() end
         sixerActiveCooldownTimers[sixer][abilityName] = nil
     end
-    
     local hrp = sixer:FindFirstChild("HumanoidRootPart") or sixer:FindFirstChild("Head") or sixer:FindFirstChild("Torso")
     if not hrp then return end
-    
     local offsetY = 3
     local abilityCount = 0
     if sixerActiveCooldownTimers[sixer] then
         for _, existing in pairs(sixerActiveCooldownTimers[sixer]) do
-            if existing and existing.billboard and existing.billboard.Parent then
-                abilityCount = abilityCount + 1
-            end
+            if existing and existing.billboard and existing.billboard.Parent then abilityCount = abilityCount + 1 end
         end
     end
     offsetY = offsetY + (abilityCount * 1.5)
-    
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "SixerCooldown_" .. abilityName
-    billboard.Size = UDim2.new(0, 120, 0, 30)
+    billboard.Size = UDim2.new(0,120,0,30)
     billboard.StudsOffset = Vector3.new(0, offsetY, 0)
     billboard.AlwaysOnTop = true
     billboard.Parent = hrp
-    
     local textLabel = Instance.new("TextLabel")
     textLabel.Name = "CooldownText"
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Size = UDim2.new(1,0,1,0)
     textLabel.BackgroundTransparency = 1
     textLabel.Text = abilityName .. ": " .. formatSixerCooldownTime(cooldownEndTime - tick())
     textLabel.TextStrokeTransparency = 0
-    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
     textLabel.TextScaled = true
     textLabel.Font = Enum.Font.GothamBold
     textLabel.Parent = billboard
-    
-    if not sixerActiveCooldownTimers[sixer] then
-        sixerActiveCooldownTimers[sixer] = {}
-    end
-    
+    if not sixerActiveCooldownTimers[sixer] then sixerActiveCooldownTimers[sixer] = {} end
     local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName, connection = nil }
-    
     local connection
     connection = RunService.Heartbeat:Connect(function()
         if not sixer or not sixer.Parent then
             if connection then connection:Disconnect() end
             if billboard then pcall(function() billboard:Destroy() end) end
-            if sixerActiveCooldownTimers[sixer] then
-                sixerActiveCooldownTimers[sixer][abilityName] = nil
-            end
+            if sixerActiveCooldownTimers[sixer] then sixerActiveCooldownTimers[sixer][abilityName] = nil end
             return
         end
-        
         local currentTime = tick()
         local remaining = timerData.endTime - currentTime
         if remaining <= 0.1 then
             if connection then connection:Disconnect() end
             if billboard then pcall(function() billboard:Destroy() end) end
-            if sixerActiveCooldownTimers[sixer] then
-                sixerActiveCooldownTimers[sixer][abilityName] = nil
-            end
+            if sixerActiveCooldownTimers[sixer] then sixerActiveCooldownTimers[sixer][abilityName] = nil end
             if sixerActiveCooldownTimers[sixer] then
                 local newOffset = 3
                 for _, existing in pairs(sixerActiveCooldownTimers[sixer]) do
@@ -2783,19 +2788,13 @@ local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
         else
             local formattedTime = formatSixerCooldownTime(remaining)
             textLabel.Text = abilityName .. ": " .. formattedTime
-            if remaining < 5 then
-                textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-            elseif remaining < 10 then
-                textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
-            else
-                textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            end
+            if remaining < 5 then textLabel.TextColor3 = Color3.fromRGB(255,0,0)
+            elseif remaining < 10 then textLabel.TextColor3 = Color3.fromRGB(255,165,0)
+            else textLabel.TextColor3 = Color3.fromRGB(255,255,255) end
         end
     end)
-    
     timerData.connection = connection
     sixerActiveCooldownTimers[sixer][abilityName] = timerData
-    
     local newOffset = 3
     for _, existing in pairs(sixerActiveCooldownTimers[sixer]) do
         if existing and existing.billboard then
@@ -2807,12 +2806,10 @@ end
 
 local function reduceSixerCooldownByBloodOrb(sixer)
     if not sixerActiveCooldownTimers[sixer] then return end
-    
     for abilityName, timerData in pairs(sixerActiveCooldownTimers[sixer]) do
         if timerData and timerData.endTime then
             local currentRemaining = timerData.endTime - tick()
             local newRemaining = currentRemaining - BLOOD_ORB_REDUCTION
-            
             if newRemaining <= 0 then
                 if timerData.billboard then pcall(function() timerData.billboard:Destroy() end) end
                 if timerData.connection then timerData.connection:Disconnect() end
@@ -2825,7 +2822,6 @@ local function reduceSixerCooldownByBloodOrb(sixer)
             end
         end
     end
-    
     if sixerActiveCooldownTimers[sixer] then
         local newOffset = 3
         for _, existing in pairs(sixerActiveCooldownTimers[sixer]) do
@@ -2841,12 +2837,10 @@ local function listenForSixerAbilities(sixer)
     if not sixer then return end
     if sixer:GetAttribute("SixerListener") then return end
     sixer:SetAttribute("SixerListener", true)
-    
     local function onAbilityDetected(cooldown, abilityName)
         local cooldownEndTime = tick() + cooldown
         createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     end
-    
     local function onBloodOrbSoundAdded(sound)
         if not sound:IsA("Sound") then return end
         local soundId = extractNumericSoundId(sound)
@@ -2854,20 +2848,17 @@ local function listenForSixerAbilities(sixer)
             reduceSixerCooldownByBloodOrb(sixer)
         end
     end
-    
     local hrp = sixer:FindFirstChild("HumanoidRootPart")
     if hrp then
         for _, sound in ipairs(hrp:GetChildren()) do
             onBloodOrbSoundAdded(sound)
         end
     end
-    
     sixer.DescendantAdded:Connect(function(descendant)
         if descendant:IsA("Sound") then
             onBloodOrbSoundAdded(descendant)
         end
     end)
-    
     local humanoid = sixer:FindFirstChildOfClass("Humanoid")
     if humanoid then
         local function setupAnimator(animator)
@@ -3156,7 +3147,15 @@ VisualsTab:CreateToggle({ Name = "Show Stun Immune Indicator", CurrentValue = fa
 
 CooldownTrackerToggle = VisualsTab:CreateToggle({ Name = "Show Ability Cooldowns (Survivors)", CurrentValue = false, Flag = "ShowCooldowns", Callback = function(Value) cooldownTrackerEnabled = Value; if Value then scanForAllCooldownSurvivors(); watchForNewCooldownSurvivors(); task.spawn(function() while cooldownTrackerEnabled do task.wait(5); scanForAllCooldownSurvivors() end end); SendNotif("Cooldown Tracker", "Enabled - Tracking survivor ability cooldowns", 2) else for survivor, data in pairs(activeCooldownTimers) do if data.billboard then pcall(function() data.billboard:Destroy() end) end; if data.connection then data.connection:Disconnect() end; if survivor then survivor:SetAttribute("CooldownListener", nil) end end; activeCooldownTimers = {}; lastGuest1337Trigger = {}; lastChanceTrigger = {}; SendNotif("Cooldown Tracker", "Disabled", 1) end end })
 
-KillerCooldownToggle = VisualsTab:CreateToggle({ Name = "Show Ability Cooldowns (Killers)", CurrentValue = false, Flag = "KillerCooldownToggle", Callback = function(Value) slasherTrackerEnabled = Value; if Value then startSlasherTracking() else stopSlasherTracking() end; onexTrackerEnabled = Value; if Value then startOnexTracking() else stopOnexTracking() end; sixerTrackerEnabled = Value; if Value then startSixerTracking() else stopSixerTracking() end; SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1 & Sixer abilities" or "Disabled", 2) end })
+KillerCooldownToggle = VisualsTab:CreateToggle({ Name = "Show Ability Cooldowns (Killers)", CurrentValue = false, Flag = "KillerCooldownToggle", Callback = function(Value) 
+    slasherTrackerEnabled = Value
+    if Value then startSlasherTracking() else stopSlasherTracking() end
+    onexTrackerEnabled = Value
+    if Value then startOnexTracking() else stopOnexTracking() end
+    sixerTrackerEnabled = Value
+    if Value then startSixerTracking() else stopSixerTracking() end
+    SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1 & Sixer abilities" or "Disabled", 2) 
+end })
 
 VisualsTab:CreateToggle({ Name = "Inventory ESP - Shows items below survivors", CurrentValue = false, Flag = "InventoryEspToggle", Callback = function(Value) inventoryEspEnabled = Value; if Value then updateInventoryESP(); if not inventoryEspConnection then inventoryEspConnection = RunService.Heartbeat:Connect(function() updateInventoryESP() end) end; SendNotif("Inventory ESP", "Enabled - Items will appear below survivors", 2) else for survivor, billboard in pairs(inventoryEspBillboards) do pcall(function() billboard:Destroy() end) end; inventoryEspBillboards = {}; if inventoryEspConnection then inventoryEspConnection:Disconnect(); inventoryEspConnection = nil end; SendNotif("Inventory ESP", "Disabled", 1) end end })
 
