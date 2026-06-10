@@ -72,7 +72,8 @@ local humanoidRootPart = localCharacter:WaitForChild("HumanoidRootPart")
 local isMoving = false
 local VELOCITY_THRESHOLD = 0.4
 
-local KILLER_CHECK_RANGE = 110
+-- CHANGED: Killer range reduced from 110 to 85 studs
+local KILLER_CHECK_RANGE = 85
 local isInKillerRange = false
 
 -- Function to get the skateboard directly from the path
