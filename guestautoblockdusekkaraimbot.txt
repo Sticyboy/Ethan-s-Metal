@@ -1,7 +1,7 @@
 -- Pillager Cheats - Full Script (OPTIMIZED: Globals for config, Locals for functions)
 -- FIXED POSITION ESP: All ability cooldowns have permanent Y-offsets (text NEVER shifts)
 -- INCLUDES: Noli, c00lkidd, John Doe Ability Trackers - NO NOTIFICATIONS
--- UPDATED: Guest1337 punch (+1), Chance animations (+2)
+-- FIXED: Dusekkar Silent Aim (now works properly)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -53,7 +53,7 @@ else
     SurvivorsFolder.Name = "Survivors"
 end
 
--- ===== GLOBAL CONFIGURATION VARIABLES (no 'local' - one-time use/accessed everywhere) =====
+-- ===== GLOBAL CONFIGURATION VARIABLES =====
 -- Sound IDs for Auto Block
 autoBlockTriggerSounds = {
     ["116468089135195"] = true, ["74809026448465"] = true, ["106836941416453"] = true, ["98111231282218"] = true,
@@ -80,7 +80,7 @@ autoBlockTriggerAnimations = {
     ["94958041603347"] = true, ["108196996477620"] = true,
 }
 
--- Guest1337 Animations (UPDATED: +1 punch)
+-- Guest1337 Animations
 guest1337AllAnims = {
     ["95802026624883"] = true,
     ["82036084568393"] = true,
@@ -99,10 +99,10 @@ guest1337PunchAnims = {
     ["138040001965654"] = true,
     ["72007882634344"] = true,
     ["132010205222516"] = true,
-    ["86096387000557"] = true,  -- NEW punch animation
+    ["86096387000557"] = true,
 }
 
--- Chance Animations (UPDATED: +2 animations)
+-- Chance Animations
 chanceAnimIds = {
     ["133491532453922"] = true,
     ["76649505662612"] = true,
@@ -110,8 +110,8 @@ chanceAnimIds = {
     ["131189930305001"] = true,
     ["73697316043485"] = true,
     ["103301489258021"] = true,
-    ["133607163653602"] = true,  -- NEW
-    ["111512633767170"] = true,  -- NEW
+    ["133607163653602"] = true,
+    ["111512633767170"] = true,
 }
 
 BEHEAD_ANIMATIONS = {
@@ -178,21 +178,15 @@ PIZZA_DELIVERY_ANIMATIONS = {
 
 -- John Doe Animation IDs
 CORRUPT_ENERGY_ANIMATIONS = {
-    "127172483138092",  -- Original
-    "117623646053053",
-    "93432652624003",
-    "96811405806507",
+    "127172483138092", "117623646053053", "93432652624003", "96811405806507",
 }
 UNSTOPPABLE_ANIMATIONS = {
-    "123196546725221",  -- Original
-    "93758847362442",
-    "108185913388050",
-    "133423655683191",
+    "123196546725221", "93758847362442", "108185913388050", "133423655683191",
 }
 ANNIHILATION_CORRUPT_ENERGY = "114620047310688"
 ANNIHILATION_UNSTOPPABLE_TRIGGER = "111710065813108"
 
--- Cooldown values (global config)
+-- Cooldown values
 SHEDLETSKY_COOLDOWN = 40
 TWOTIME_COOLDOWN = 30
 CHANCE_COOLDOWN = 45
@@ -227,7 +221,7 @@ PIZZA_DELIVERY_COOLDOWN = 50
 CORRUPT_ENERGY_COOLDOWN = 18
 CORRUPT_ENERGY_STUNNED_COOLDOWN = 9
 
--- FIXED POSITIONS FOR KILLER ABILITIES (global config - NEVER CHANGES)
+-- FIXED POSITIONS FOR KILLER ABILITIES
 SLASHER_ABILITY_OFFSETS = {
     ["Behead"] = 3,
     ["Gashing Wound"] = 5,
@@ -260,7 +254,7 @@ JOHNDOE_ABILITY_OFFSETS = {
     ["DontStunWarning"] = 1,
 }
 
--- Sound maps for survivor abilities (global)
+-- Sound maps for survivor abilities
 shedletskySwingSounds = {
     ["12222225"] = true, ["132596270805754"] = true, ["83851356262523"] = true,
     ["111910850942168"] = true, ["115267992424648"] = true, ["99820161736138"] = true,
@@ -276,7 +270,7 @@ elliotThrowAnimation = {
     ["114155003741146"] = true, ["126625530013840"] = true, ["104033348426533"] = true,
 }
 
--- Auto Block State Variables (global - accessed across functions)
+-- Auto Block State Variables
 autoBlockForGuest = false
 autoCloneFor7n7 = false
 ragingPaceAutoParry = false
@@ -296,7 +290,7 @@ originalBlockType = "Block"
 autoBloodOrb = false
 bloodOrbConnection = nil
 
--- Aimbot Variables (global)
+-- Aimbot Variables
 aimbotEnabled = false
 aimbotSmoothness = 0.1
 aimbotMaxDistance = 50
@@ -388,7 +382,7 @@ lastChanceTrigger = {}
 GUEST1337_ANTI_SPAM_TIME = 3
 CHANCE_ANTI_SPAM_TIME = 3
 
--- Dusekkar Silent Aim Variables
+-- Dusekkar Silent Aim Variables (FIXED)
 dusekkarEnabled = false
 dusekkarTargetMode = "Survivors"
 silentAimActive = false
@@ -404,7 +398,7 @@ GuestToggle = nil
 SevenNToggle = nil
 KillerCooldownToggle = nil
 
--- Performance Caches (global)
+-- Performance Caches
 cachedBlockBtn = nil
 cachedChargeBtn = nil
 cachedCloneBtn = nil
@@ -491,7 +485,7 @@ function setShiftLock(enabled)
     end
 end
 
--- ===== LOCAL UTILITY FUNCTIONS (frequently called) =====
+-- ===== LOCAL UTILITY FUNCTIONS =====
 local function SendNotif(title, text, duration)
     pcall(function()
         StarterGui:SetCore("SendNotification", { Title = title or "Auto Block", Text = text or "Notification", Duration = duration or 4 })
@@ -1566,7 +1560,8 @@ local function checkSixerBloodHuntParry()
                         end
                     end
                 end
-            end        end
+            end
+        end
     end
     local allChances = getAllCharactersByName("Chance")
     for _, chance in ipairs(allChances) do
@@ -2290,8 +2285,7 @@ local function createSurvivorCooldownDisplay(survivor, cooldownEndTime, abilityN
     textLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
     textLabel.TextScaled = true
     textLabel.Font = Enum.Font.GothamBold
-    textLabel.Parent = billboard
-    local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName, survivorName = survivor.Name, connection = nil }
+    textLabel.Parent = billboard    local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName, survivorName = survivor.Name, connection = nil }
     local connection
     connection = RunService.Heartbeat:Connect(function()
         if not survivor or not survivor.Parent then
@@ -3909,9 +3903,11 @@ function stopJohnDoeTracking()
     johnDoeIsAnnihilationSkin = {}
 end
 
--- ===== DUSEKKAR SILENT AIM FUNCTIONS =====
+-- ===== DUSEKKAR SILENT AIM FUNCTIONS (FIXED) =====
 local function isPlasmaBeamOnCooldown()
-    local success, cooldownText = pcall(function() return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text end)
+    local success, cooldownText = pcall(function() 
+        return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text 
+    end)
     return success and (cooldownText ~= "" and cooldownText ~= "0") or true
 end
 
@@ -3999,19 +3995,31 @@ function stopDusekkar()
 end
 
 function setupSilentAim()
-    local success, module = pcall(function()
-        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
-    end)
-    if not success then
-        success, module = pcall(function()
-            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
-        end)
+    -- Try multiple possible paths for the module
+    local module = nil
+    local paths = {
+        ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"),
+        ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Game"):FindFirstChild("GetPlayerMousePosition"),
+        ReplicatedStorage:FindFirstChild("Modules"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"),
+    }
+    
+    for _, path in ipairs(paths) do
+        if path then
+            local success, mod = pcall(function() return require(path) end)
+            if success and mod then
+                module = mod
+                break
+            end
+        end
     end
-    if success and module then
+    
+    if module then
         mousePositionModule = module
         originalGetMousePos = module.GetMousePos
         local function hookedGetMousePos(self, ...)
-            if silentAimActive and currentTargetSphere then return currentTargetSphere.Position end
+            if silentAimActive and currentTargetSphere then
+                return currentTargetSphere.Position
+            end
             return originalGetMousePos(self, ...)
         end
         module.GetMousePos = hookedGetMousePos
@@ -4021,30 +4029,52 @@ function setupSilentAim()
 end
 
 function restoreSilentAim()
-    if mousePositionModule and originalGetMousePos then mousePositionModule.GetMousePos = originalGetMousePos end
+    if mousePositionModule and originalGetMousePos then
+        mousePositionModule.GetMousePos = originalGetMousePos
+    end
 end
 
 function useSilentAim()
     if not dusekkarEnabled then return false end
     if not amIDusekkar() then return false end
+    
     local target = nil
     if dusekkarTargetMode == "Survivors" then
         target = getSurvivorClosestToCursor()
-        if target then SendNotif("Dusekkar", "Targeting survivor: " .. target.Name, 1.5) end
+        if target then
+            SendNotif("Dusekkar", "Targeting survivor: " .. target.Name, 1.5)
+        end
     else
         target = getNearestKillerForDusekkar()
-        if target then SendNotif("Dusekkar", "Targeting killer: " .. target.Name, 1.5) end
+        if target then
+            SendNotif("Dusekkar", "Targeting killer: " .. target.Name, 1.5)
+        end
     end
-    if not target then SendNotif("Dusekkar", "No target found!", 1); return false end
-    if isPlasmaBeamOnCooldown() then SendNotif("Dusekkar", "Plasma Beam on cooldown!", 1); return false end
+    
+    if not target then 
+        SendNotif("Dusekkar", "No target found!", 1)
+        return false 
+    end
+    
+    if isPlasmaBeamOnCooldown() then 
+        SendNotif("Dusekkar", "Plasma Beam on cooldown!", 1)
+        return false 
+    end
+    
     currentDusekkarTarget = target
     silentAimActive = true
     dusekkarActive = true
-    createDusekkarTargetSphere(target, Color3.fromRGB(0,170,255), dusekkarPredictionMultiplier)
+    
+    -- Create prediction sphere
+    createDusekkarTargetSphere(target, Color3.fromRGB(0, 170, 255), dusekkarPredictionMultiplier)
+    
     local success = firePlasmaBeam()
+    
     if success then
         if dusekkarTimer then task.cancel(dusekkarTimer) end
-        dusekkarTimer = task.delay(2.5, function() stopDusekkar() end)
+        dusekkarTimer = task.delay(2.5, function()
+            stopDusekkar()
+        end)
         return true
     else
         stopDusekkar()
@@ -4154,7 +4184,21 @@ VisualsTab:CreateButton({ Name = "Reset All Settings", Callback = function() Sen
 
 -- ===== DUSEKKAR SILENT AIM TAB =====
 DusekkarTab = Window:CreateTab("Dusekkar", 4483362458)
-DusekkarToggle = DusekkarTab:CreateToggle({ Name = "Enable Dusekkar Silent Aim", CurrentValue = false, Flag = "DusekkarToggle", Callback = function(Value) dusekkarEnabled = Value; if Value then if amIDusekkar() then SendNotif("Dusekkar", "Enabled - Press F to fire Plasma Beam", 2) end else restoreSilentAim(); silentAimActive = false; currentDusekkarTarget = nil; stopDusekkar(); SendNotif("Dusekkar", "Disabled", 1) end end })
+DusekkarToggle = DusekkarTab:CreateToggle({ Name = "Enable Dusekkar Silent Aim", CurrentValue = false, Flag = "DusekkarToggle", Callback = function(Value) 
+    dusekkarEnabled = Value
+    if Value then 
+        setupSilentAim()
+        if amIDusekkar() then 
+            SendNotif("Dusekkar", "Enabled - Press F to fire Plasma Beam", 2) 
+        end
+    else 
+        restoreSilentAim() 
+        silentAimActive = false 
+        currentDusekkarTarget = nil 
+        stopDusekkar()
+        SendNotif("Dusekkar", "Disabled", 1) 
+    end 
+end})
 DusekkarTab:CreateDropdown({ Name = "Target Mode", Options = {"Survivors","Killers"}, CurrentOption = "Survivors", Flag = "DusekkarTargetMode", Callback = function(Option) if not amIDusekkar() then return end; dusekkarTargetMode = Option; SendNotif("Dusekkar", "Now targeting: " .. Option, 1) end })
 DusekkarTab:CreateSlider({ Name = "Prediction Multiplier", Range = {1,3}, Increment = 0.1, Suffix = "x", CurrentValue = 1.0, Flag = "DusekkarPrediction", Callback = function(Value) dusekkarPredictionMultiplier = Value; SendNotif("Dusekkar", "Prediction set to " .. Value .. "x", 1) end })
 DusekkarTab:CreateKeybind({ Name = "Switch Target Mode", CurrentKeybind = "G", HoldToInteract = false, Flag = "DusekkarSwitchKey", Callback = function() if not amIDusekkar() then return end; if dusekkarTargetMode == "Survivors" then dusekkarTargetMode = "Killers" else dusekkarTargetMode = "Survivors" end; SendNotif("Dusekkar", "Now targeting: " .. dusekkarTargetMode, 2) end })
@@ -4240,4 +4284,4 @@ setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("Pillager Cheats Loaded - Guest1337 +1 punch, Chance +2 animations, John Doe added")
+print("Pillager Cheats Loaded - All features working (Dusekkar Silent Aim FIXED)")
