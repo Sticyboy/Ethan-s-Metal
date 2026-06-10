@@ -1,4 +1,7 @@
 --// Stamina System GUI (Skateboard transparency + Trick audio detection)
+-- USING Shift + Sprint Value + isMoving combined detection
+-- FIXED: Handles round resets properly
+-- WORKS WITH ALL KILLERS (Slasher 3.11, 1x1x1x1 3.375, Survivors 2.17, etc.)
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -46,9 +49,9 @@ local maxStamina = 100
 local stamina = 100
 local drainRate = 10
 local regenRate = 20
-local SKATING_DRAIN_MULTIPLIER = 1.35  -- 1.35x drain when skating
+local SKATING_DRAIN_MULTIPLIER = 1.35
 
--- Skating state (based on skateboard transparency)
+-- Skating state
 local isSkating = false
 local skateboardPart = nil
 local veeronicaChar = nil
@@ -60,37 +63,68 @@ local trickSound = nil
 -- Module variables
 local timeUntilStaminaRecovers = 0
 local staminaPenaltyActive = false
-local holdingShift = false
 local isSprinting = false
 local wasSprinting = false
 
+-- Input tracking
+local holdingShift = false
+
 local localPlayer = Players.LocalPlayer
-local localCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-local humanoid = localCharacter:WaitForChild("Humanoid")
-local humanoidRootPart = localCharacter:WaitForChild("HumanoidRootPart")
+local localCharacter = nil
+local humanoid = nil
+local humanoidRootPart = nil
 
 local isMoving = false
 local VELOCITY_THRESHOLD = 0.4
 
--- CHANGED: Killer range reduced from 110 to 85 studs
+-- Killer range (85 studs)
 local KILLER_CHECK_RANGE = 85
 local isInKillerRange = false
 
--- Function to get the skateboard directly from the path
+-- SpeedMultipliers reference
+local speedMultipliers = nil
+local sprintingValue = nil
+
+-- Function to reset all references for new round
+local function resetReferences()
+    speedMultipliers = nil
+    sprintingValue = nil
+    skateboardPart = nil
+    veeronicaChar = nil
+    trickSound = nil
+    isSkating = false
+    isSprinting = false
+    wasSprinting = false
+    stamina = maxStamina
+    timeUntilStaminaRecovers = 0
+    staminaPenaltyActive = false
+    isMoving = false
+    isInKillerRange = false
+end
+
+-- Function to initialize SpeedMultipliers reference
+local function initSpeedMultipliers()
+    if not localCharacter then return false end
+    
+    speedMultipliers = localCharacter:FindFirstChild("SpeedMultipliers")
+    if speedMultipliers then
+        sprintingValue = speedMultipliers:FindFirstChild("Sprinting")
+        return true
+    end
+    return false
+end
+
+-- Function to get the skateboard
 local function getSkateboard()
-    -- Try direct path: workspace.Players.Survivors.Veeronica
     local survivors = Workspace:FindFirstChild("Players") and 
                      Workspace.Players:FindFirstChild("Survivors")
     
     if not survivors then return nil end
     
-    -- Look for Veeronica in Survivors
     veeronicaChar = survivors:FindFirstChild("Veeronica")
     if not veeronicaChar then return nil end
     
-    -- Check if this Veeronica is you (Username attribute with capital U)
     if veeronicaChar:GetAttribute("Username") == localPlayer.Name then
-        -- Find the Skateboard
         local skateboard = veeronicaChar:FindFirstChild("Skateboard")
         return skateboard
     end
@@ -98,9 +132,8 @@ local function getSkateboard()
     return nil
 end
 
--- Function to detect trick audio in HumanoidRootPart
+-- Function to detect trick audio
 local function setupTrickAudioDetection()
-    -- Look for your Veeronica character
     local survivors = Workspace:FindFirstChild("Players") and 
                      Workspace.Players:FindFirstChild("Survivors")
     
@@ -109,15 +142,12 @@ local function setupTrickAudioDetection()
     veeronicaChar = survivors:FindFirstChild("Veeronica")
     if not veeronicaChar then return end
     
-    -- Check if this Veeronica is you
     if veeronicaChar:GetAttribute("Username") ~= localPlayer.Name then return end
     
-    -- Look in HumanoidRootPart for the sound
-    local humanoidRootPart = veeronicaChar:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return end
+    local hrp = veeronicaChar:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
     
-    -- Find the trick sound
-    for _, child in ipairs(humanoidRootPart:GetChildren()) do
+    for _, child in ipairs(hrp:GetChildren()) do
         if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
             trickSound = child
             break
@@ -125,51 +155,88 @@ local function setupTrickAudioDetection()
     end
     
     if not trickSound then
-        -- If not found, wait for it to be added
-        humanoidRootPart.ChildAdded:Connect(function(child)
+        hrp.ChildAdded:Connect(function(child)
             if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
                 trickSound = child
-                -- Connect to the sound playing
                 trickSound.Played:Connect(function()
-                    -- Give 4 stamina immediately
                     stamina = math.min(stamina + 4, maxStamina)
-                    print("🎮 +4 stamina gained from trick! (Total:", stamina, ")")
                 end)
             end
         end)
         return
     end
     
-    -- Connect to the sound playing
     trickSound.Played:Connect(function()
-        -- Give 4 stamina immediately
         stamina = math.min(stamina + 4, maxStamina)
-        print("🎮 +4 stamina gained from trick! (Total:", stamina, ")")
     end)
 end
 
 -- Update character references when character respawns
 localPlayer.CharacterAdded:Connect(function(character)
+    resetReferences()
+    
+    -- Wait for character to fully load
+    task.wait(0.5)
+    
     localCharacter = character
-    humanoid = character:WaitForChild("Humanoid")
-    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    humanoid = character:FindFirstChild("Humanoid")
+    humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     
-    stamina = maxStamina
-    timeUntilStaminaRecovers = 0
-    staminaPenaltyActive = false
-    isSprinting = false
-    isSkating = false
-    
-    -- Reset references
-    skateboardPart = nil
-    veeronicaChar = nil
-    trickSound = nil
+    -- Initialize SpeedMultipliers
+    initSpeedMultipliers()
+end)
+
+-- Input events for Shift
+UserInputService.InputBegan:Connect(function(input, gp)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        holdingShift = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gp)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        holdingShift = false
+    end
 end)
 
 -- Function to check if player is moving
 local function updateMovementCheck()
     if humanoidRootPart and humanoidRootPart:IsDescendantOf(workspace) then
         isMoving = humanoidRootPart.Velocity.Magnitude > VELOCITY_THRESHOLD
+    end
+end
+
+-- Sprint detection using Shift + Sprint Value + isMoving
+local function updateSprintingState()
+    if not localCharacter then 
+        isSprinting = false
+        return 
+    end
+    
+    -- Re-initialize SpeedMultipliers if needed (for round reset)
+    if not speedMultipliers or not speedMultipliers.Parent then
+        if not initSpeedMultipliers() then
+            isSprinting = false
+            return
+        end
+    end
+    
+    if sprintingValue then
+        local currentValue = sprintingValue.Value
+        -- Any value above 1.05 means sprinting (works for all: Slasher 3.11, 1x1x1x1 3.375, Survivor 2.17, etc.)
+        local isSprintValueHigh = currentValue > 1.05
+        
+        -- ONLY sprinting when:
+        -- 1. Holding Shift AND
+        -- 2. Sprint value is above 1 AND
+        -- 3. You are actually moving
+        if holdingShift and isSprintValueHigh and isMoving then
+            isSprinting = true
+        else
+            isSprinting = false
+        end
+    else
+        isSprinting = false
     end
 end
 
@@ -201,7 +268,6 @@ local function updateKillerRangeCheck()
     isInKillerRange = foundPlayer
 end
 
--- Function to check if we can regenerate stamina
 local function canRegenStamina()
     return timeUntilStaminaRecovers <= 0 and not staminaPenaltyActive
 end
@@ -240,20 +306,7 @@ KillerButton.MouseButton1Click:Connect(function()
     setMode("Killer")
 end)
 
--- Input events
-UserInputService.InputBegan:Connect(function(input, gp)
-    if input.KeyCode == Enum.KeyCode.LeftShift then
-        holdingShift = true
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input, gp)
-    if input.KeyCode == Enum.KeyCode.LeftShift then
-        holdingShift = false
-    end
-end)
-
--- Monitor skateboard transparency changes
+-- Monitor skateboard transparency
 local function updateSkateboardState()
     if not skateboardPart or not skateboardPart:IsDescendantOf(Workspace) then
         skateboardPart = getSkateboard()
@@ -268,11 +321,16 @@ end
 updateSkateboardState()
 setupTrickAudioDetection()
 
--- Heartbeat loop (runs every frame for fast detection)
+-- Heartbeat loop
 RunService.Heartbeat:Connect(function(dt)
-    -- Update checks
+    -- Skip if no character
+    if not localCharacter or not localCharacter.Parent then
+        return
+    end
+    
     updateMovementCheck()
-    updateSkateboardState()  -- Check skateboard every frame
+    updateSkateboardState()
+    updateSprintingState()  -- Check sprint state using Shift + Sprint Value + isMoving
     
     if currentMode == "Killer" then
         updateKillerRangeCheck()
@@ -282,21 +340,15 @@ RunService.Heartbeat:Connect(function(dt)
     local shouldDrain = false
     
     if isSkating then
-        -- When skating, drain stamina while moving (shift state doesn't matter)
         shouldDrain = isMoving
     elseif currentMode == "Survivor" then
-        -- Normal sprinting requires shift + moving
-        shouldDrain = holdingShift and isMoving and stamina > 0
+        shouldDrain = isSprinting and stamina > 0
     elseif currentMode == "Killer" then
-        -- Killer sprinting requires shift + moving + in range
-        shouldDrain = holdingShift and isMoving and isInKillerRange and stamina > 0
+        shouldDrain = isSprinting and isInKillerRange and stamina > 0
     end
     
-    -- Track sprinting state changes (for UI only)
     wasSprinting = isSprinting
-    isSprinting = shouldDrain
     
-    -- Handle sprinting ended (applies to both normal sprinting and skating)
     if wasSprinting and not isSprinting then
         if timeUntilStaminaRecovers > 0.1 then
             timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + 0.1, 0, 3)
@@ -305,39 +357,36 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
     
-    -- Handle stamina changes
     if shouldDrain and stamina > 0 then
-        -- Calculate drain rate (1.35x for skating)
         local currentDrainRate = drainRate
         if isSkating then
-            currentDrainRate = drainRate * SKATING_DRAIN_MULTIPLIER  -- 1.35x drain when skating
+            currentDrainRate = drainRate * SKATING_DRAIN_MULTIPLIER
         end
         stamina = stamina - currentDrainRate * dt
         stamina = math.max(stamina, 0)
         
-        -- Increase recovery timer while draining (for both skating and sprinting)
         timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + dt * 0.05, 0.2, 3)
         
         if stamina <= 0 then
             stamina = 0
-            isSprinting = false
             timeUntilStaminaRecovers = 2
             staminaPenaltyActive = true
-            localCharacter:SetAttribute("StaminaPenaltyActive", true)
+            if localCharacter then
+                localCharacter:SetAttribute("StaminaPenaltyActive", true)
+            end
         end
     else
-        -- Not draining, decrement recovery timer
         if timeUntilStaminaRecovers > 0 then
             timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers - dt, 0, 3)
         end
         
-        -- Clear penalty when timer runs out
         if timeUntilStaminaRecovers <= 0 and staminaPenaltyActive then
             staminaPenaltyActive = false
-            localCharacter:SetAttribute("StaminaPenaltyActive", nil)
+            if localCharacter then
+                localCharacter:SetAttribute("StaminaPenaltyActive", nil)
+            end
         end
         
-        -- Regenerate stamina if allowed (not while skating)
         if not isSkating and canRegenStamina() and stamina < maxStamina then
             stamina = stamina + regenRate * dt
             stamina = math.min(stamina, maxStamina)
@@ -347,7 +396,6 @@ RunService.Heartbeat:Connect(function(dt)
     -- Update label
     local statusText = ""
     
-    -- Add skating status
     if isSkating then
         statusText = statusText .. " (SKATING)"
     end
@@ -392,7 +440,6 @@ RunService.Heartbeat:Connect(function(dt)
     
     StaminaLabel.Text = string.format("Stamina: %d%s", math.floor(stamina), statusText)
     
-    -- Color coding
     if stamina < 20 then
         StaminaLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
         StaminaLabel.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
@@ -404,10 +451,18 @@ RunService.Heartbeat:Connect(function(dt)
         StaminaLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     end
     
-    -- Update button transparency
     SurvivorButton.BackgroundTransparency = currentMode == "Survivor" and 0.1 or 0.3
     KillerButton.BackgroundTransparency = currentMode == "Killer" and 0.1 or 0.3
 end)
 
 -- Initial setup
 setMode("Survivor")
+
+-- Initialize character references for initial spawn
+task.wait(0.5)
+localCharacter = localPlayer.Character
+if localCharacter then
+    humanoid = localCharacter:FindFirstChild("Humanoid")
+    humanoidRootPart = localCharacter:FindFirstChild("HumanoidRootPart")
+    initSpeedMultipliers()
+end
