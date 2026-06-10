@@ -1,7 +1,7 @@
 --// Stamina System GUI (Skateboard transparency + Trick audio detection)
 -- USING Shift + Sprint Value + isMoving combined detection
 -- FIXED: Handles round resets properly
--- WORKS WITH ALL KILLERS (Slasher 3.11, 1x1x1x1 3.375, Survivors 2.17, etc.)
+-- FIXED: Detects ability usage for ALL survivors to stop sprinting
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -85,6 +85,26 @@ local isInKillerRange = false
 local speedMultipliers = nil
 local sprintingValue = nil
 
+-- Ability blocking detection (ALL survivors)
+local ABILITY_BLOCKERS = {
+    -- Noob abilities
+    "DrinkingCola",
+    "DrinkingSlateskin",
+    "EatingGhostburger",
+    -- Shedletsky abilities
+    "StunningKiller",
+    -- Guest1337 abilities
+    "PunchAbility",
+    -- TwoTime abilities
+    "TwoTimeStab",
+    -- JaneDoe abilities
+    "jdaw",
+    -- Chance abilities
+    "ShootingGun",
+}
+local isAbilityBlocking = false
+local abilityBlockerConnections = {}
+
 -- Function to reset all references for new round
 local function resetReferences()
     speedMultipliers = nil
@@ -100,6 +120,58 @@ local function resetReferences()
     staminaPenaltyActive = false
     isMoving = false
     isInKillerRange = false
+    isAbilityBlocking = false
+    
+    -- Clean up ability blocker connections
+    for _, connection in pairs(abilityBlockerConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    abilityBlockerConnections = {}
+end
+
+-- Function to check if any ability blocker exists
+local function checkAbilityBlockers()
+    if not speedMultipliers then return false end
+    
+    for _, blockerName in ipairs(ABILITY_BLOCKERS) do
+        if speedMultipliers:FindFirstChild(blockerName) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to setup ability blocker listeners
+local function setupAbilityBlockerListeners()
+    if not speedMultipliers then return end
+    
+    -- Check existing blockers
+    isAbilityBlocking = checkAbilityBlockers()
+    
+    -- Listen for new blockers being added
+    local addedConnection = speedMultipliers.ChildAdded:Connect(function(child)
+        for _, blockerName in ipairs(ABILITY_BLOCKERS) do
+            if child.Name == blockerName then
+                isAbilityBlocking = true
+                isSprinting = false  -- Force stop sprinting immediately
+                break
+            end
+        end
+    end)
+    table.insert(abilityBlockerConnections, addedConnection)
+    
+    -- Listen for blockers being removed
+    local removedConnection = speedMultipliers.ChildRemoved:Connect(function(child)
+        for _, blockerName in ipairs(ABILITY_BLOCKERS) do
+            if child.Name == blockerName then
+                isAbilityBlocking = checkAbilityBlockers()  -- Check if any blockers remain
+                break
+            end
+        end
+    end)
+    table.insert(abilityBlockerConnections, removedConnection)
 end
 
 -- Function to initialize SpeedMultipliers reference
@@ -109,6 +181,8 @@ local function initSpeedMultipliers()
     speedMultipliers = localCharacter:FindFirstChild("SpeedMultipliers")
     if speedMultipliers then
         sprintingValue = speedMultipliers:FindFirstChild("Sprinting")
+        -- Setup ability blocker listeners
+        setupAbilityBlockerListeners()
         return true
     end
     return false
@@ -206,7 +280,7 @@ local function updateMovementCheck()
     end
 end
 
--- Sprint detection using Shift + Sprint Value + isMoving
+-- Sprint detection using Shift + Sprint Value + isMoving + ability blockers
 local function updateSprintingState()
     if not localCharacter then 
         isSprinting = false
@@ -219,6 +293,12 @@ local function updateSprintingState()
             isSprinting = false
             return
         end
+    end
+    
+    -- If ability is blocking sprint, force false
+    if isAbilityBlocking then
+        isSprinting = false
+        return
     end
     
     if sprintingValue then
@@ -296,6 +376,7 @@ local function setMode(mode)
     isSprinting = false
     wasSprinting = false
     isSkating = false
+    isAbilityBlocking = false
 end
 
 SurvivorButton.MouseButton1Click:Connect(function()
@@ -330,7 +411,7 @@ RunService.Heartbeat:Connect(function(dt)
     
     updateMovementCheck()
     updateSkateboardState()
-    updateSprintingState()  -- Check sprint state using Shift + Sprint Value + isMoving
+    updateSprintingState()  -- Check sprint state (includes ability blocker check)
     
     if currentMode == "Killer" then
         updateKillerRangeCheck()
@@ -410,6 +491,10 @@ RunService.Heartbeat:Connect(function(dt)
     
     if not isMoving then
         statusText = statusText .. " (STATIONARY)"
+    end
+    
+    if isAbilityBlocking then
+        statusText = statusText .. " (ABILITY)"
     end
     
     if shouldDrain then
