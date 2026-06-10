@@ -1,6 +1,7 @@
 -- Pillager Cheats - Full Script (OPTIMIZED: Globals for config, Locals for functions)
 -- FIXED POSITION ESP: All ability cooldowns have permanent Y-offsets (text NEVER shifts)
--- INCLUDES: Noli Ability Tracker, c00lkidd Ability Tracker, John Doe Ability Tracker - NO NOTIFICATIONS
+-- INCLUDES: Noli, c00lkidd, John Doe Ability Trackers - NO NOTIFICATIONS
+-- UPDATED: Guest1337 punch (+1), Chance animations (+2)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -79,7 +80,7 @@ autoBlockTriggerAnimations = {
     ["94958041603347"] = true, ["108196996477620"] = true,
 }
 
--- Guest1337 Animations
+-- Guest1337 Animations (UPDATED: +1 punch)
 guest1337AllAnims = {
     ["95802026624883"] = true,
     ["82036084568393"] = true,
@@ -98,11 +99,19 @@ guest1337PunchAnims = {
     ["138040001965654"] = true,
     ["72007882634344"] = true,
     ["132010205222516"] = true,
+    ["86096387000557"] = true,  -- NEW punch animation
 }
 
+-- Chance Animations (UPDATED: +2 animations)
 chanceAnimIds = {
-    ["133491532453922"] = true, ["76649505662612"] = true, ["86371356500204"] = true,
-    ["131189930305001"] = true, ["73697316043485"] = true, ["103301489258021"] = true,
+    ["133491532453922"] = true,
+    ["76649505662612"] = true,
+    ["86371356500204"] = true,
+    ["131189930305001"] = true,
+    ["73697316043485"] = true,
+    ["103301489258021"] = true,
+    ["133607163653602"] = true,  -- NEW
+    ["111512633767170"] = true,  -- NEW
 }
 
 BEHEAD_ANIMATIONS = {
@@ -168,20 +177,20 @@ PIZZA_DELIVERY_ANIMATIONS = {
 }
 
 -- John Doe Animation IDs
-local CORRUPT_ENERGY_ANIMATIONS = {
+CORRUPT_ENERGY_ANIMATIONS = {
     "127172483138092",  -- Original
-    "117623646053053",  -- New
-    "93432652624003",   -- New
-    "96811405806507",   -- New
+    "117623646053053",
+    "93432652624003",
+    "96811405806507",
 }
-local UNSTOPPABLE_ANIMATIONS = {
+UNSTOPPABLE_ANIMATIONS = {
     "123196546725221",  -- Original
-    "93758847362442",   -- New
-    "108185913388050",  -- New
-    "133423655683191",  -- New
+    "93758847362442",
+    "108185913388050",
+    "133423655683191",
 }
-local ANNIHILATION_CORRUPT_ENERGY = "114620047310688"
-local ANNIHILATION_UNSTOPPABLE_TRIGGER = "111710065813108"
+ANNIHILATION_CORRUPT_ENERGY = "114620047310688"
+ANNIHILATION_UNSTOPPABLE_TRIGGER = "111710065813108"
 
 -- Cooldown values (global config)
 SHEDLETSKY_COOLDOWN = 40
@@ -1557,8 +1566,7 @@ local function checkSixerBloodHuntParry()
                         end
                     end
                 end
-            end
-        end
+            end        end
     end
     local allChances = getAllCharactersByName("Chance")
     for _, chance in ipairs(allChances) do
@@ -2280,7 +2288,8 @@ local function createSurvivorCooldownDisplay(survivor, cooldownEndTime, abilityN
     textLabel.Text = abilityName .. ": " .. formatCooldownTime(getCooldown(survivor.Name))
     textLabel.TextStrokeTransparency = 0
     textLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
-    textLabel.TextScaled = true    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
     textLabel.Parent = billboard
     local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName, survivorName = survivor.Name, connection = nil }
     local connection
@@ -3898,7 +3907,9 @@ function stopJohnDoeTracking()
     johnDoeWarningBillboards = {}
     johnDoeWarningPulseConnections = {}
     johnDoeIsAnnihilationSkin = {}
-end-- ===== DUSEKKAR SILENT AIM FUNCTIONS =====
+end
+
+-- ===== DUSEKKAR SILENT AIM FUNCTIONS =====
 local function isPlasmaBeamOnCooldown()
     local success, cooldownText = pcall(function() return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text end)
     return success and (cooldownText ~= "" and cooldownText ~= "0") or true
@@ -4229,4 +4240,4 @@ setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("Pillager Cheats Loaded - John Doe Ability Checks Added")
+print("Pillager Cheats Loaded - Guest1337 +1 punch, Chance +2 animations, John Doe added")
