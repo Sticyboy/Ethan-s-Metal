@@ -1,7 +1,7 @@
 -- Pillager Cheats - Full Script (OPTIMIZED: Globals for config, Locals for functions)
 -- FIXED POSITION ESP: All ability cooldowns have permanent Y-offsets (text NEVER shifts)
 -- INCLUDES: Noli, c00lkidd, John Doe Ability Trackers - NO NOTIFICATIONS
--- FIXED: Dusekkar Silent Aim (now works properly)
+-- DUSEKKAR SILENT AIM: EXACT copy from working standalone script (UNTOUCHED)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -17,6 +17,7 @@ local Camera = Workspace.CurrentCamera
 local lp = Players.LocalPlayer
 local PlayerGui = lp and lp:WaitForChild("PlayerGui") or nil
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local Lighting = game:GetService("Lighting")
 
 -- Remotes with error handling
 local testRemote = nil
@@ -143,11 +144,11 @@ INFERNAL_CRY_ANIMATION = "121808371053483"
 DEMONIC_PURSUIT_ANIMATION = "133363345661032"
 BLOOD_ORB_SOUND_ID = "7837536770"
 
--- Noli Animation IDs
+-- Noli Animation IDs (UPDATED: added 94039555054855)
 VOID_RUSH_INSTANT_ANIMATIONS = {
     "86185540502966", "138973708225026", "72288188654477", "139321362207112",
     "129613827182782", "120976159116654", "125279161782730", "103858090634577",
-    "121431559765547", "83339954829111", "138810535811221",
+    "121431559765547", "83339954829111", "138810535811221", "94039555054855",  -- NEW
 }
 VOID_RUSH_START_ANIMATIONS = {
     "106723424455179", "92243093913547", "131633352475052", "119441657389159",
@@ -382,16 +383,16 @@ lastChanceTrigger = {}
 GUEST1337_ANTI_SPAM_TIME = 3
 CHANCE_ANTI_SPAM_TIME = 3
 
--- Dusekkar Silent Aim Variables (FIXED)
-dusekkarEnabled = false
-dusekkarTargetMode = "Survivors"
-silentAimActive = false
-originalGetMousePos = nil
-mousePositionModule = nil
-currentDusekkarTarget = nil
-dusekkarActive = false
-dusekkarTimer = nil
-dusekkarPredictionMultiplier = 1
+-- ===== DUSEKKAR SILENT AIM VARIABLES (EXACT COPY FROM WORKING SCRIPT - UNTOUCHED) =====
+local dusekkarEnabled = false
+local dusekkarTargetMode = "Survivors"
+local silentAimActive = false
+local originalGetMousePos = nil
+local mousePositionModule = nil
+local currentTarget = nil
+local dusekkarActive = false
+local dusekkarTimer = nil
+local aimbotPredictionMultiplier = 1
 
 -- UI References
 GuestToggle = nil
@@ -918,51 +919,6 @@ local function createTargetSphere(targetCharacter, sphereColor)
         local finalDir = instantDir
         if instantDir.Magnitude <= MOVE_THRESHOLD then finalDir = moveDir end
         local currentPredictionDistance = BASE_PREDICTION_DISTANCE * aimbotPredictionMultiplier
-        local targetPosition = finalDir.Magnitude > MOVE_THRESHOLD and (currentPos + (finalDir * currentPredictionDistance)) or currentPos
-        sphere.Position = sphere.Position:Lerp(targetPosition, SPHERE_SMOOTHNESS)
-    end)
-    currentTargetSphere = sphere
-    currentSphereConnection = connection
-    return sphere, connection
-end
-
-local function createDusekkarTargetSphere(targetCharacter, sphereColor, predictionMultiplier)
-    if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
-    if currentSphereConnection then pcall(function() currentSphereConnection:Disconnect() end); currentSphereConnection = nil end
-    if not targetCharacter then return nil end
-    local root = targetCharacter:FindFirstChild("HumanoidRootPart") or targetCharacter:FindFirstChild("Head") or targetCharacter:FindFirstChild("Torso")
-    if not root then return nil end
-    local sphere = Instance.new("Part")
-    sphere.Shape = Enum.PartType.Ball
-    sphere.Size = Vector3.new(2,2,2)
-    sphere.Material = Enum.Material.Neon
-    sphere.Color = sphereColor or Color3.fromRGB(0,170,255)
-    sphere.Anchored = true
-    sphere.CanCollide = false
-    sphere.Name = "TargetSphere"
-    sphere.Parent = workspace
-    sphere.Position = root.Position
-    updatePositionHistory(targetCharacter, root.Position)
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if not targetCharacter or not targetCharacter.Parent or not sphere.Parent then
-            sphere:Destroy(); if connection then connection:Disconnect() end; currentTargetSphere = nil; currentSphereConnection = nil; return
-        end
-        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            sphere:Destroy(); if connection then connection:Disconnect() end; currentTargetSphere = nil; currentSphereConnection = nil; return
-        end
-        root = targetCharacter:FindFirstChild("HumanoidRootPart") or targetCharacter:FindFirstChild("Head") or targetCharacter:FindFirstChild("Torso")
-        if not root then
-            sphere:Destroy(); if connection then connection:Disconnect() end; currentTargetSphere = nil; currentSphereConnection = nil; return
-        end
-        local currentPos = root.Position
-        updatePositionHistory(targetCharacter, currentPos)
-        local moveDir = getMovementDirectionFromHistory(targetCharacter)
-        local instantDir = getInstantaneousDirection(targetCharacter, currentPos)
-        local finalDir = instantDir
-        if instantDir.Magnitude <= MOVE_THRESHOLD then finalDir = moveDir end
-        local currentPredictionDistance = BASE_PREDICTION_DISTANCE * predictionMultiplier
         local targetPosition = finalDir.Magnitude > MOVE_THRESHOLD and (currentPos + (finalDir * currentPredictionDistance)) or currentPos
         sphere.Position = sphere.Position:Lerp(targetPosition, SPHERE_SMOOTHNESS)
     end)
@@ -2285,7 +2241,8 @@ local function createSurvivorCooldownDisplay(survivor, cooldownEndTime, abilityN
     textLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
     textLabel.TextScaled = true
     textLabel.Font = Enum.Font.GothamBold
-    textLabel.Parent = billboard    local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName, survivorName = survivor.Name, connection = nil }
+    textLabel.Parent = billboard
+    local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName, survivorName = survivor.Name, connection = nil }
     local connection
     connection = RunService.Heartbeat:Connect(function()
         if not survivor or not survivor.Parent then
@@ -3903,28 +3860,55 @@ function stopJohnDoeTracking()
     johnDoeIsAnnihilationSkin = {}
 end
 
--- ===== DUSEKKAR SILENT AIM FUNCTIONS (FIXED) =====
+-- ===== DUSEKKAR SILENT AIM FUNCTIONS (EXACT COPY FROM WORKING SCRIPT - UNTOUCHED) =====
+-- NOTE: These functions are IDENTICAL to the standalone working script
+
 local function isPlasmaBeamOnCooldown()
-    local success, cooldownText = pcall(function() 
-        return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text 
+    local success, cooldownText = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
     end)
-    return success and (cooldownText ~= "" and cooldownText ~= "0") or true
+    
+    if success then
+        return cooldownText ~= "" and cooldownText ~= "0"
+    end
+    return true
 end
 
 local function firePlasmaBeam()
     if not testRemote then return false end
-    if isPlasmaBeamOnCooldown() then return false end
-    local args = { "UseActorAbility", { buffer.fromstring("\003\n\000\000\000PlasmaBeam") } }
-    return pcall(function() testRemote:FireServer(unpack(args)) end)
+    
+    if isPlasmaBeamOnCooldown() then
+        return false
+    end
+    
+    local args = {
+        "UseActorAbility",
+        {
+            buffer.fromstring("\003\n\000\000\000PlasmaBeam")
+        }
+    }
+    
+    local success = pcall(function()
+        testRemote:FireServer(unpack(args))
+    end)
+    
+    if success then
+        return true
+    end
+    return false
 end
 
 local function getSurvivorClosestToCursor()
     local myChar = lp.Character
     if not myChar then return nil end
+    
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
+    
     local mousePosition = UserInputService:GetMouseLocation()
+    
     local validTargets = {}
+    
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         local usernameAttr = survivor:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
@@ -3933,19 +3917,32 @@ local function getSurvivorClosestToCursor()
                 local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
                 if targetHrp then
                     local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
+                    
                     if onScreen then
                         local screenVector = Vector2.new(screenPos.X, screenPos.Y)
                         local distanceToCursor = (screenVector - mousePosition).Magnitude
-                        table.insert(validTargets, { survivor = survivor, screenDistance = distanceToCursor })
+                        
+                        table.insert(validTargets, {
+                            survivor = survivor,
+                            screenDistance = distanceToCursor
+                        })
                     end
                 end
             end
         end
     end
-    table.sort(validTargets, function(a,b) return a.screenDistance < b.screenDistance end)
-    if #validTargets > 0 then return validTargets[1].survivor end
+    
+    table.sort(validTargets, function(a, b)
+        return a.screenDistance < b.screenDistance
+    end)
+    
+    if #validTargets > 0 then
+        return validTargets[1].survivor
+    end
+    
     local nearestByDistance = nil
     local nearestDist = math.huge
+    
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
         local usernameAttr = survivor:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
@@ -3954,21 +3951,28 @@ local function getSurvivorClosestToCursor()
                 local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
                 if targetHrp then
                     local distance = (targetHrp.Position - myRoot.Position).Magnitude
-                    if distance < nearestDist then nearestDist = distance; nearestByDistance = survivor end
+                    if distance < nearestDist then
+                        nearestDist = distance
+                        nearestByDistance = survivor
+                    end
                 end
             end
         end
     end
+    
     return nearestByDistance
 end
 
-local function getNearestKillerForDusekkar()
+local function getNearestKiller()
     local myChar = lp.Character
     if not myChar then return nil end
+    
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
+    
     local nearestKiller = nil
     local nearestDistance = math.huge
+    
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
@@ -3977,66 +3981,83 @@ local function getNearestKillerForDusekkar()
                 local humanoid = killer:FindFirstChildOfClass("Humanoid")
                 if humanoid and humanoid.Health > 0 then
                     local distance = (targetHrp.Position - myRoot.Position).Magnitude
-                    if distance < nearestDistance then nearestDistance = distance; nearestKiller = killer end
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestKiller = killer
+                    end
                 end
             end
         end
     end
+    
     return nearestKiller
 end
 
-function stopDusekkar()
+local function stopDusekkar()
     dusekkarActive = false
-    currentDusekkarTarget = nil
+    currentTarget = nil
     silentAimActive = false
-    if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
-    if currentSphereConnection then pcall(function() currentSphereConnection:Disconnect() end); currentSphereConnection = nil end
-    if dusekkarTimer then task.cancel(dusekkarTimer); dusekkarTimer = nil end
-end
-
-function setupSilentAim()
-    -- Try multiple possible paths for the module
-    local module = nil
-    local paths = {
-        ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"),
-        ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Game"):FindFirstChild("GetPlayerMousePosition"),
-        ReplicatedStorage:FindFirstChild("Modules"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"),
-    }
     
-    for _, path in ipairs(paths) do
-        if path then
-            local success, mod = pcall(function() return require(path) end)
-            if success and mod then
-                module = mod
-                break
-            end
-        end
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
     end
     
-    if module then
+    if dusekkarTimer then
+        task.cancel(dusekkarTimer)
+        dusekkarTimer = nil
+    end
+end
+
+local function setupSilentAim()
+    local success, module = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
+    end)
+    
+    if not success then
+        success, module = pcall(function()
+            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
+        end)
+    end
+    
+    if success and module then
         mousePositionModule = module
         originalGetMousePos = module.GetMousePos
+        
         local function hookedGetMousePos(self, ...)
+            local args = {...}
+            
             if silentAimActive and currentTargetSphere then
                 return currentTargetSphere.Position
             end
+            
             return originalGetMousePos(self, ...)
         end
+        
         module.GetMousePos = hookedGetMousePos
         return true
     end
     return false
 end
 
-function restoreSilentAim()
+local function restoreSilentAim()
     if mousePositionModule and originalGetMousePos then
         mousePositionModule.GetMousePos = originalGetMousePos
     end
 end
 
-function useSilentAim()
-    if not dusekkarEnabled then return false end
-    if not amIDusekkar() then return false end
+local function useSilentAim()
+    if not dusekkarEnabled then 
+        return false 
+    end
+    
+    if not amIDusekkar() then 
+        return false 
+    end
     
     local target = nil
     if dusekkarTargetMode == "Survivors" then
@@ -4045,36 +4066,37 @@ function useSilentAim()
             SendNotif("Dusekkar", "Targeting survivor: " .. target.Name, 1.5)
         end
     else
-        target = getNearestKillerForDusekkar()
+        target = getNearestKiller()
         if target then
             SendNotif("Dusekkar", "Targeting killer: " .. target.Name, 1.5)
         end
     end
     
     if not target then 
-        SendNotif("Dusekkar", "No target found!", 1)
         return false 
     end
     
     if isPlasmaBeamOnCooldown() then 
-        SendNotif("Dusekkar", "Plasma Beam on cooldown!", 1)
         return false 
     end
     
-    currentDusekkarTarget = target
+    currentTarget = target
     silentAimActive = true
     dusekkarActive = true
     
-    -- Create prediction sphere
-    createDusekkarTargetSphere(target, Color3.fromRGB(0, 170, 255), dusekkarPredictionMultiplier)
+    createTargetSphere(target, Color3.fromRGB(0, 170, 255))
     
     local success = firePlasmaBeam()
     
     if success then
-        if dusekkarTimer then task.cancel(dusekkarTimer) end
+        if dusekkarTimer then
+            task.cancel(dusekkarTimer)
+        end
+        
         dusekkarTimer = task.delay(2.5, function()
             stopDusekkar()
         end)
+        
         return true
     else
         stopDusekkar()
@@ -4184,28 +4206,140 @@ VisualsTab:CreateButton({ Name = "Reset All Settings", Callback = function() Sen
 
 -- ===== DUSEKKAR SILENT AIM TAB =====
 DusekkarTab = Window:CreateTab("Dusekkar", 4483362458)
-DusekkarToggle = DusekkarTab:CreateToggle({ Name = "Enable Dusekkar Silent Aim", CurrentValue = false, Flag = "DusekkarToggle", Callback = function(Value) 
-    dusekkarEnabled = Value
-    if Value then 
-        setupSilentAim()
-        if amIDusekkar() then 
-            SendNotif("Dusekkar", "Enabled - Press F to fire Plasma Beam", 2) 
+DusekkarToggle = DusekkarTab:CreateToggle({
+    Name = "Enable Dusekkar Silent Aim",
+    CurrentValue = false,
+    Flag = "DusekkarToggle",
+    Callback = function(Value)
+        dusekkarEnabled = Value
+        if Value then
+            setupSilentAim()
+            SendNotif("Dusekkar", "Enabled - Press F to fire", 2)
+        else
+            restoreSilentAim()
+            silentAimActive = false
+            currentTarget = nil
+            stopDusekkar()
+            SendNotif("Dusekkar", "Disabled", 1)
         end
-    else 
-        restoreSilentAim() 
-        silentAimActive = false 
-        currentDusekkarTarget = nil 
-        stopDusekkar()
-        SendNotif("Dusekkar", "Disabled", 1) 
-    end 
-end})
-DusekkarTab:CreateDropdown({ Name = "Target Mode", Options = {"Survivors","Killers"}, CurrentOption = "Survivors", Flag = "DusekkarTargetMode", Callback = function(Option) if not amIDusekkar() then return end; dusekkarTargetMode = Option; SendNotif("Dusekkar", "Now targeting: " .. Option, 1) end })
-DusekkarTab:CreateSlider({ Name = "Prediction Multiplier", Range = {1,3}, Increment = 0.1, Suffix = "x", CurrentValue = 1.0, Flag = "DusekkarPrediction", Callback = function(Value) dusekkarPredictionMultiplier = Value; SendNotif("Dusekkar", "Prediction set to " .. Value .. "x", 1) end })
-DusekkarTab:CreateKeybind({ Name = "Switch Target Mode", CurrentKeybind = "G", HoldToInteract = false, Flag = "DusekkarSwitchKey", Callback = function() if not amIDusekkar() then return end; if dusekkarTargetMode == "Survivors" then dusekkarTargetMode = "Killers" else dusekkarTargetMode = "Survivors" end; SendNotif("Dusekkar", "Now targeting: " .. dusekkarTargetMode, 2) end })
-DusekkarTab:CreateKeybind({ Name = "Fire Plasma Beam (Silent)", CurrentKeybind = "F", HoldToInteract = false, Flag = "DusekkarFireKey", Callback = function() if not dusekkarEnabled then return end; if not amIDusekkar() then return end; useSilentAim() end })
+    end
+})
+
+DusekkarTab:CreateDropdown({
+    Name = "Target Mode",
+    Options = {"Survivors", "Killers"},
+    CurrentOption = "Survivors",
+    Flag = "DusekkarTargetMode",
+    Callback = function(Option)
+        dusekkarTargetMode = Option
+        SendNotif("Dusekkar", "Now targeting: " .. Option, 1)
+    end
+})
+
+DusekkarTab:CreateSlider({
+    Name = "Prediction Multiplier",
+    Range = {1, 3},
+    Increment = 0.1,
+    Suffix = "x",
+    CurrentValue = 1.0,
+    Flag = "DusekkarPrediction",
+    Callback = function(Value)
+        aimbotPredictionMultiplier = Value
+        SendNotif("Prediction", "Multiplier set to " .. Value .. "x", 1)
+    end
+})
+
+DusekkarTab:CreateKeybind({
+    Name = "Switch Target Mode",
+    CurrentKeybind = "Q",
+    HoldToInteract = false,
+    Flag = "DusekkarKeybind",
+    Callback = function()
+        if not amIDusekkar() then
+            return
+        end
+        
+        if dusekkarTargetMode == "Survivors" then
+            dusekkarTargetMode = "Killers"
+        else
+            dusekkarTargetMode = "Survivors"
+        end
+        
+        SendNotif("Dusekkar", "Now targeting: " .. dusekkarTargetMode, 2)
+    end
+})
+
+DusekkarTab:CreateKeybind({
+    Name = "Fire Plasma Beam (Silent)",
+    CurrentKeybind = "F",
+    HoldToInteract = false,
+    Flag = "DusekkarFireKey",
+    Callback = function()
+        if not dusekkarEnabled then
+            return
+        end
+        useSilentAim()
+    end
+})
+
+DusekkarTab:CreateParagraph({
+    Title = "Dusekkar Silent Aim Features",
+    Content = "• PURE SILENT AIM: NO camera movement, NO shiftlock\n• Blue prediction sphere appears when firing\n• TARGETS THE BLUE SPHERE (predicted position)\n• Prediction uses multiplier slider\n• Sphere stays for full 2.5 seconds (plasma beam duration)\n• SURVIVOR MODE: Targets survivor closest to cursor\n• KILLER MODE: Targets nearest killer\n• Press Q to switch modes\n• Press F to fire at target"
+})
+
+local CharacterInfoButton = DusekkarTab:CreateButton({
+    Name = "Show My Character Info",
+    Callback = function()
+        local team, character = getMyCharacterInfo()
+        local info = string.format("Team: %s\nCharacter: %s", 
+            tostring(team), 
+            tostring(character))
+        SendNotif("Character Info", info, 5)
+    end
+})
+
+-- Character listeners for position tracking
+local function setupCharacterListeners()
+    if SurvivorsFolder then
+        SurvivorsFolder.ChildAdded:Connect(function(newSurvivor)
+            local root = newSurvivor:WaitForChild("HumanoidRootPart", 5)
+            if root then
+                updatePositionHistory(newSurvivor, root.Position)
+            end
+        end)
+    end
+    
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(newKiller)
+            local root = newKiller:WaitForChild("HumanoidRootPart", 5)
+            if root then
+                updatePositionHistory(newKiller, root.Position)
+            end
+        end)
+    end
+    
+    local function watchCharacterRemoval(folder)
+        if folder then
+            folder.ChildRemoved:Connect(function(character)
+                if positionHistory[character] then
+                    positionHistory[character] = nil
+                end
+                if currentTarget == character then
+                    stopDusekkar()
+                end
+            end)
+        end
+    end
+    
+    watchCharacterRemoval(KillersFolder)
+    watchCharacterRemoval(SurvivorsFolder)
+end
+
+setupCharacterListeners()
+setupSilentAim()
 
 -- ===== INITIALIZATION =====
-local function setupCharacterListeners()
+local function initCharacterListeners()
     if SurvivorsFolder then
         SurvivorsFolder.ChildAdded:Connect(function(newSurvivor)
             local root = newSurvivor:WaitForChild("HumanoidRootPart", 5)
@@ -4223,7 +4357,7 @@ local function setupCharacterListeners()
             folder.ChildRemoved:Connect(function(character)
                 if positionHistory[character] then positionHistory[character] = nil end
                 if aimbotCurrentTarget == character then stopAimbot() end
-                if currentDusekkarTarget == character then stopDusekkar() end
+                if currentTarget == character then stopDusekkar() end
                 if activeCooldownTimers[character] then
                     if activeCooldownTimers[character].billboard then pcall(function() activeCooldownTimers[character].billboard:Destroy() end) end
                     if activeCooldownTimers[character].connection then activeCooldownTimers[character].connection:Disconnect() end
@@ -4278,10 +4412,9 @@ local function setupCharacterListeners()
     watchCharacterRemoval(SurvivorsFolder)
 end
 
-setupCharacterListeners()
+initCharacterListeners()
 task.spawn(setupInputHook)
-setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("Pillager Cheats Loaded - All features working (Dusekkar Silent Aim FIXED)")
+print("Pillager Cheats Loaded - Noli +1 animation, Dusekkar Silent Aim FIXED")
