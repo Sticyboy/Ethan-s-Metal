@@ -2,6 +2,7 @@
 -- FIXED POSITION ESP: All ability cooldowns have permanent Y-offsets (text NEVER shifts)
 -- INCLUDES: Noli, c00lkidd, John Doe Ability Trackers - NO NOTIFICATIONS
 -- FIXED: Dusekkar Silent Aim (stack overflow resolved)
+-- UPDATED: Sixer Tracker with Blood Hunt reset, Kill reset during Blood Hunt, & Blood Orb reduction (3s)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -124,6 +125,7 @@ BEHEAD_ANIMATIONS = {
 GASHING_WOUND_ANIMATIONS = {
     "121086746534252", "104980456408239", "70483423693126", "131642454238375",
     "93284670378212", "129976080405072", "135349868049670", "106847695270773",
+    "127774626396280", 
 }
 
 RAGING_PACE_STARTUP_ANIMATIONS = {
@@ -141,10 +143,14 @@ ENTANGLEMENT_ANIMATIONS = {
     "91237398850193", "81935774508746",
 }
 
--- Sixer Animation IDs
+-- Sixer Animation IDs (UPDATED with full tracking)
 INFERNAL_CRY_ANIMATION = "121808371053483"
 DEMONIC_PURSUIT_ANIMATION = "133363345661032"
+BLOOD_HUNT_ACTIVATION_ANIMATION = "117834850464068"
+KILL_ANIMATION_NORMAL = "131140322818412"
+KILL_ANIMATION_NOOB = "101413761015692"
 BLOOD_ORB_SOUND_ID = "7837536770"
+BLOOD_HUNT_DURATION = 25
 
 -- Noli Animation IDs
 VOID_RUSH_INSTANT_ANIMATIONS = {
@@ -208,19 +214,23 @@ SLASHER_RAGING_PACE_COOLDOWN = 30
 MASS_INFECTION_COOLDOWN = 15
 ENTANGLEMENT_COOLDOWN = 15
 
+-- Sixer Cooldown values
 INFERNAL_CRY_COOLDOWN = 20
 DEMONIC_PURSUIT_COOLDOWN = 30
 BLOOD_ORB_REDUCTION = 3
 
+-- Noli Cooldown values
 VOID_RUSH_COOLDOWN = 20
 NOVA_COOLDOWN = 12
 VOID_RUSH_WINDOW = 2.85
 VOID_RUSH_ANTI_SPAM = 3
 
+-- c00lkidd Cooldown values
 CORRUPT_NATURE_COOLDOWN = 16
 WALKSPEED_OVERRIDE_COOLDOWN = 20
 PIZZA_DELIVERY_COOLDOWN = 50
 
+-- John Doe Cooldown values
 CORRUPT_ENERGY_COOLDOWN = 18
 CORRUPT_ENERGY_STUNNED_COOLDOWN = 9
 
@@ -348,9 +358,12 @@ onexTrackerEnabled = false
 onexActiveCooldownTimers = {}
 onexUpdateConnection = nil
 
--- Sixer Tracker Variables
+-- Sixer Tracker Variables (UPDATED with Blood Hunt tracking)
 sixerTrackerEnabled = false
 sixerActiveCooldownTimers = {}
+sixerBloodHuntActive = {}
+sixerBloodHuntTimers = {}
+sixerBloodOrbSoundConnections = {}
 sixerUpdateConnection = nil
 
 -- Noli Tracker Variables
@@ -400,7 +413,6 @@ isSilentAimHooked = false
 -- UI References
 GuestToggle = nil
 SevenNToggle = nil
-KillerCooldownToggle = nil
 
 -- Performance Caches
 cachedBlockBtn = nil
@@ -2344,7 +2356,7 @@ local function listenForCooldownAbility(survivor)
 end
 
 local function scanForAllCooldownSurvivors()
-    local survivorsToTrack = {"Shedletsky","TwoTime","Chance","JaneDoe","Guest1337","Elliot","007n7"}
+    local survivorsToTrack = {"Shedletsky","TwoTime","Chance","JaneDoe","Guest1337","Elliot","007n7","7n7"}
     for _, survivorName in ipairs(survivorsToTrack) do
         local survivors = getAllCharactersByName(survivorName)
         for _, survivor in ipairs(survivors) do listenForCooldownAbility(survivor) end
@@ -2357,7 +2369,7 @@ local function watchForNewCooldownSurvivors()
     local survivorsFolder = playersFolder:FindFirstChild("Survivors")
     if not survivorsFolder then return end
     survivorsFolder.ChildAdded:Connect(function(child)
-        local survivorsToTrack = {"Shedletsky","TwoTime","Chance","JaneDoe","Guest1337","Elliot","007n7"}
+        local survivorsToTrack = {"Shedletsky","TwoTime","Chance","JaneDoe","Guest1337","Elliot","007n7","7n7"}
         for _, survivorName in ipairs(survivorsToTrack) do
             if child.Name == survivorName then
                 task.wait(0.5)
@@ -2792,7 +2804,7 @@ function stopOnexTracking()
     onexActiveCooldownTimers = {}
 end
 
--- ===== SIXER ABILITY TRACKER FUNCTIONS =====
+-- ===== SIXER ABILITY TRACKER FUNCTIONS (UPDATED with Blood Hunt reset & Blood Orb reduction) =====
 local function getAllSixers()
     local sixers = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -2815,6 +2827,40 @@ local function formatSixerCooldownTime(remainingSeconds)
     else return tostring(math.floor(remainingSeconds)) end
 end
 
+local function clearAllSixerCooldowns(sixer, reason)
+    if not sixerActiveCooldownTimers[sixer] then return end
+    
+    for abilityName, timerData in pairs(sixerActiveCooldownTimers[sixer]) do
+        if timerData.billboard then pcall(function() timerData.billboard:Destroy() end) end
+        if timerData.connection then timerData.connection:Disconnect() end
+        sixerActiveCooldownTimers[sixer][abilityName] = nil
+    end
+    if next(sixerActiveCooldownTimers[sixer]) == nil then
+        sixerActiveCooldownTimers[sixer] = nil
+    end
+end
+
+local function setSixerBloodHuntActive(sixer, active)
+    sixerBloodHuntActive[sixer] = active
+    if sixerBloodHuntTimers[sixer] then
+        task.cancel(sixerBloodHuntTimers[sixer])
+        sixerBloodHuntTimers[sixer] = nil
+    end
+    if active then
+        sixerBloodHuntTimers[sixer] = task.delay(BLOOD_HUNT_DURATION, function()
+            sixerBloodHuntActive[sixer] = false
+        end)
+    end
+end
+
+local function isSixerBloodHuntActive(sixer)
+    local huntingAttr = sixer:GetAttribute("Hunting")
+    if huntingAttr ~= nil then
+        return huntingAttr == true
+    end
+    return sixerBloodHuntActive[sixer] == true
+end
+
 local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     if sixerActiveCooldownTimers[sixer] and sixerActiveCooldownTimers[sixer][abilityName] then
         local existing = sixerActiveCooldownTimers[sixer][abilityName]
@@ -2826,7 +2872,16 @@ local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     local hrp = sixer:FindFirstChild("HumanoidRootPart") or sixer:FindFirstChild("Head") or sixer:FindFirstChild("Torso")
     if not hrp then return end
     
-    local offsetY = SIXER_ABILITY_OFFSETS[abilityName] or 3
+    local abilityCount = 0
+    if sixerActiveCooldownTimers[sixer] then
+        for _, existing in pairs(sixerActiveCooldownTimers[sixer]) do
+            if existing and existing.billboard and existing.billboard.Parent then
+                abilityCount = abilityCount + 1
+            end
+        end
+    end
+    
+    local offsetY = 3 + (abilityCount * 1.5)
     
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "SixerCooldown_" .. abilityName
@@ -2901,16 +2956,21 @@ local function reduceSixerCooldownByBloodOrb(sixer)
             end
         end
     end
+    if sixerActiveCooldownTimers[sixer] and next(sixerActiveCooldownTimers[sixer]) == nil then
+        sixerActiveCooldownTimers[sixer] = nil
+    end
 end
 
 local function listenForSixerAbilities(sixer)
     if not sixer then return end
     if sixer:GetAttribute("SixerListener") then return end
     sixer:SetAttribute("SixerListener", true)
+    
     local function onAbilityDetected(cooldown, abilityName)
         local cooldownEndTime = tick() + cooldown
         createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     end
+    
     local function onBloodOrbSoundAdded(sound)
         if not sound:IsA("Sound") then return end
         local soundId = extractNumericSoundId(sound)
@@ -2918,32 +2978,42 @@ local function listenForSixerAbilities(sixer)
             reduceSixerCooldownByBloodOrb(sixer)
         end
     end
+    
     local hrp = sixer:FindFirstChild("HumanoidRootPart")
     if hrp then
         for _, sound in ipairs(hrp:GetChildren()) do
             onBloodOrbSoundAdded(sound)
         end
+        local soundAddedConn = hrp.ChildAdded:Connect(onBloodOrbSoundAdded)
+        sixerBloodOrbSoundConnections[sixer] = soundAddedConn
     end
-    sixer.DescendantAdded:Connect(function(descendant)
-        if descendant:IsA("Sound") then
-            onBloodOrbSoundAdded(descendant)
-        end
-    end)
+    
     local humanoid = sixer:FindFirstChildOfClass("Humanoid")
     if humanoid then
         local function setupAnimator(animator)
             if not animator then return end
+            
             animator.AnimationPlayed:Connect(function(animationTrack)
                 local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+                
                 if animId == INFERNAL_CRY_ANIMATION then
                     onAbilityDetected(INFERNAL_CRY_COOLDOWN, "Infernal Cry")
                 elseif animId == DEMONIC_PURSUIT_ANIMATION then
                     onAbilityDetected(DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
+                elseif animId == BLOOD_HUNT_ACTIVATION_ANIMATION then
+                    setSixerBloodHuntActive(sixer, true)
+                    clearAllSixerCooldowns(sixer, "activation")
+                elseif animId == KILL_ANIMATION_NORMAL or animId == KILL_ANIMATION_NOOB then
+                    if isSixerBloodHuntActive(sixer) then
+                        clearAllSixerCooldowns(sixer, "kill")
+                    end
                 end
             end)
         end
+        
         local animator = humanoid:FindFirstChildOfClass("Animator")
         if animator then setupAnimator(animator) end
+        
         humanoid.ChildAdded:Connect(function(child)
             if child:IsA("Animator") then setupAnimator(child) end
         end)
@@ -2984,18 +3054,32 @@ function startSixerTracking()
 end
 
 function stopSixerTracking()
-    if sixerUpdateConnection then sixerUpdateConnection:Disconnect(); sixerUpdateConnection = nil end
+    if sixerUpdateConnection then
+        sixerUpdateConnection:Disconnect()
+        sixerUpdateConnection = nil
+    end
     for sixer, abilities in pairs(sixerActiveCooldownTimers) do
         for _, data in pairs(abilities) do
             if data.billboard then pcall(function() data.billboard:Destroy() end) end
             if data.connection then data.connection:Disconnect() end
         end
-        if sixer then sixer:SetAttribute("SixerListener", nil) end
+        if sixer then
+            sixer:SetAttribute("SixerListener", nil)
+        end
+    end
+    for sixer, conn in pairs(sixerBloodOrbSoundConnections) do
+        if conn then conn:Disconnect() end
+    end
+    for sixer, timer in pairs(sixerBloodHuntTimers) do
+        if timer then task.cancel(timer) end
     end
     sixerActiveCooldownTimers = {}
+    sixerBloodHuntActive = {}
+    sixerBloodHuntTimers = {}
+    sixerBloodOrbSoundConnections = {}
 end
 
--- ===== NOLI ABILITY TRACKER FUNCTIONS (NO NOTIFICATIONS) =====
+-- ===== NOLI ABILITY TRACKER FUNCTIONS =====
 local function getOtherNolis()
     local nolis = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -3259,7 +3343,7 @@ function stopNoliTracking()
     noliActiveCooldownTimers = {}
 end
 
--- ===== C00LKIDD ABILITY TRACKER FUNCTIONS (NO NOTIFICATIONS) =====
+-- ===== C00LKIDD ABILITY TRACKER FUNCTIONS =====
 local function getOtherC00lkidds()
     local c00lkidds = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -3460,7 +3544,7 @@ function stopC00lkiddTracking()
     c00lkiddActiveCooldownTimers = {}
 end
 
--- ===== JOHN DOE ABILITY TRACKER FUNCTIONS (NO NOTIFICATIONS) =====
+-- ===== JOHN DOE ABILITY TRACKER FUNCTIONS =====
 local function getOtherJohnDoes()
     local johnDoes = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -4163,7 +4247,7 @@ KillerCooldownToggle = VisualsTab:CreateToggle({ Name = "Show Ability Cooldowns 
     if Value then startC00lkiddTracking() else stopC00lkiddTracking() end
     johnDoeTrackerEnabled = Value
     if Value then startJohnDoeTracking() else stopJohnDoeTracking() end
-    SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer, Noli, c00lkidd & John Doe abilities (FIXED POSITIONS)" or "Disabled", 2) 
+    SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer (with Blood Hunt reset & Blood Orb reduction), Noli, c00lkidd & John Doe abilities" or "Disabled", 2) 
 end })
 
 VisualsTab:CreateToggle({ Name = "Inventory ESP - Shows items below survivors", CurrentValue = false, Flag = "InventoryEspToggle", Callback = function(Value) inventoryEspEnabled = Value; if Value then updateInventoryESP(); if not inventoryEspConnection then inventoryEspConnection = RunService.Heartbeat:Connect(function() updateInventoryESP() end) end; SendNotif("Inventory ESP", "Enabled - Items will appear below survivors", 2) else for survivor, billboard in pairs(inventoryEspBillboards) do pcall(function() billboard:Destroy() end) end; inventoryEspBillboards = {}; if inventoryEspConnection then inventoryEspConnection:Disconnect(); inventoryEspConnection = nil end; SendNotif("Inventory ESP", "Disabled", 1) end end })
@@ -4279,3 +4363,4 @@ refreshUIRefs()
 Rayfield:LoadConfiguration()
 
 print("Pillager Cheats Loaded - All features working (Dusekkar Silent Aim FIXED - no stack overflow)")
+print("Sixer Tracker: Blood Hunt reset, Kill reset during Blood Hunt, Blood Orb reduction (3s)")
