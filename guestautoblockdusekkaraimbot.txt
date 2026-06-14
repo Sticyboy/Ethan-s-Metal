@@ -3,6 +3,8 @@
 -- INCLUDES: Noli, c00lkidd, John Doe Ability Trackers - NO NOTIFICATIONS
 -- FIXED: Dusekkar Silent Aim (stack overflow resolved)
 -- UPDATED: Sixer Tracker with Blood Hunt reset, Kill reset during Blood Hunt, & Blood Orb reduction (3s)
+-- ADDED: New Slasher slash animation, Raging Pace startup animation, new sound IDs
+-- FIXED: Sixer cooldown text overlap (now uses fixed offsets like 1x1x1x1)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -74,12 +76,12 @@ autoBlockTriggerSounds = {
     ["117231507259853"] = true, ["136323728355613"] = true, ["119089145505438"] = true, ["121954639447247"] = true,
     ["125213046326879"] = true, ["131406927389838"] = true, ["117173212095661"] = true, ["80516583309685"] = true,
     ["132596270805754"] = true, ["83851356262523"] = true, ["111910850942168"] = true, ["136728245733659"] = true,
-    ["94317217837143"] = true,
+    ["94317217837143"] = true, ["96594507550917"] = true, ["139996647355899"] = true,  -- NEW SOUND IDs
 }
 
 autoBlockTriggerAnimations = {
     ["126830014841198"] = true, ["109667959938617"] = true, ["130958529065375"] = true,
-    ["94958041603347"] = true, ["108196996477620"] = true,
+    ["94958041603347"] = true, ["108196996477620"] = true, ["106860049270347"] = true,  -- NEW Slasher slash animation
 }
 
 -- Guest1337 Animations
@@ -131,6 +133,7 @@ GASHING_WOUND_ANIMATIONS = {
 RAGING_PACE_STARTUP_ANIMATIONS = {
     "85591573377728", "91775045514793", "140541272981448", "115819010915990",
     "88786572272093", "71800868265962", "126217710453897", "119211953898567",
+    "134720422373422",  -- NEW Raging Pace startup animation
 }
 
 MASS_INFECTION_ANIMATIONS = {
@@ -2805,6 +2808,7 @@ function stopOnexTracking()
 end
 
 -- ===== SIXER ABILITY TRACKER FUNCTIONS (UPDATED with Blood Hunt reset & Blood Orb reduction) =====
+-- FIXED: Now uses fixed Y-offsets like other killers (text never overlaps)
 local function getAllSixers()
     local sixers = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -2861,6 +2865,7 @@ local function isSixerBloodHuntActive(sixer)
     return sixerBloodHuntActive[sixer] == true
 end
 
+-- FIXED: Uses fixed Y-offsets from SIXER_ABILITY_OFFSETS (no dynamic stacking)
 local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     if sixerActiveCooldownTimers[sixer] and sixerActiveCooldownTimers[sixer][abilityName] then
         local existing = sixerActiveCooldownTimers[sixer][abilityName]
@@ -2872,16 +2877,8 @@ local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     local hrp = sixer:FindFirstChild("HumanoidRootPart") or sixer:FindFirstChild("Head") or sixer:FindFirstChild("Torso")
     if not hrp then return end
     
-    local abilityCount = 0
-    if sixerActiveCooldownTimers[sixer] then
-        for _, existing in pairs(sixerActiveCooldownTimers[sixer]) do
-            if existing and existing.billboard and existing.billboard.Parent then
-                abilityCount = abilityCount + 1
-            end
-        end
-    end
-    
-    local offsetY = 3 + (abilityCount * 1.5)
+    -- Use fixed offset from SIXER_ABILITY_OFFSETS
+    local offsetY = SIXER_ABILITY_OFFSETS[abilityName] or 3
     
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "SixerCooldown_" .. abilityName
@@ -4364,3 +4361,5 @@ Rayfield:LoadConfiguration()
 
 print("Pillager Cheats Loaded - All features working (Dusekkar Silent Aim FIXED - no stack overflow)")
 print("Sixer Tracker: Blood Hunt reset, Kill reset during Blood Hunt, Blood Orb reduction (3s)")
+print("Added new Slasher slash animation, Raging Pace startup animation, and sound IDs for Guest auto block")
+print("Sixer cooldown text now uses fixed offsets - no more overlapping!")
