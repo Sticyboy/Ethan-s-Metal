@@ -3,8 +3,7 @@
 -- INCLUDES: Noli, c00lkidd, John Doe Ability Trackers - NO NOTIFICATIONS
 -- FIXED: Dusekkar Silent Aim (stack overflow resolved)
 -- UPDATED: Sixer Tracker with Blood Hunt reset, Kill reset during Blood Hunt, & Blood Orb reduction (3s)
--- ADDED: New Slasher slash animation, Raging Pace startup animation, new sound IDs
--- FIXED: Sixer cooldown text overlap (now uses fixed offsets like 1x1x1x1)
+-- FIXED: Sixer custom skin support - finds ALL Animators in the model
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -76,12 +75,12 @@ autoBlockTriggerSounds = {
     ["117231507259853"] = true, ["136323728355613"] = true, ["119089145505438"] = true, ["121954639447247"] = true,
     ["125213046326879"] = true, ["131406927389838"] = true, ["117173212095661"] = true, ["80516583309685"] = true,
     ["132596270805754"] = true, ["83851356262523"] = true, ["111910850942168"] = true, ["136728245733659"] = true,
-    ["94317217837143"] = true, ["96594507550917"] = true, ["139996647355899"] = true,  -- NEW SOUND IDs
+    ["94317217837143"] = true, ["96594507550917"] = true, ["139996647355899"] = true,
 }
 
 autoBlockTriggerAnimations = {
     ["126830014841198"] = true, ["109667959938617"] = true, ["130958529065375"] = true,
-    ["94958041603347"] = true, ["108196996477620"] = true, ["106860049270347"] = true,  -- NEW Slasher slash animation
+    ["94958041603347"] = true, ["108196996477620"] = true, ["106860049270347"] = true,
 }
 
 -- Guest1337 Animations
@@ -133,7 +132,7 @@ GASHING_WOUND_ANIMATIONS = {
 RAGING_PACE_STARTUP_ANIMATIONS = {
     "85591573377728", "91775045514793", "140541272981448", "115819010915990",
     "88786572272093", "71800868265962", "126217710453897", "119211953898567",
-    "134720422373422",  -- NEW Raging Pace startup animation
+    "134720422373422",
 }
 
 MASS_INFECTION_ANIMATIONS = {
@@ -853,8 +852,7 @@ local function rotateTowardsKiller(killerModel)
     task.delay(ROTATION_DURATION, function() rotationActive = false end)
 end
 
--- ===== PREDICTION FUNCTIONS =====
-local function updatePositionHistory(character, position)
+-- ===== PREDICTION FUNCTIONS =====local function updatePositionHistory(character, position)
     if not character or not position then return end
     if not positionHistory[character] then positionHistory[character] = {} end
     local history = positionHistory[character]
@@ -2808,7 +2806,7 @@ function stopOnexTracking()
 end
 
 -- ===== SIXER ABILITY TRACKER FUNCTIONS (UPDATED with Blood Hunt reset & Blood Orb reduction) =====
--- FIXED: Now uses fixed Y-offsets like other killers (text never overlaps)
+-- FIXED: Now finds ALL Animators in the model (fixes custom skin issue)
 local function getAllSixers()
     local sixers = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -2865,7 +2863,6 @@ local function isSixerBloodHuntActive(sixer)
     return sixerBloodHuntActive[sixer] == true
 end
 
--- FIXED: Uses fixed Y-offsets from SIXER_ABILITY_OFFSETS (no dynamic stacking)
 local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     if sixerActiveCooldownTimers[sixer] and sixerActiveCooldownTimers[sixer][abilityName] then
         local existing = sixerActiveCooldownTimers[sixer][abilityName]
@@ -2877,7 +2874,6 @@ local function createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
     local hrp = sixer:FindFirstChild("HumanoidRootPart") or sixer:FindFirstChild("Head") or sixer:FindFirstChild("Torso")
     if not hrp then return end
     
-    -- Use fixed offset from SIXER_ABILITY_OFFSETS
     local offsetY = SIXER_ABILITY_OFFSETS[abilityName] or 3
     
     local billboard = Instance.new("BillboardGui")
@@ -2958,6 +2954,7 @@ local function reduceSixerCooldownByBloodOrb(sixer)
     end
 end
 
+-- 🔥 FIXED: Finds ALL Animators in the model (fixes custom skin issue)
 local function listenForSixerAbilities(sixer)
     if not sixer then return end
     if sixer:GetAttribute("SixerListener") then return end
@@ -2976,6 +2973,7 @@ local function listenForSixerAbilities(sixer)
         end
     end
     
+    -- Blood Orb sound detection
     local hrp = sixer:FindFirstChild("HumanoidRootPart")
     if hrp then
         for _, sound in ipairs(hrp:GetChildren()) do
@@ -2985,34 +2983,71 @@ local function listenForSixerAbilities(sixer)
         sixerBloodOrbSoundConnections[sixer] = soundAddedConn
     end
     
-    local humanoid = sixer:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        local function setupAnimator(animator)
-            if not animator then return end
+    -- 🔥 FIND ALL ANIMATORS (fixes custom skin issue)
+    local function findAllAnimators(model)
+        local animators = {}
+        for _, descendant in ipairs(model:GetDescendants()) do
+            if descendant:IsA("Animator") then
+                table.insert(animators, descendant)
+            end
+        end
+        return animators
+    end
+    
+    local allAnimators = findAllAnimators(sixer)
+    
+    if #allAnimators == 0 then
+        -- Fallback to original method
+        local humanoid = sixer:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            local animator = humanoid:FindFirstChildOfClass("Animator")
+            if animator then
+                allAnimators = {animator}
+            end
+        end
+    end
+    
+    if #allAnimators == 0 then
+        warn("No Animator found for Sixer:", sixer.Name)
+        return
+    end
+    
+    -- Connect to ALL Animators
+    for _, animator in ipairs(allAnimators) do
+        -- Check already playing animations
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            local animId = extractNumericAnimationId(track.Animation.AnimationId)
             
-            animator.AnimationPlayed:Connect(function(animationTrack)
-                local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
-                
-                if animId == INFERNAL_CRY_ANIMATION then
-                    onAbilityDetected(INFERNAL_CRY_COOLDOWN, "Infernal Cry")
-                elseif animId == DEMONIC_PURSUIT_ANIMATION then
-                    onAbilityDetected(DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
-                elseif animId == BLOOD_HUNT_ACTIVATION_ANIMATION then
-                    setSixerBloodHuntActive(sixer, true)
-                    clearAllSixerCooldowns(sixer, "activation")
-                elseif animId == KILL_ANIMATION_NORMAL or animId == KILL_ANIMATION_NOOB then
-                    if isSixerBloodHuntActive(sixer) then
-                        clearAllSixerCooldowns(sixer, "kill")
-                    end
+            if animId == INFERNAL_CRY_ANIMATION then
+                onAbilityDetected(INFERNAL_CRY_COOLDOWN, "Infernal Cry")
+            elseif animId == DEMONIC_PURSUIT_ANIMATION then
+                onAbilityDetected(DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
+            elseif animId == BLOOD_HUNT_ACTIVATION_ANIMATION then
+                setSixerBloodHuntActive(sixer, true)
+                clearAllSixerCooldowns(sixer, "activation")
+            elseif animId == KILL_ANIMATION_NORMAL or animId == KILL_ANIMATION_NOOB then
+                if isSixerBloodHuntActive(sixer) then
+                    clearAllSixerCooldowns(sixer, "kill")
                 end
-            end)
+            end
         end
         
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then setupAnimator(animator) end
-        
-        humanoid.ChildAdded:Connect(function(child)
-            if child:IsA("Animator") then setupAnimator(child) end
+        -- Listen for new animations
+        animator.AnimationPlayed:Connect(function(animationTrack)
+            local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+            
+            if animId == INFERNAL_CRY_ANIMATION then
+                onAbilityDetected(INFERNAL_CRY_COOLDOWN, "Infernal Cry")
+            elseif animId == DEMONIC_PURSUIT_ANIMATION then
+                onAbilityDetected(DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
+            elseif animId == BLOOD_HUNT_ACTIVATION_ANIMATION then
+                setSixerBloodHuntActive(sixer, true)
+                clearAllSixerCooldowns(sixer, "activation")
+            elseif animId == KILL_ANIMATION_NORMAL or animId == KILL_ANIMATION_NOOB then
+                if isSixerBloodHuntActive(sixer) then
+                    clearAllSixerCooldowns(sixer, "kill")
+                end
+            end
         end)
     end
 end
@@ -4363,3 +4398,4 @@ print("Pillager Cheats Loaded - All features working (Dusekkar Silent Aim FIXED 
 print("Sixer Tracker: Blood Hunt reset, Kill reset during Blood Hunt, Blood Orb reduction (3s)")
 print("Added new Slasher slash animation, Raging Pace startup animation, and sound IDs for Guest auto block")
 print("Sixer cooldown text now uses fixed offsets - no more overlapping!")
+print("FIXED: Sixer custom skin support - finds ALL Animators in the model")
