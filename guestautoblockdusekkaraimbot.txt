@@ -5,6 +5,7 @@
 -- UPDATED: Sixer Tracker with Blood Hunt reset, Kill reset during Blood Hunt, & Blood Orb reduction (3s)
 -- FIXED: Sixer custom skin support - finds ALL Animators in the model
 -- ADDED: Ability Warner (1x1x1x1 Mass Infection & Entanglement line tracking)
+-- ADDED: TwoTime Backstab Mode with toggle and keybind (Facing Same Side TRUE/FALSE)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -427,6 +428,7 @@ abilityWarnerUpdateConnection = nil
 -- UI References
 GuestToggle = nil
 SevenNToggle = nil
+twoTimeBackstabToggle = nil
 
 -- Performance Caches
 cachedBlockBtn = nil
@@ -2782,7 +2784,7 @@ function setupInputHook()
                 else
                     aimbotActive = true
                     aimbotCurrentTarget = targetKiller
-                    if faceSameSideAsKiller then SendNotif("TwoTime", "Backstab mode!", 1) else SendNotif("TwoTime", "Normal stab!", 1) end
+                    if faceSameSideAsKiller then SendNotif("TwoTime", "Facing Same Side TRUE", 1) else SendNotif("TwoTime", "Facing Same Side FALSE", 1) end
                     startNormalStab(targetKiller)
                 end
             elseif isNoli then startGeneralAimbot(2.5)
@@ -4858,7 +4860,55 @@ TechTab:CreateToggle({ Name = "Auto Blood Orb (Sixer)", CurrentValue = false, Fl
 AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 AimbotToggle = AimbotTab:CreateToggle({ Name = "Enable Aimbot", CurrentValue = false, Flag = "AimbotToggle", Callback = function(Value) aimbotEnabled = Value; if Value then updateAimbot(); if aimbotUseFOV then createFOVCircle() end; SendNotif("Aimbot", "Enabled", 2) else if aimbotConnection then aimbotConnection:Disconnect(); aimbotConnection = nil end; if aimbotFOVCircle then pcall(function() aimbotFOVCircle:Destroy() end); aimbotFOVCircle = nil end; stopAimbot(); positionHistory = {}; SendNotif("Aimbot", "Disabled", 1) end end })
 AimbotTab:CreateKeybind({ Name = "Toggle Aimbot (Keybind)", CurrentKeybind = "Z", HoldToInteract = false, Flag = "AimbotToggleKey", Callback = function() local newState = not aimbotEnabled; AimbotToggle:Set(newState); SendNotif("Aimbot", newState and "Enabled" or "Disabled", 1) end })
-AimbotTab:CreateToggle({ Name = "TwoTime: Face Same Side As Killer (Backstab Mode)", CurrentValue = false, Flag = "FaceKillerSideToggle", Callback = function(Value) faceSameSideAsKiller = Value; if Value then SendNotif("TwoTime", "Normal stab will now ROTATE CHARACTER to face killer side (NO shiftlock)", 1) else SendNotif("TwoTime", "Normal stab will now move CAMERA to aim at killer (Shiftlock ON)", 1) end end })
+
+-- ===== TWOTIME BACKSTAB MODE =====
+-- ===== TWOTIME BACKSTAB MODE =====
+twoTimeBackstabToggle = AimbotTab:CreateToggle({
+    Name = "TwoTime: Face Same Side As Killer (Backstab Mode)",
+    CurrentValue = false,
+    Flag = "TwoTimeBackstabToggle",
+    Callback = function(Value)
+        local isTwoTime = amITwoTime()
+        if not isTwoTime then
+            -- Silently revert the toggle back
+            task.spawn(function()
+                twoTimeBackstabToggle:Set(false)
+            end)
+            return
+        end
+        faceSameSideAsKiller = Value
+        if Value then
+            SendNotif("TwoTime", "Facing Same Side TRUE", 1)
+        else
+            SendNotif("TwoTime", "Facing Same Side FALSE", 1)
+        end
+    end
+})
+
+AimbotTab:CreateKeybind({
+    Name = "Toggle TwoTime Backstab Mode",
+    CurrentKeybind = "None",
+    HoldToInteract = false,
+    Flag = "TwoTimeBackstabKeybind",
+    Callback = function()
+        local isTwoTime = amITwoTime()
+        if not isTwoTime then
+            -- Silently do nothing
+            return
+        end
+        local newValue = not faceSameSideAsKiller
+        faceSameSideAsKiller = newValue
+        if twoTimeBackstabToggle then
+            twoTimeBackstabToggle:Set(newValue)
+        end
+        if newValue then
+            SendNotif("TwoTime", "Facing Same Side TRUE", 1)
+        else
+            SendNotif("TwoTime", "Facing Same Side FALSE", 1)
+        end
+    end
+})
+
 AimbotTab:CreateSlider({ Name = "Aimbot Smoothness", Range = {0.01,0.5}, Increment = 0.01, Suffix = "", CurrentValue = 0.1, Flag = "AimbotSmoothness", Callback = function(Value) aimbotSmoothness = Value end })
 AimbotTab:CreateSlider({ Name = "Prediction Distance Multiplier", Range = {1,3}, Increment = 0.1, Suffix = "x", CurrentValue = 1, Flag = "PredictionMultiplier", Callback = function(Value) aimbotPredictionMultiplier = Value; SendNotif("Prediction", "Multiplier set to " .. Value .. "x", 1) end })
 AimbotTab:CreateSlider({ Name = "Max Distance", Range = {10,200}, Increment = 5, Suffix = "studs", CurrentValue = 50, Flag = "AimbotMaxDistance", Callback = function(Value) aimbotMaxDistance = Value end })
@@ -5100,3 +5150,4 @@ print("Added new Slasher slash animation, Raging Pace startup animation, and sou
 print("Sixer cooldown text now uses fixed offsets - no more overlapping!")
 print("FIXED: Sixer custom skin support - finds ALL Animators in the model")
 print("ADDED: Ability Warner - Tracks 1x1x1x1 Mass Infection & Entanglement with lines!")
+print("ADDED: TwoTime Backstab Mode toggle with keybind (Facing Same Side TRUE/FALSE)")
