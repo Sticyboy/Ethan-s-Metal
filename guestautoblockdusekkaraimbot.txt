@@ -6,6 +6,7 @@
 -- FIXED: Sixer custom skin support - finds ALL Animators in the model
 -- ADDED: Ability Warner (1x1x1x1 Mass Infection & Entanglement line tracking)
 -- ADDED: TwoTime Backstab Mode with toggle and keybind (Facing Same Side TRUE/FALSE)
+-- FIXED: Prediction now matches the old reliable script (Dusekkar uses its own multiplier)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -108,7 +109,7 @@ guest1337PunchAnims = {
     ["86096387000557"] = true,
 }
 
--- Chance Animations
+-- Chance Animations (updated with new animation)
 chanceAnimIds = {
     ["133491532453922"] = true,
     ["76649505662612"] = true,
@@ -325,7 +326,7 @@ aimbotPredictionMultiplier = 1
 -- Backstab Mode Toggle
 faceSameSideAsKiller = false
 
--- Prediction Variables
+-- Prediction Variables (from old reliable script)
 BASE_PREDICTION_DISTANCE = 4
 SPHERE_SMOOTHNESS = 0.25
 MOVE_THRESHOLD = 0.15
@@ -867,7 +868,7 @@ local function rotateTowardsKiller(killerModel)
     task.delay(ROTATION_DURATION, function() rotationActive = false end)
 end
 
--- ===== PREDICTION FUNCTIONS =====
+-- ===== PREDICTION FUNCTIONS (from old reliable script) =====
 local function updatePositionHistory(character, position)
     if not character or not position then return end
     if not positionHistory[character] then positionHistory[character] = {} end
@@ -901,7 +902,7 @@ local function getInstantaneousDirection(character, currentPos)
     return Vector3.new(0,0,0)
 end
 
-local function getPredictedPosition(character, predictionMultiplier)
+local function getPredictedPosition(character, multiplier)
     if not character then return nil end
     local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head") or character:FindFirstChild("Torso")
     if not root then return nil end
@@ -911,11 +912,12 @@ local function getPredictedPosition(character, predictionMultiplier)
     local instantDir = getInstantaneousDirection(character, currentPos)
     local finalDir = instantDir
     if instantDir.Magnitude <= MOVE_THRESHOLD then finalDir = moveDir end
-    local currentPredictionDistance = BASE_PREDICTION_DISTANCE * (predictionMultiplier or aimbotPredictionMultiplier)
+    local currentPredictionDistance = BASE_PREDICTION_DISTANCE * (multiplier or aimbotPredictionMultiplier)
     if finalDir.Magnitude > MOVE_THRESHOLD then return currentPos + (finalDir * currentPredictionDistance) else return currentPos end
 end
 
-local function createTargetSphere(targetCharacter, sphereColor)
+-- ===== SPHERE FUNCTION (uses prediction) =====
+local function createTargetSphere(targetCharacter, sphereColor, predictionMultiplier)
     if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
     if currentSphereConnection then pcall(function() currentSphereConnection:Disconnect() end); currentSphereConnection = nil end
     if not targetCharacter then return nil end
@@ -951,7 +953,8 @@ local function createTargetSphere(targetCharacter, sphereColor)
         local instantDir = getInstantaneousDirection(targetCharacter, currentPos)
         local finalDir = instantDir
         if instantDir.Magnitude <= MOVE_THRESHOLD then finalDir = moveDir end
-        local currentPredictionDistance = BASE_PREDICTION_DISTANCE * aimbotPredictionMultiplier
+        local multiplier = predictionMultiplier or aimbotPredictionMultiplier
+        local currentPredictionDistance = BASE_PREDICTION_DISTANCE * multiplier
         local targetPosition = finalDir.Magnitude > MOVE_THRESHOLD and (currentPos + (finalDir * currentPredictionDistance)) or currentPos
         sphere.Position = sphere.Position:Lerp(targetPosition, SPHERE_SMOOTHNESS)
     end)
@@ -1216,7 +1219,7 @@ function startGeneralAimbot(duration, customSmoothness)
     setShiftLock(true)
     local originalSmoothness = aimbotSmoothness
     if customSmoothness then aimbotSmoothness = customSmoothness end
-    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255,0,0))
+    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255,0,0), aimbotPredictionMultiplier)
     local cameraConnection
     cameraConnection = RunService.RenderStepped:Connect(function()
         if not aimbotActive or not aimbotCurrentTarget then if cameraConnection then cameraConnection:Disconnect() end; return end
@@ -4780,7 +4783,8 @@ function useSilentAim()
     silentAimActive = true
     dusekkarActive = true
     
-    createTargetSphere(target, Color3.fromRGB(0, 170, 255))
+    -- Pass the Dusekkar-specific prediction multiplier
+    createTargetSphere(target, Color3.fromRGB(0, 170, 255), dusekkarPredictionMultiplier)
     
     local success = firePlasmaBeam()
     
@@ -4862,7 +4866,6 @@ AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 AimbotToggle = AimbotTab:CreateToggle({ Name = "Enable Aimbot", CurrentValue = false, Flag = "AimbotToggle", Callback = function(Value) aimbotEnabled = Value; if Value then updateAimbot(); if aimbotUseFOV then createFOVCircle() end; SendNotif("Aimbot", "Enabled", 2) else if aimbotConnection then aimbotConnection:Disconnect(); aimbotConnection = nil end; if aimbotFOVCircle then pcall(function() aimbotFOVCircle:Destroy() end); aimbotFOVCircle = nil end; stopAimbot(); positionHistory = {}; SendNotif("Aimbot", "Disabled", 1) end end })
 AimbotTab:CreateKeybind({ Name = "Toggle Aimbot (Keybind)", CurrentKeybind = "Z", HoldToInteract = false, Flag = "AimbotToggleKey", Callback = function() local newState = not aimbotEnabled; AimbotToggle:Set(newState); SendNotif("Aimbot", newState and "Enabled" or "Disabled", 1) end })
 
--- ===== TWOTIME BACKSTAB MODE =====
 -- ===== TWOTIME BACKSTAB MODE =====
 twoTimeBackstabToggle = AimbotTab:CreateToggle({
     Name = "TwoTime: Face Same Side As Killer (Backstab Mode)",
@@ -5152,3 +5155,4 @@ print("Sixer cooldown text now uses fixed offsets - no more overlapping!")
 print("FIXED: Sixer custom skin support - finds ALL Animators in the model")
 print("ADDED: Ability Warner - Tracks 1x1x1x1 Mass Infection & Entanglement with lines!")
 print("ADDED: TwoTime Backstab Mode toggle with keybind (Facing Same Side TRUE/FALSE)")
+print("FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)")
