@@ -118,6 +118,7 @@ chanceAnimIds = {
     ["103301489258021"] = true,
     ["133607163653602"] = true,
     ["111512633767170"] = true,
+    ["103601716322988"] = true,  -- NEWLY ADDED
 }
 
 BEHEAD_ANIMATIONS = {
