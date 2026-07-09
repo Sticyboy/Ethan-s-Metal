@@ -1,6 +1,6 @@
 -- Pillager Cheats - Full Script (OPTIMIZED: Globals for config, Locals for functions)
 -- FIXED POSITION ESP: All ability cooldowns have permanent Y-offsets (text NEVER shifts)
--- INCLUDES: Noli, c00lkidd, John Doe Ability Trackers - NO NOTIFICATIONS
+-- INCLUDES: Noli, c00lkidd, John Doe, Nosferatu Ability Trackers - NO NOTIFICATIONS
 -- FIXED: Dusekkar Silent Aim (stack overflow resolved)
 -- UPDATED: Sixer Tracker with Blood Hunt reset, Kill reset during Blood Hunt, & Blood Orb reduction (3s)
 -- FIXED: Sixer custom skin support - finds ALL Animators in the model
@@ -9,6 +9,7 @@
 -- FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)
 -- ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)
 -- FIXED: Noli aimbot timer cancellation error (cannot cancel thread)
+-- ADDED: Nosferatu Ability Cooldowns (Bloodhook 25s, Cataclysm 23s, Hunter's Feast 17s, Ascension 33s)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -203,6 +204,18 @@ UNSTOPPABLE_ANIMATIONS = {
 ANNIHILATION_CORRUPT_ENERGY = "114620047310688"
 ANNIHILATION_UNSTOPPABLE_TRIGGER = "111710065813108"
 
+-- Nosferatu Animation IDs
+BLOODHOOK_ANIMATION = "79282445348798"
+BLOODHOOK_RESET_ANIMATION = "113403615979705"
+CATACLYSM_ANIMATION = "72186169160926"
+ASCENSION_ANIMATION = "97279203534534"
+
+-- Nosferatu Cooldown values
+BLOODHOOK_COOLDOWN = 25
+CATACLYSM_COOLDOWN = 23
+HUNTERS_FEAST_COOLDOWN = 17
+ASCENSION_COOLDOWN = 33
+
 -- Cooldown values
 SHEDLETSKY_COOLDOWN = 40
 TWOTIME_COOLDOWN = 30
@@ -273,6 +286,13 @@ C00LKIDD_ABILITY_OFFSETS = {
 JOHNDOE_ABILITY_OFFSETS = {
     ["Corrupt Energy"] = 3,
     ["DontStunWarning"] = 1,
+}
+
+NOSFERATU_ABILITY_OFFSETS = {
+    ["Bloodhook"] = 3,
+    ["Cataclysm"] = 5,
+    ["Hunter's Feast"] = 7,
+    ["Ascension"] = 9,
 }
 
 -- Sound maps for survivor abilities
@@ -397,6 +417,13 @@ johnDoePendingCorruptEnergy = {}
 johnDoeWarningBillboards = {}
 johnDoeWarningPulseConnections = {}
 johnDoeIsAnnihilationSkin = {}
+
+-- Nosferatu Tracker Variables
+nosferatuTrackerEnabled = false
+nosferatuActiveCooldownTimers = {}
+nosferatuHunterFeastActive = {}
+nosferatuHunterFeastTracked = {}
+nosferatuUpdateConnection = nil
 
 -- Ability Cooldown Tracker Variables
 cooldownTrackerEnabled = false
@@ -790,6 +817,20 @@ local function amINoli()
     return false
 end
 
+local function amINosferatu()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Nosferatu" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function getAllCharactersByName(name)
     local characters = {}
     if name == "Guest1337" or name == "Shedletsky" or name == "TwoTime" or name == "Chance" or name == "JaneDoe" or name == "Elliot" or name == "007n7" or name == "7n7" then
@@ -800,7 +841,7 @@ local function getAllCharactersByName(name)
                 end
             end
         end
-    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "Sixer" or name == "Noli" or name == "c00lkidd" then
+    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "Sixer" or name == "Noli" or name == "c00lkidd" or name == "Nosferatu" then
         if KillersFolder then
             for _, killer in ipairs(KillersFolder:GetChildren()) do
                 if killer.Name == name then
@@ -1532,6 +1573,273 @@ function startBloodOrbLoop()
     if bloodOrbConnection then bloodOrbConnection:Disconnect(); bloodOrbConnection = nil end
     if not autoBloodOrb then return end
     bloodOrbConnection = RunService.Heartbeat:Connect(function() pcall(bringBloodOrbsToPlayer) end)
+end
+
+-- ===== NOSFERATU ABILITY TRACKER FUNCTIONS =====
+local function getAllNosferatus()
+    local nosferatus = {}
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if playersFolder then
+        local killersFolder = playersFolder:FindFirstChild("Killers")
+        if killersFolder then
+            for _, killer in ipairs(killersFolder:GetChildren()) do
+                if killer.Name == "Nosferatu" then
+                    table.insert(nosferatus, killer)
+                end
+            end
+        end
+    end
+    return nosferatus
+end
+
+local function formatNosferatuCooldownTime(remainingSeconds)
+    if remainingSeconds <= 0 then return "0.0"
+    elseif remainingSeconds < 10 then return string.format("%.1f", remainingSeconds)
+    else return tostring(math.floor(remainingSeconds)) end
+end
+
+local function createNosferatuCooldownDisplay(nosferatu, cooldownEndTime, abilityName)
+    if nosferatuActiveCooldownTimers[nosferatu] and nosferatuActiveCooldownTimers[nosferatu][abilityName] then
+        local existing = nosferatuActiveCooldownTimers[nosferatu][abilityName]
+        if existing.billboard then pcall(function() existing.billboard:Destroy() end) end
+        if existing.connection then existing.connection:Disconnect() end
+        nosferatuActiveCooldownTimers[nosferatu][abilityName] = nil
+    end
+    
+    local hrp = nosferatu:FindFirstChild("HumanoidRootPart") or nosferatu:FindFirstChild("Head") or nosferatu:FindFirstChild("Torso")
+    if not hrp then return end
+    
+    local offsetY = NOSFERATU_ABILITY_OFFSETS[abilityName] or 3
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "NosferatuCooldown_" .. abilityName
+    billboard.Size = UDim2.new(0, 140, 0, 25)
+    billboard.StudsOffset = Vector3.new(0, offsetY, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = hrp
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = abilityName .. ": " .. formatNosferatuCooldownTime(cooldownEndTime - tick())
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = billboard
+    
+    if not nosferatuActiveCooldownTimers[nosferatu] then nosferatuActiveCooldownTimers[nosferatu] = {} end
+    
+    local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName, connection = nil }
+    
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not nosferatu or not nosferatu.Parent then
+            if connection then connection:Disconnect() end
+            if billboard then pcall(function() billboard:Destroy() end) end
+            if nosferatuActiveCooldownTimers[nosferatu] then nosferatuActiveCooldownTimers[nosferatu][abilityName] = nil end
+            return
+        end
+        
+        local currentTime = tick()
+        local remaining = timerData.endTime - currentTime
+        
+        if remaining <= 0.1 then
+            if connection then connection:Disconnect() end
+            if billboard then pcall(function() billboard:Destroy() end) end
+            if nosferatuActiveCooldownTimers[nosferatu] then nosferatuActiveCooldownTimers[nosferatu][abilityName] = nil end
+        else
+            local formattedTime = formatNosferatuCooldownTime(remaining)
+            textLabel.Text = abilityName .. ": " .. formattedTime
+            
+            if remaining < 5 then 
+                textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            elseif remaining < 10 then 
+                textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+            else 
+                textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end
+    end)
+    
+    timerData.connection = connection
+    nosferatuActiveCooldownTimers[nosferatu][abilityName] = timerData
+end
+
+local function resetNosferatuBloodhookCooldown(nosferatu)
+    if not nosferatu then return end
+    
+    -- Remove existing Bloodhook timer if it exists
+    if nosferatuActiveCooldownTimers[nosferatu] and nosferatuActiveCooldownTimers[nosferatu]["Bloodhook"] then
+        local existing = nosferatuActiveCooldownTimers[nosferatu]["Bloodhook"]
+        if existing.billboard then pcall(function() existing.billboard:Destroy() end) end
+        if existing.connection then existing.connection:Disconnect() end
+        nosferatuActiveCooldownTimers[nosferatu]["Bloodhook"] = nil
+    end
+    
+    -- Start a fresh 25-second timer
+    local cooldownEndTime = tick() + BLOODHOOK_COOLDOWN
+    createNosferatuCooldownDisplay(nosferatu, cooldownEndTime, "Bloodhook")
+end
+
+local function checkForNosferatuBats()
+    local map = Workspace:FindFirstChild("Map")
+    if not map then return end
+    
+    local ingame = map:FindFirstChild("Ingame")
+    if not ingame then return end
+    
+    local bats = ingame:FindFirstChild("Bats")
+    
+    -- If Bats exists, mark it as active
+    if bats then
+        -- Find which Nosferatu spawned it
+        local foundNosferatu = nil
+        for _, nosferatu in ipairs(getAllNosferatus()) do
+            if not isLocalPlayer(nosferatu) then
+                -- Check if this Nosferatu is nearby
+                local hrp = nosferatu:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local distance = (hrp.Position - bats.Position).Magnitude
+                    if distance < 50 then
+                        foundNosferatu = nosferatu
+                        break
+                    end
+                end
+            end
+        end
+        
+        if foundNosferatu then
+            nosferatuHunterFeastActive[foundNosferatu] = true
+            
+            -- Start watching for Bats to disappear
+            if not nosferatuHunterFeastTracked[foundNosferatu] then
+                nosferatuHunterFeastTracked[foundNosferatu] = true
+                
+                local connection
+                connection = bats.AncestryChanged:Connect(function()
+                    if not bats or not bats.Parent then
+                        -- Bats was removed
+                        if connection then connection:Disconnect() end
+                        nosferatuHunterFeastTracked[foundNosferatu] = nil
+                        
+                        if nosferatuHunterFeastActive[foundNosferatu] then
+                            nosferatuHunterFeastActive[foundNosferatu] = nil
+                            local cooldownEndTime = tick() + HUNTERS_FEAST_COOLDOWN
+                            createNosferatuCooldownDisplay(foundNosferatu, cooldownEndTime, "Hunter's Feast")
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end
+
+local function listenForNosferatuAbilities(nosferatu)
+    if not nosferatu then return end
+    if isLocalPlayer(nosferatu) then return end
+    if nosferatu:GetAttribute("NosferatuListener") then return end
+    nosferatu:SetAttribute("NosferatuListener", true)
+    
+    local function onAbilityDetected(cooldown, abilityName)
+        local cooldownEndTime = tick() + cooldown
+        createNosferatuCooldownDisplay(nosferatu, cooldownEndTime, abilityName)
+    end
+    
+    local humanoid = nosferatu:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        local function setupAnimator(animator)
+            if not animator then return end
+            
+            animator.AnimationPlayed:Connect(function(animationTrack)
+                if not nosferatuTrackerEnabled then return end
+                
+                local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+                
+                if animId == BLOODHOOK_ANIMATION then
+                    -- Bloodhook animation started - start 25s timer
+                    onAbilityDetected(BLOODHOOK_COOLDOWN, "Bloodhook")
+                elseif animId == BLOODHOOK_RESET_ANIMATION then
+                    -- Bloodhook landed - RESET the timer to 25s
+                    resetNosferatuBloodhookCooldown(nosferatu)
+                elseif animId == CATACLYSM_ANIMATION then
+                    onAbilityDetected(CATACLYSM_COOLDOWN, "Cataclysm")
+                elseif animId == ASCENSION_ANIMATION then
+                    onAbilityDetected(ASCENSION_COOLDOWN, "Ascension")
+                end
+            end)
+        end
+        
+        local animator = humanoid:FindFirstChildOfClass("Animator")
+        if animator then
+            setupAnimator(animator)
+        end
+        
+        humanoid.ChildAdded:Connect(function(child)
+            if child:IsA("Animator") then
+                setupAnimator(child)
+            end
+        end)
+    end
+end
+
+local function scanForAllNosferatus()
+    local nosferatus = getAllNosferatus()
+    for _, nosferatu in ipairs(nosferatus) do
+        if not isLocalPlayer(nosferatu) then
+            listenForNosferatuAbilities(nosferatu)
+        end
+    end
+end
+
+local function watchForNewNosferatus()
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return end
+    local killersFolder = playersFolder:FindFirstChild("Killers")
+    if not killersFolder then return end
+    
+    killersFolder.ChildAdded:Connect(function(child)
+        if child.Name == "Nosferatu" then
+            task.wait(0.5)
+            if not isLocalPlayer(child) then
+                listenForNosferatuAbilities(child)
+            end
+        end
+    end)
+end
+
+function startNosferatuTracking()
+    if nosferatuUpdateConnection then return end
+    
+    scanForAllNosferatus()
+    watchForNewNosferatus()
+    
+    nosferatuUpdateConnection = RunService.Heartbeat:Connect(function()
+        if nosferatuTrackerEnabled then
+            scanForAllNosferatus()
+            checkForNosferatuBats()
+        end
+    end)
+end
+
+function stopNosferatuTracking()
+    if nosferatuUpdateConnection then
+        nosferatuUpdateConnection:Disconnect()
+        nosferatuUpdateConnection = nil
+    end
+    
+    for nosferatu, abilities in pairs(nosferatuActiveCooldownTimers) do
+        for _, data in pairs(abilities) do
+            if data.billboard then pcall(function() data.billboard:Destroy() end) end
+            if data.connection then data.connection:Disconnect() end
+        end
+        if nosferatu then
+            nosferatu:SetAttribute("NosferatuListener", nil)
+        end
+    end
+    nosferatuActiveCooldownTimers = {}
+    nosferatuHunterFeastActive = {}
+    nosferatuHunterFeastTracked = {}
 end
 
 -- ===== ABILITY WARNER FUNCTIONS =====
@@ -2979,8 +3287,7 @@ function setupInputHook()
                 if not isTwoTimeDaggerReady() then SendNotif("TwoTime", "Dagger is on cooldown!", 1); return end
                 local targetKiller = getNearestKiller()
                 if not targetKiller then SendNotif("TwoTime", "No killer found!", 1); return end
-                if isCrouching() then
-                    SendNotif("TwoTime", "DASH STAB!", 1)
+                if isCrouching() then                    SendNotif("TwoTime", "DASH STAB!", 1)
                     startDashStab(targetKiller)
                 else
                     aimbotActive = true
@@ -5124,21 +5431,28 @@ VisualsTab:CreateToggle({ Name = "Show Stun Immune Indicator", CurrentValue = fa
 
 CooldownTrackerToggle = VisualsTab:CreateToggle({ Name = "Show Ability Cooldowns (Survivors)", CurrentValue = false, Flag = "ShowCooldowns", Callback = function(Value) cooldownTrackerEnabled = Value; if Value then scanForAllCooldownSurvivors(); watchForNewCooldownSurvivors(); task.spawn(function() while cooldownTrackerEnabled do task.wait(5); scanForAllCooldownSurvivors() end end); SendNotif("Cooldown Tracker", "Enabled - Tracking survivor ability cooldowns", 2) else for survivor, data in pairs(activeCooldownTimers) do if data.billboard then pcall(function() data.billboard:Destroy() end) end; if data.connection then data.connection:Disconnect() end; if survivor then survivor:SetAttribute("CooldownListener", nil) end end; activeCooldownTimers = {}; lastGuest1337Trigger = {}; lastChanceTrigger = {}; SendNotif("Cooldown Tracker", "Disabled", 1) end end })
 
-KillerCooldownToggle = VisualsTab:CreateToggle({ Name = "Show Ability Cooldowns (Killers) - FIXED SPACING", CurrentValue = false, Flag = "KillerCooldownToggle", Callback = function(Value) 
-    slasherTrackerEnabled = Value
-    if Value then startSlasherTracking() else stopSlasherTracking() end
-    onexTrackerEnabled = Value
-    if Value then startOnexTracking() else stopOnexTracking() end
-    sixerTrackerEnabled = Value
-    if Value then startSixerTracking() else stopSixerTracking() end
-    noliTrackerEnabled = Value
-    if Value then startNoliTracking() else stopNoliTracking() end
-    c00lkiddTrackerEnabled = Value
-    if Value then startC00lkiddTracking() else stopC00lkiddTracking() end
-    johnDoeTrackerEnabled = Value
-    if Value then startJohnDoeTracking() else stopJohnDoeTracking() end
-    SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer (with Blood Hunt reset & Blood Orb reduction), Noli, c00lkidd & John Doe abilities" or "Disabled", 2) 
-end })
+KillerCooldownToggle = VisualsTab:CreateToggle({
+    Name = "Show Ability Cooldowns (Killers)",
+    CurrentValue = false,
+    Flag = "KillerCooldownToggle",
+    Callback = function(Value) 
+        slasherTrackerEnabled = Value
+        if Value then startSlasherTracking() else stopSlasherTracking() end
+        onexTrackerEnabled = Value
+        if Value then startOnexTracking() else stopOnexTracking() end
+        sixerTrackerEnabled = Value
+        if Value then startSixerTracking() else stopSixerTracking() end
+        noliTrackerEnabled = Value
+        if Value then startNoliTracking() else stopNoliTracking() end
+        c00lkiddTrackerEnabled = Value
+        if Value then startC00lkiddTracking() else stopC00lkiddTracking() end
+        johnDoeTrackerEnabled = Value
+        if Value then startJohnDoeTracking() else stopJohnDoeTracking() end
+        nosferatuTrackerEnabled = Value
+        if Value then startNosferatuTracking() else stopNosferatuTracking() end
+        SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer (with Blood Hunt reset & Blood Orb reduction), Noli, c00lkidd, John Doe & Nosferatu abilities" or "Disabled", 2) 
+    end
+})
 
 -- ===== ABILITY WARNER (VISUALS TAB) =====
 VisualsTab:CreateToggle({
@@ -5333,6 +5647,13 @@ local function initCharacterListeners()
                     end
                     johnDoeActiveCooldownTimers[character] = nil
                 end
+                if nosferatuActiveCooldownTimers[character] then
+                    for _, data in pairs(nosferatuActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    nosferatuActiveCooldownTimers[character] = nil
+                end
             end)
         end
     end
@@ -5356,3 +5677,4 @@ print("ADDED: TwoTime Backstab Mode toggle with keybind (Facing Same Side TRUE/F
 print("FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)")
 print("ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)")
 print("FIXED: Noli aimbot timer cancellation error (cannot cancel thread)")
+print("ADDED: Nosferatu Ability Cooldowns - Bloodhook 25s, Cataclysm 23s, Hunter's Feast 17s, Ascension 33s")
