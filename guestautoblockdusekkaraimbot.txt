@@ -7,7 +7,7 @@
 -- ADDED: Ability Warner (1x1x1x1 Mass Infection & Entanglement line tracking)
 -- ADDED: TwoTime Backstab Mode with toggle and keybind (Facing Same Side TRUE/FALSE)
 -- FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)
--- ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection)
+-- ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)
 -- FIXED: Noli aimbot timer cancellation error (cannot cancel thread)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -423,6 +423,11 @@ noliAimbotActive = false
 noliAimbotTimer = nil
 noliAimbotCameraConnection = nil
 noliAimbotSoundConnections = {}
+noliSoundsModuleHooked = false
+noliOriginalSoundsPlay = nil
+noliSoundsModule = nil
+noliHitID = nil
+noliKillID = nil
 
 -- ===== ABILITY WARNER VARIABLES =====
 abilityWarnerEnabled = false
@@ -1139,6 +1144,54 @@ local function stopNoliAimbot()
     cleanupNoliAimbot()
 end
 
+local function setupNoliSoundHook()
+    -- Get HitsoundID and KillsoundID
+    local hitsoundID = lp.PlayerData.Settings.Customization:FindFirstChild("HitsoundID")
+    local killsoundID = lp.PlayerData.Settings.Customization:FindFirstChild("KillsoundID")
+    
+    if not hitsoundID or not killsoundID then
+        return false
+    end
+    
+    noliHitID = hitsoundID.Value
+    noliKillID = killsoundID.Value
+    
+    -- Get the Sounds module
+    local success, module = pcall(function()
+        return require(ReplicatedStorage.Modules.Rendering.Sounds)
+    end)
+    
+    if not success or not module then
+        return false
+    end
+    
+    noliSoundsModule = module
+    
+    -- Only hook once
+    if not noliSoundsModuleHooked then
+        noliSoundsModuleHooked = true
+        noliOriginalSoundsPlay = module.Play
+        
+        module.Play = function(self, soundId, ...)
+            local args = {...}
+            local id = tostring(soundId)
+            local num = id:match("rbxassetid://(%d+)") or id:match("://(%d+)") or id:match("^(%d+)$")
+            
+            -- Check if it's our hit or kill sound
+            if num == noliHitID or num == noliKillID then
+                if noliAimbotActive then
+                    stopNoliAimbot()
+                end
+            end
+            
+            -- Call the original function
+            return noliOriginalSoundsPlay(self, soundId, unpack(args))
+        end
+    end
+    
+    return true
+end
+
 local function startNoliAimbot()
     if not aimbotEnabled then
         SendNotif("Noli", "Aimbot is disabled!", 1)
@@ -1148,6 +1201,9 @@ local function startNoliAimbot()
 
     stopAimbot()
     stopNoliAimbot()
+    
+    -- Setup sound hook if not already done
+    setupNoliSoundHook()
 
     local targets = getValidTargets()
     if #targets == 0 then
@@ -1198,67 +1254,15 @@ local function startNoliAimbot()
     end)
     noliAimbotCameraConnection = cameraConnection
 
-    local function setupSoundListeners()
-        for _, conn in ipairs(noliAimbotSoundConnections) do
-            conn:Disconnect()
+    -- Cleanup if character changes
+    local charAddedConn = lp.CharacterAdded:Connect(function()
+        if noliAimbotActive then
+            stopNoliAimbot()
         end
-        noliAimbotSoundConnections = {}
+    end)
+    table.insert(noliAimbotSoundConnections, charAddedConn)
 
-        local char = lp.Character
-        if not char then
-            return
-        end
-
-        local hitsoundID = lp.PlayerData.Settings.Customization:FindFirstChild("HitsoundID")
-        local killsoundID = lp.PlayerData.Settings.Customization:FindFirstChild("KillsoundID")
-        if not hitsoundID or not killsoundID then
-            return
-        end
-        local hitID = hitsoundID.Value
-        local killID = killsoundID.Value
-
-        local function checkSound(sound)
-            if not sound:IsA("Sound") then return false end
-            local sid = extractNumericSoundId(sound)
-            if not sid then return false end
-            return sid == hitID or sid == killID
-        end
-
-        local function onSoundPlayed(sound)
-            if checkSound(sound) then
-                stopNoliAimbot()
-            end
-        end
-
-        local addedConn = char.DescendantAdded:Connect(function(desc)
-            if desc:IsA("Sound") then
-                if desc.IsPlaying then
-                    onSoundPlayed(desc)
-                end
-                local playedConn = desc.Played:Connect(function()
-                    onSoundPlayed(desc)
-                end)
-                table.insert(noliAimbotSoundConnections, playedConn)
-            end
-        end)
-        table.insert(noliAimbotSoundConnections, addedConn)
-
-        for _, desc in ipairs(char:GetDescendants()) do
-            if desc:IsA("Sound") and desc.IsPlaying then
-                onSoundPlayed(desc)
-            end
-        end
-
-        local charAddedConn = lp.CharacterAdded:Connect(function()
-            if noliAimbotActive then
-                stopNoliAimbot()
-            end
-        end)
-        table.insert(noliAimbotSoundConnections, charAddedConn)
-    end
-
-    setupSoundListeners()
-
+    -- 3‑second timer
     if noliAimbotTimer then
         task.cancel(noliAimbotTimer)
         noliAimbotTimer = nil
@@ -5068,7 +5072,10 @@ twoTimeBackstabToggle = AimbotTab:CreateToggle({
     Callback = function(Value)
         local isTwoTime = amITwoTime()
         if not isTwoTime then
-            -- Silently do nothing (don't change the toggle)
+            -- Silently revert the toggle back
+            task.spawn(function()
+                twoTimeBackstabToggle:Set(false)
+            end)
             return
         end
         faceSameSideAsKiller = Value
@@ -5347,5 +5354,5 @@ print("FIXED: Sixer custom skin support - finds ALL Animators in the model")
 print("ADDED: Ability Warner - Tracks 1x1x1x1 Mass Infection & Entanglement with lines!")
 print("ADDED: TwoTime Backstab Mode toggle with keybind (Facing Same Side TRUE/FALSE)")
 print("FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)")
-print("ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection)")
+print("ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)")
 print("FIXED: Noli aimbot timer cancellation error (cannot cancel thread)")
