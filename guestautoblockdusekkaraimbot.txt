@@ -5379,10 +5379,7 @@ twoTimeBackstabToggle = AimbotTab:CreateToggle({
     Callback = function(Value)
         local isTwoTime = amITwoTime()
         if not isTwoTime then
-            -- Silently revert the toggle back
-            task.spawn(function()
-                twoTimeBackstabToggle:Set(false)
-            end)
+            -- Silently do nothing (don't change the toggle)
             return
         end
         faceSameSideAsKiller = Value
