@@ -6,7 +6,9 @@
 -- FIXED: Sixer custom skin support - finds ALL Animators in the model
 -- ADDED: Ability Warner (1x1x1x1 Mass Infection & Entanglement line tracking)
 -- ADDED: TwoTime Backstab Mode with toggle and keybind (Facing Same Side TRUE/FALSE)
--- FIXED: Prediction now matches the old reliable script (Dusekkar uses its own multiplier)
+-- FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)
+-- ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection)
+-- FIXED: Noli aimbot timer cancellation error (cannot cancel thread)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -416,6 +418,12 @@ dusekkarTimer = nil
 dusekkarPredictionMultiplier = 1
 isSilentAimHooked = false
 
+-- ===== NOLI AIMBOT VARIABLES =====
+noliAimbotActive = false
+noliAimbotTimer = nil
+noliAimbotCameraConnection = nil
+noliAimbotSoundConnections = {}
+
 -- ===== ABILITY WARNER VARIABLES =====
 abilityWarnerEnabled = false
 abilityWarnerLineLength = 150
@@ -763,6 +771,20 @@ local function amIDusekkar()
     return false
 end
 
+local function amINoli()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Noli" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function getAllCharactersByName(name)
     local characters = {}
     if name == "Guest1337" or name == "Shedletsky" or name == "TwoTime" or name == "Chance" or name == "JaneDoe" or name == "Elliot" or name == "007n7" or name == "7n7" then
@@ -1076,6 +1098,177 @@ function stopAimbot()
     if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
     if currentSphereConnection then pcall(function() currentSphereConnection:Disconnect() end); currentSphereConnection = nil end
     setShiftLock(false)
+end
+
+-- ===== NOLI AIMBOT WITH EARLY STOP ON DAMAGE =====
+local function cleanupNoliAimbot()
+    if not noliAimbotActive then return end
+    noliAimbotActive = false
+
+    if noliAimbotCameraConnection then
+        noliAimbotCameraConnection:Disconnect()
+        noliAimbotCameraConnection = nil
+    end
+
+    for _, conn in ipairs(noliAimbotSoundConnections) do
+        conn:Disconnect()
+    end
+    noliAimbotSoundConnections = {}
+
+    aimbotActive = false
+    aimbotCurrentTarget = nil
+    if currentTargetSphere then
+        pcall(function() currentTargetSphere:Destroy() end)
+        currentTargetSphere = nil
+    end
+    if currentSphereConnection then
+        pcall(function() currentSphereConnection:Disconnect() end)
+        currentSphereConnection = nil
+    end
+    setShiftLock(false)
+end
+
+local function stopNoliAimbot()
+    if not noliAimbotActive then return end
+
+    if noliAimbotTimer then
+        pcall(function() task.cancel(noliAimbotTimer) end)
+        noliAimbotTimer = nil
+    end
+
+    cleanupNoliAimbot()
+end
+
+local function startNoliAimbot()
+    if not aimbotEnabled then
+        SendNotif("Noli", "Aimbot is disabled!", 1)
+        return
+    end
+    if noliAimbotActive then return end
+
+    stopAimbot()
+    stopNoliAimbot()
+
+    local targets = getValidTargets()
+    if #targets == 0 then
+        SendNotif("Noli", "No target found!", 1)
+        return
+    end
+
+    local target = targets[1]
+    aimbotActive = true
+    aimbotCurrentTarget = target.obj
+    noliAimbotActive = true
+    setShiftLock(true)
+
+    createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0), aimbotPredictionMultiplier)
+
+    local cameraConnection
+    cameraConnection = RunService.RenderStepped:Connect(function()
+        if not aimbotActive or not aimbotCurrentTarget then
+            if cameraConnection then cameraConnection:Disconnect() end
+            stopNoliAimbot()
+            return
+        end
+        local myChar = lp.Character
+        if not myChar then
+            return
+        end
+        local humanoid = aimbotCurrentTarget:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            stopNoliAimbot()
+            if cameraConnection then cameraConnection:Disconnect() end
+            return
+        end
+        local targetPos = getPredictedPosition(aimbotCurrentTarget, aimbotPredictionMultiplier)
+        if not targetPos then
+            stopNoliAimbot()
+            if cameraConnection then cameraConnection:Disconnect() end
+            return
+        end
+        local camera = Camera
+        local cameraPos = camera.CFrame.Position
+        local targetCFrame = CFrame.lookAt(cameraPos, targetPos)
+        local currentCFrame = camera.CFrame
+        local currentLook = currentCFrame.LookVector
+        local targetLook = targetCFrame.LookVector
+        local smoothLook = currentLook:Lerp(targetLook, aimbotSmoothness)
+        local newCFrame = CFrame.new(cameraPos, cameraPos + smoothLook)
+        camera.CFrame = newCFrame
+    end)
+    noliAimbotCameraConnection = cameraConnection
+
+    local function setupSoundListeners()
+        for _, conn in ipairs(noliAimbotSoundConnections) do
+            conn:Disconnect()
+        end
+        noliAimbotSoundConnections = {}
+
+        local char = lp.Character
+        if not char then
+            return
+        end
+
+        local hitsoundID = lp.PlayerData.Settings.Customization:FindFirstChild("HitsoundID")
+        local killsoundID = lp.PlayerData.Settings.Customization:FindFirstChild("KillsoundID")
+        if not hitsoundID or not killsoundID then
+            return
+        end
+        local hitID = hitsoundID.Value
+        local killID = killsoundID.Value
+
+        local function checkSound(sound)
+            if not sound:IsA("Sound") then return false end
+            local sid = extractNumericSoundId(sound)
+            if not sid then return false end
+            return sid == hitID or sid == killID
+        end
+
+        local function onSoundPlayed(sound)
+            if checkSound(sound) then
+                stopNoliAimbot()
+            end
+        end
+
+        local addedConn = char.DescendantAdded:Connect(function(desc)
+            if desc:IsA("Sound") then
+                if desc.IsPlaying then
+                    onSoundPlayed(desc)
+                end
+                local playedConn = desc.Played:Connect(function()
+                    onSoundPlayed(desc)
+                end)
+                table.insert(noliAimbotSoundConnections, playedConn)
+            end
+        end)
+        table.insert(noliAimbotSoundConnections, addedConn)
+
+        for _, desc in ipairs(char:GetDescendants()) do
+            if desc:IsA("Sound") and desc.IsPlaying then
+                onSoundPlayed(desc)
+            end
+        end
+
+        local charAddedConn = lp.CharacterAdded:Connect(function()
+            if noliAimbotActive then
+                stopNoliAimbot()
+            end
+        end)
+        table.insert(noliAimbotSoundConnections, charAddedConn)
+    end
+
+    setupSoundListeners()
+
+    if noliAimbotTimer then
+        task.cancel(noliAimbotTimer)
+        noliAimbotTimer = nil
+    end
+
+    noliAimbotTimer = task.delay(3, function()
+        if noliAimbotActive then
+            cleanupNoliAimbot()
+        end
+    end)
 end
 
 local function startNormalStab(targetKiller)
@@ -2791,7 +2984,8 @@ function setupInputHook()
                     if faceSameSideAsKiller then SendNotif("TwoTime", "Facing Same Side TRUE", 1) else SendNotif("TwoTime", "Facing Same Side FALSE", 1) end
                     startNormalStab(targetKiller)
                 end
-            elseif isNoli then startGeneralAimbot(2.5)
+            elseif isNoli then
+                startNoliAimbot()
             elseif isSixer then startGeneralAimbot(1.45)
             elseif isJohnDoe then startGeneralAimbot(4.5)
             elseif isShedletsky then startGeneralAimbot(1.1)
@@ -4874,10 +5068,7 @@ twoTimeBackstabToggle = AimbotTab:CreateToggle({
     Callback = function(Value)
         local isTwoTime = amITwoTime()
         if not isTwoTime then
-            -- Silently revert the toggle back
-            task.spawn(function()
-                twoTimeBackstabToggle:Set(false)
-            end)
+            -- Silently do nothing (don't change the toggle)
             return
         end
         faceSameSideAsKiller = Value
@@ -5156,3 +5347,5 @@ print("FIXED: Sixer custom skin support - finds ALL Animators in the model")
 print("ADDED: Ability Warner - Tracks 1x1x1x1 Mass Infection & Entanglement with lines!")
 print("ADDED: TwoTime Backstab Mode toggle with keybind (Facing Same Side TRUE/FALSE)")
 print("FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)")
+print("ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection)")
+print("FIXED: Noli aimbot timer cancellation error (cannot cancel thread)")
