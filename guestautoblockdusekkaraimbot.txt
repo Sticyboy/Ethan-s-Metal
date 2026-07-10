@@ -2251,7 +2251,8 @@ local function setupWarnerShockwaveListener()
     if not ingame then return end
     
     ingame.ChildAdded:Connect(function(child)
-        if child.Name == "Shockwave" then
+        -- Check both "Shockwave" and "shockwave"
+        if child.Name == "Shockwave" or child.Name == "shockwave" then
             task.wait(0.1)
             if not child:GetAttribute("AbilityWarnerTracked_Shockwave") then
                 child:SetAttribute("AbilityWarnerTracked_Shockwave", true)
