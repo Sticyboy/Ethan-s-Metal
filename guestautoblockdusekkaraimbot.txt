@@ -10,6 +10,9 @@
 -- ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)
 -- FIXED: Noli aimbot timer cancellation error (cannot cancel thread)
 -- ADDED: Nosferatu Ability Cooldowns (Bloodhook 25s, Cataclysm 23s, Hunter's Feast 17s, Ascension 33s)
+-- FIXED: Shockwave detection now case-insensitive ("Shockwave" or "shockwave")
+-- FIXED: Noli animation IDs updated with missing animations
+-- FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -122,7 +125,7 @@ chanceAnimIds = {
     ["103301489258021"] = true,
     ["133607163653602"] = true,
     ["111512633767170"] = true,
-    ["103601716322988"] = true,  -- NEWLY ADDED
+    ["103601716322988"] = true,
 }
 
 BEHEAD_ANIMATIONS = {
@@ -166,15 +169,15 @@ VOID_RUSH_INSTANT_ANIMATIONS = {
     "86185540502966", "138973708225026", "72288188654477", "139321362207112",
     "129613827182782", "120976159116654", "125279161782730", "103858090634577",
     "121431559765547", "83339954829111", "138810535811221", "94039555054855",
-    "87515658747464", "126303780782129", "112579925472899",  -- NEW
+    "87515658747464", "126303780782129", "112579925472899",  -- NEW IDs
 }
 VOID_RUSH_START_ANIMATIONS = {
     "106723424455179", "92243093913547", "131633352475052", "119441657389159",
-    "134083594808875",  -- NEW
+    "134083594808875",  -- NEW ID
 }
 VOID_RUSH_CANCEL_ANIMATIONS = {
     "132221505301108", "114356208094580", "129002299536917", "133272285191941",
-    "126654961540956",  -- NEW
+    "126654961540956",  -- NEW ID
 }
 
 -- c00lkidd Animation IDs
@@ -347,6 +350,9 @@ aimbotActive = false
 aimbotActiveTimer = nil
 aimbotTargetCount = 0
 aimbotPredictionMultiplier = 1
+-- Shiftlock tracking
+shiftlockWasEnabled = false
+shiftlockWasAimbotActive = false
 
 -- Backstab Mode Toggle
 faceSameSideAsKiller = false
@@ -527,10 +533,13 @@ local function isShiftLockEnabled()
     end
 end
 
-function setShiftLock(enabled)
+function setShiftLock(enabled, fromAimbot)
     if enabled then
-        shiftlockWasEnabled = isShiftLockEnabled()
-        if not shiftlockWasEnabled then
+        if fromAimbot then
+            shiftlockWasEnabled = isShiftLockEnabled()
+            shiftlockWasAimbotActive = true
+        end
+        if not isShiftLockEnabled() then
             if shiftlockLoaded and SmoothShiftLock and not SmoothShiftLock.Enabled then
                 pcall(function() SmoothShiftLock:ToggleShiftLock() end)
             else
@@ -545,19 +554,24 @@ function setShiftLock(enabled)
             end
         end
     else
-        if isShiftLockEnabled() then
-            if shiftlockLoaded and SmoothShiftLock and SmoothShiftLock.Enabled then
-                pcall(function() SmoothShiftLock:ToggleShiftLock() end)
-            else
-                pcall(function()
-                    local shiftlockKeybindEnum = lp.PlayerData.Settings.Keybinds.ShiftLock.Value
-                    local shiftlockKeyCode = Enum.KeyCode[shiftlockKeybindEnum]
-                    if shiftlockKeyCode then
-                        VirtualInputManager:SendKeyEvent(true, shiftlockKeyCode, false, game)
-                        VirtualInputManager:SendKeyEvent(false, shiftlockKeyCode, false, game)
+        if fromAimbot and shiftlockWasAimbotActive then
+            if not shiftlockWasEnabled then
+                if isShiftLockEnabled() then
+                    if shiftlockLoaded and SmoothShiftLock and SmoothShiftLock.Enabled then
+                        pcall(function() SmoothShiftLock:ToggleShiftLock() end)
+                    else
+                        pcall(function()
+                            local shiftlockKeybindEnum = lp.PlayerData.Settings.Keybinds.ShiftLock.Value
+                            local shiftlockKeyCode = Enum.KeyCode[shiftlockKeybindEnum]
+                            if shiftlockKeyCode then
+                                VirtualInputManager:SendKeyEvent(true, shiftlockKeyCode, false, game)
+                                VirtualInputManager:SendKeyEvent(false, shiftlockKeyCode, false, game)
+                            end
+                        end)
                     end
-                end)
+                end
             end
+            shiftlockWasAimbotActive = false
         end
     end
 end
@@ -1146,7 +1160,7 @@ function stopAimbot()
     if aimbotActiveTimer then pcall(function() task.cancel(aimbotActiveTimer) end); aimbotActiveTimer = nil end
     if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
     if currentSphereConnection then pcall(function() currentSphereConnection:Disconnect() end); currentSphereConnection = nil end
-    setShiftLock(false)
+    setShiftLock(false, true)
 end
 
 -- ===== NOLI AIMBOT WITH EARLY STOP ON DAMAGE =====
@@ -1174,7 +1188,7 @@ local function cleanupNoliAimbot()
         pcall(function() currentSphereConnection:Disconnect() end)
         currentSphereConnection = nil
     end
-    setShiftLock(false)
+    setShiftLock(false, true)
 end
 
 local function stopNoliAimbot()
@@ -1238,7 +1252,6 @@ end
 
 local function startNoliAimbot()
     if not aimbotEnabled then
-        SendNotif("Noli", "Aimbot is disabled!", 1)
         return
     end
     if noliAimbotActive then return end
@@ -1251,7 +1264,6 @@ local function startNoliAimbot()
 
     local targets = getValidTargets()
     if #targets == 0 then
-        SendNotif("Noli", "No target found!", 1)
         return
     end
 
@@ -1259,7 +1271,7 @@ local function startNoliAimbot()
     aimbotActive = true
     aimbotCurrentTarget = target.obj
     noliAimbotActive = true
-    setShiftLock(true)
+    setShiftLock(true, true)
 
     createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255, 0, 0), aimbotPredictionMultiplier)
 
@@ -1326,7 +1338,7 @@ local function startNormalStab(targetKiller)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     if faceSameSideAsKiller then
-        setShiftLock(false)
+        setShiftLock(false, false)
         createTargetSphere(targetKiller, Color3.fromRGB(255,0,0))
         local backstabConnection
         backstabConnection = RunService.Heartbeat:Connect(function()
@@ -1345,7 +1357,7 @@ local function startNormalStab(targetKiller)
             if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
         end)
     else
-        setShiftLock(true)
+        setShiftLock(true, false)
         createTargetSphere(targetKiller, Color3.fromRGB(255,0,0))
         local cameraConnection
         cameraConnection = RunService.RenderStepped:Connect(function()
@@ -1372,7 +1384,7 @@ local function startNormalStab(targetKiller)
             aimbotActive = false; aimbotCurrentTarget = nil
             if cameraConnection then cameraConnection:Disconnect() end
             if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
-            setShiftLock(false)
+            setShiftLock(false, false)
         end)
     end
 end
@@ -1385,7 +1397,7 @@ local function startDashStab(targetKiller)
     if not hrp then return end
     aimbotActive = true
     aimbotCurrentTarget = targetKiller
-    setShiftLock(true)
+    setShiftLock(true, true)
     createTargetSphere(targetKiller, Color3.fromRGB(0,255,0))
     local dashConnection
     dashConnection = RunService.RenderStepped:Connect(function()
@@ -1409,7 +1421,7 @@ local function startDashStab(targetKiller)
     end)
     task.delay(0.35, function()
         if not aimbotActive then return end
-        setShiftLock(false)
+        setShiftLock(false, true)
         if dashConnection then dashConnection:Disconnect() end
         if currentTargetSphere then currentTargetSphere.Color = Color3.fromRGB(255,0,0) end
         local backstabConnection
@@ -1452,12 +1464,14 @@ function startGeneralAimbot(duration, customSmoothness)
     if not aimbotEnabled then return end
     if aimbotActive then return end
     local targets = getValidTargets()
-    if #targets == 0 then return end
+    if #targets == 0 then 
+        return 
+    end
     local target = targets[1]
     aimbotCurrentTarget = target.obj
     aimbotActive = true
     aimbotTargetCount = aimbotTargetCount + 1
-    setShiftLock(true)
+    setShiftLock(true, true)
     local originalSmoothness = aimbotSmoothness
     if customSmoothness then aimbotSmoothness = customSmoothness end
     createTargetSphere(aimbotCurrentTarget, Color3.fromRGB(255,0,0), aimbotPredictionMultiplier)
@@ -1486,7 +1500,7 @@ function startGeneralAimbot(duration, customSmoothness)
         aimbotActive = false; aimbotCurrentTarget = nil
         if cameraConnection then cameraConnection:Disconnect() end
         if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
-        setShiftLock(false)
+        setShiftLock(false, true)
     end)
 end
 
@@ -1846,10 +1860,12 @@ function stopNosferatuTracking()
 end
 
 -- ===== ABILITY WARNER FUNCTIONS =====
+-- FIXED: Shockwave detection is now case-insensitive
 local function getShockwavePart(projectile)
     if not projectile then return nil end
     
-    local part = projectile:FindFirstChild("Shockwave")
+    -- Check both "Shockwave" and "shockwave" (case-insensitive)
+    local part = projectile:FindFirstChild("Shockwave") or projectile:FindFirstChild("shockwave")
     if part and part:IsA("BasePart") then
         return part
     end
@@ -2251,7 +2267,7 @@ local function setupWarnerShockwaveListener()
     if not ingame then return end
     
     ingame.ChildAdded:Connect(function(child)
-        -- Check both "Shockwave" and "shockwave"
+        -- Check both "Shockwave" and "shockwave" (case-insensitive)
         if child.Name == "Shockwave" or child.Name == "shockwave" then
             task.wait(0.1)
             if not child:GetAttribute("AbilityWarnerTracked_Shockwave") then
@@ -2431,7 +2447,7 @@ function stopAbilityWarner()
         local ingame = map:FindFirstChild("Ingame")
         if ingame then
             for _, child in ipairs(ingame:GetChildren()) do
-                if child.Name == "Shockwave" then
+                if child.Name == "Shockwave" or child.Name == "shockwave" then
                     child:SetAttribute("AbilityWarnerTracked_Shockwave", nil)
                 end
             end
@@ -3291,7 +3307,8 @@ function setupInputHook()
                 if not isTwoTimeDaggerReady() then SendNotif("TwoTime", "Dagger is on cooldown!", 1); return end
                 local targetKiller = getNearestKiller()
                 if not targetKiller then SendNotif("TwoTime", "No killer found!", 1); return end
-                if isCrouching() then                    SendNotif("TwoTime", "DASH STAB!", 1)
+                if isCrouching() then
+                    SendNotif("TwoTime", "DASH STAB!", 1)
                     startDashStab(targetKiller)
                 else
                     aimbotActive = true
@@ -4341,8 +4358,11 @@ local function listenForNoliVoidRush(noli)
         if not animator then return end
         
         animator.AnimationPlayed:Connect(function(animationTrack)
+            if not noliTrackerEnabled then return end
+            
             local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
             
+            -- Check Instant Void Rush animations
             for _, id in ipairs(VOID_RUSH_INSTANT_ANIMATIONS) do
                 if animId == id then
                     local now = tick()
@@ -4356,6 +4376,7 @@ local function listenForNoliVoidRush(noli)
                 end
             end
             
+            -- Check Void Rush startup animations
             for _, startAnim in ipairs(VOID_RUSH_START_ANIMATIONS) do
                 if animId == startAnim then
                     clearPendingNoliVoidRush()
@@ -4373,6 +4394,7 @@ local function listenForNoliVoidRush(noli)
                 end
             end
             
+            -- Check Void Rush cancel animations
             for _, cancelAnim in ipairs(VOID_RUSH_CANCEL_ANIMATIONS) do
                 if animId == cancelAnim then
                     if noliPendingNoli == noli then
@@ -4384,16 +4406,20 @@ local function listenForNoliVoidRush(noli)
         end)
     end
     
-    local animator = humanoid:FindFirstChildOfClass("Animator")
-    if animator then
-        setupAnimator(animator)
-    end
-    
-    humanoid.ChildAdded:Connect(function(child)
-        if child:IsA("Animator") then
-            setupAnimator(child)
+    -- 🔥 ONLY use the Animator inside Humanoid (fixes custom skin issue)
+    if humanoid then
+        local animator = humanoid:FindFirstChildOfClass("Animator")
+        if animator then
+            setupAnimator(animator)
+        else
+            -- Wait for Animator to be added to Humanoid later
+            humanoid.ChildAdded:Connect(function(child)
+                if child:IsA("Animator") then
+                    setupAnimator(child)
+                end
+            end)
         end
-    end)
+    end
 end
 
 local function listenForNoliAbilities(noli)
@@ -5679,3 +5705,6 @@ print("FIXED: Prediction now matches old reliable script (Dusekkar uses its own 
 print("ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)")
 print("FIXED: Noli aimbot timer cancellation error (cannot cancel thread)")
 print("ADDED: Nosferatu Ability Cooldowns - Bloodhook 25s, Cataclysm 23s, Hunter's Feast 17s, Ascension 33s")
+print("FIXED: Shockwave detection is now case-insensitive ('Shockwave' or 'shockwave')")
+print("FIXED: Noli animation IDs updated with missing animations (15 instant, 5 startup, 5 cancel)")
+print("FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found")
