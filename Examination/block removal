@@ -1,0 +1,18 @@
+while true do
+    for _, c in pairs(workspace.Characters:GetChildren()) do
+        local n = c.Name
+        if n and (n:match("^Slasher%d+$") or n:match("^Shielder%d+$")) then
+            local arm = c:FindFirstChild("Right Arm")
+            if arm then
+                if n:match("^Slasher") then
+                    local h = arm:FindFirstChild("Handle")
+                    if h then h:Destroy() end
+                elseif n:match("^Shielder") then
+                    local s = arm:FindFirstChild("Shield")
+                    if s then s:Destroy() end
+                end
+            end
+        end
+    end
+    task.wait()
+end
