@@ -1,1 +1,63 @@
+-- Disable staggering by making damage never count toward stagger
+local player = game.Players.LocalPlayer
 
+local function disableStagger(character)
+    if not character then return end
+    
+    -- Find the Stagger script in the character
+    local staggerScript = character:FindFirstChild("ClientScripts")
+    if staggerScript then
+        staggerScript = staggerScript:FindFirstChild("Stagger")
+    end
+    
+    -- Alternative location
+    if not staggerScript then
+        staggerScript = character:FindFirstChild("Stagger")
+    end
+    
+    if staggerScript and staggerScript:IsA("LocalScript") then
+        -- Disable the script entirely
+        staggerScript.Disabled = true
+        print("Stagger script disabled!")
+    end
+    
+    -- Also find the ThroatSlit value that controls stagger
+    local throatSlit = character:FindFirstChild("ThroatSlit")
+    if throatSlit and throatSlit:IsA("BoolValue") then
+        -- Keep it false to prevent stagger
+        throatSlit.Value = false
+        
+        -- Lock it to false
+        local oldChanged = throatSlit.Changed
+        throatSlit.Changed:Connect(function()
+            throatSlit.Value = false
+        end)
+    end
+    
+    -- Find and remove the ShockStun effect if it appears
+    local function removeShockStun()
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local shockStun = rootPart:FindFirstChild("ShockStun")
+            if shockStun then
+                shockStun:Destroy()
+            end
+        end
+    end
+    
+    -- Constantly remove ShockStun
+    game:GetService("RunService").Heartbeat:Connect(removeShockStun)
+end
+
+-- Apply to current and future characters
+if player.Character then
+    task.wait(0.5)
+    disableStagger(player.Character)
+end
+
+player.CharacterAdded:Connect(function(character)
+    task.wait(0.5)
+    disableStagger(character)
+end)
+
+print("Stagger disabled!")
