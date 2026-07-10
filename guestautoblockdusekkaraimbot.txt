@@ -13,6 +13,8 @@
 -- FIXED: Shockwave detection now case-insensitive ("Shockwave" or "shockwave")
 -- FIXED: Noli animation IDs updated with missing animations
 -- FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found
+-- ADDED: Noob Ability Tracker (Bloxy Cola 50s, Slateskin Potion 55s, Ghostburger 45s)
+-- FIXED: Noob Slateskin Active timer (6s) with early cancel detection via Torso color
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -261,6 +263,25 @@ PIZZA_DELIVERY_COOLDOWN = 50
 CORRUPT_ENERGY_COOLDOWN = 18
 CORRUPT_ENERGY_STUNNED_COOLDOWN = 9
 
+-- Noob Cooldown values (from config)
+NOOB_BLOXYCOLA_COOLDOWN = 50
+NOOB_SLATESKIN_COOLDOWN = 55
+NOOB_GHOSTBURGER_COOLDOWN = 45
+NOOB_SLATESKIN_ACTIVE_DURATION = 6
+
+-- Noob Animation IDs
+NOOB_BLOXYCOLA_ANIMATIONS = {
+    "124033675853489",
+}
+NOOB_SLATESKIN_ANIMATIONS = {
+    "96771054624545",
+}
+NOOB_GHOSTBURGER_ANIMATIONS = {
+    "121781457295101",
+    "96457051803733",
+    "99628926500394",
+}
+
 -- FIXED POSITIONS FOR KILLER ABILITIES
 SLASHER_ABILITY_OFFSETS = {
     ["Behead"] = 3,
@@ -306,7 +327,7 @@ shedletskySwingSounds = {
     ["12222225"] = true, ["132596270805754"] = true, ["83851356262523"] = true,
     ["111910850942168"] = true, ["115267992424648"] = true, ["99820161736138"] = true,
     ["86710781315432"] = true, ["139012439429121"] = true, ["5569523548"] = true,
-    ["92445809840331"] = true, ["81714228693719"] = true, ["114486446625838"] = true,
+    ["92445809840331"] = true, ["81714228693719"] = true,
 }
 
 twotimeSounds = { ["99820161736138"] = true, ["86710781315432"] = true, }
@@ -434,6 +455,17 @@ nosferatuHunterFeastActive = {}
 nosferatuHunterFeastTracked = {}
 nosferatuUpdateConnection = nil
 
+-- Noob Tracker Variables
+noobTrackerEnabled = false
+noobActiveCooldownTimers = {}
+noobSlateskinActive = false
+noobSlateskinWasActive = false
+noobSlateskinTimerRunning = false
+noobLastTriggerTime = {}
+noobSlateskinConnection = nil
+noobUpdateConnection = nil
+NOOB_ANTI_SPAM_TIME = 2
+
 -- Ability Cooldown Tracker Variables
 cooldownTrackerEnabled = false
 activeCooldownTimers = {}
@@ -480,6 +512,7 @@ abilityWarnerUpdateConnection = nil
 GuestToggle = nil
 SevenNToggle = nil
 twoTimeBackstabToggle = nil
+noobTrackerToggle = nil
 
 -- Performance Caches
 cachedBlockBtn = nil
@@ -1859,6 +1892,336 @@ function stopNosferatuTracking()
     nosferatuHunterFeastTracked = {}
 end
 
+-- ===== NOOB ABILITY TRACKER FUNCTIONS =====
+local function getNoobCharacter()
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return nil end
+    local survivorsFolder = playersFolder:FindFirstChild("Survivors")
+    if not survivorsFolder then return nil end
+    
+    for _, survivor in ipairs(survivorsFolder:GetChildren()) do
+        if survivor.Name == "Noob" then
+            return survivor
+        end
+    end
+    return nil
+end
+
+local function formatNoobCooldownTime(remainingSeconds)
+    if remainingSeconds <= 0 then return "0.0"
+    elseif remainingSeconds < 10 then return string.format("%.1f", remainingSeconds)
+    else return tostring(math.floor(remainingSeconds)) end
+end
+
+local function destroyNoobTimer(timerData)
+    if not timerData then return end
+    if timerData.billboard then pcall(timerData.billboard.Destroy, timerData.billboard) end
+    if timerData.connection then timerData.connection:Disconnect() end
+end
+
+local function createNoobCooldownDisplay(noob, cooldownEndTime, abilityName)
+    if not noob then return end
+    if not noobActiveCooldownTimers[noob] then noobActiveCooldownTimers[noob] = {} end
+    
+    -- Remove existing timer for this ability
+    local existing = noobActiveCooldownTimers[noob][abilityName]
+    if existing then
+        destroyNoobTimer(existing)
+        noobActiveCooldownTimers[noob][abilityName] = nil
+    end
+    
+    local hrp = noob:FindFirstChild("HumanoidRootPart") or noob:FindFirstChild("Head") or noob:FindFirstChild("Torso")
+    if not hrp then return end
+    
+    -- Assign unique offsets
+    local offsetY = 3
+    if abilityName == "Bloxy Cola" then offsetY = 3
+    elseif abilityName == "Slateskin Active" or abilityName == "Slateskin Potion" then offsetY = 5
+    elseif abilityName == "Ghostburger" then offsetY = 7
+    end
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "NoobCooldown_" .. abilityName
+    billboard.Size = UDim2.new(0, 140, 0, 25)
+    billboard.StudsOffset = Vector3.new(0, offsetY, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = hrp
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = abilityName .. ": " .. formatNoobCooldownTime(cooldownEndTime - tick())
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = billboard
+    
+    local timerData = { endTime = cooldownEndTime, billboard = billboard, textLabel = textLabel, abilityName = abilityName }
+    
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not noob or not noob.Parent then
+            destroyNoobTimer(timerData)
+            if noobActiveCooldownTimers[noob] then noobActiveCooldownTimers[noob][abilityName] = nil end
+            return
+        end
+        
+        local remaining = timerData.endTime - tick()
+        if remaining <= 0 then
+            destroyNoobTimer(timerData)
+            if noobActiveCooldownTimers[noob] then noobActiveCooldownTimers[noob][abilityName] = nil end
+        else
+            textLabel.Text = abilityName .. ": " .. formatNoobCooldownTime(remaining)
+            if remaining < 5 then
+                textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            elseif remaining < 10 then
+                textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+            else
+                textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end
+    end)
+    timerData.connection = connection
+    noobActiveCooldownTimers[noob][abilityName] = timerData
+end
+
+local function startNoobSlateskinActiveTimer(noob)
+    -- Clear any existing Slateskin timers
+    if noobActiveCooldownTimers[noob] then
+        if noobActiveCooldownTimers[noob]["Slateskin Active"] then
+            destroyNoobTimer(noobActiveCooldownTimers[noob]["Slateskin Active"])
+            noobActiveCooldownTimers[noob]["Slateskin Active"] = nil
+        end
+        if noobActiveCooldownTimers[noob]["Slateskin Potion"] then
+            destroyNoobTimer(noobActiveCooldownTimers[noob]["Slateskin Potion"])
+            noobActiveCooldownTimers[noob]["Slateskin Potion"] = nil
+        end
+    end
+    
+    local duration = NOOB_SLATESKIN_ACTIVE_DURATION
+    local endTime = tick() + duration
+    createNoobCooldownDisplay(noob, endTime, "Slateskin Active")
+    noobSlateskinTimerRunning = true
+end
+
+local function startNoobSlateskinCooldown(noob)
+    -- Clear Active timer if running
+    if noobActiveCooldownTimers[noob] and noobActiveCooldownTimers[noob]["Slateskin Active"] then
+        destroyNoobTimer(noobActiveCooldownTimers[noob]["Slateskin Active"])
+        noobActiveCooldownTimers[noob]["Slateskin Active"] = nil
+    end
+    noobSlateskinTimerRunning = false
+    
+    local now = tick()
+    if not noobLastTriggerTime["SlateskinPotion"] or now - noobLastTriggerTime["SlateskinPotion"] >= NOOB_ANTI_SPAM_TIME then
+        noobLastTriggerTime["SlateskinPotion"] = now
+        local endTime = now + NOOB_SLATESKIN_COOLDOWN
+        createNoobCooldownDisplay(noob, endTime, "Slateskin Potion")
+        SendNotif("Noob", "Slateskin Potion ended - " .. NOOB_SLATESKIN_COOLDOWN .. "s cooldown", 1.5)
+    end
+end
+
+local function checkNoobSlateskinStatus(noob)
+    if not noob or not noob.Parent then return end
+    local torso = noob:FindFirstChild("Torso")
+    if not torso then return end
+    
+    local targetColor = BrickColor.new("Dark stone grey")
+    local isActiveNow = (torso.BrickColor == targetColor)
+    
+    -- Effect ended (color changed away from Dark stone grey)
+    if noobSlateskinActive and not isActiveNow then
+        noobSlateskinActive = false
+        if noobSlateskinTimerRunning then
+            -- Active timer was cancelled early
+            startNoobSlateskinCooldown(noob)
+        else
+            -- Normal end - cooldown already started when timer expired
+        end
+        noobSlateskinTimerRunning = false
+    end
+    
+    -- Effect started (color changed TO Dark stone grey)
+    if not noobSlateskinActive and isActiveNow then
+        noobSlateskinActive = true
+        startNoobSlateskinActiveTimer(noob)
+    end
+end
+
+local function listenForNoobAbilities(noob)
+    if not noob then return end
+    if noob:GetAttribute("NoobListener") then return end
+    noob:SetAttribute("NoobListener", true)
+    
+    local humanoid = noob:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        humanoid = noob:WaitForChild("Humanoid", 5)
+        if not humanoid then return end
+    end
+    
+    local function setupAnimator(animator)
+        if not animator then return end
+        
+        animator.AnimationPlayed:Connect(function(animationTrack)
+            if not noobTrackerEnabled then return end
+            
+            local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+            if not animId then return end
+            
+            local now = tick()
+            
+            -- Bloxy Cola
+            for _, id in ipairs(NOOB_BLOXYCOLA_ANIMATIONS) do
+                if animId == id then
+                    if not noobLastTriggerTime["BloxyCola"] or now - noobLastTriggerTime["BloxyCola"] >= NOOB_ANTI_SPAM_TIME then
+                        noobLastTriggerTime["BloxyCola"] = now
+                        local endTime = now + NOOB_BLOXYCOLA_COOLDOWN
+                        createNoobCooldownDisplay(noob, endTime, "Bloxy Cola")
+                        SendNotif("Noob", "Bloxy Cola used - " .. NOOB_BLOXYCOLA_COOLDOWN .. "s cooldown", 1.5)
+                    end
+                    return
+                end
+            end
+            
+            -- Slateskin Potion - only mark active, timer starts on color change
+            for _, id in ipairs(NOOB_SLATESKIN_ANIMATIONS) do
+                if animId == id then
+                    -- Don't start timer here - wait for color change
+                    -- But set the initial color state so we can detect when it changes
+                    local torso = noob:FindFirstChild("Torso")
+                    if torso then
+                        noobSlateskinActive = (torso.BrickColor == BrickColor.new("Dark stone grey"))
+                        noobSlateskinWasActive = noobSlateskinActive
+                    end
+                    return
+                end
+            end
+            
+            -- Ghostburger
+            for _, id in ipairs(NOOB_GHOSTBURGER_ANIMATIONS) do
+                if animId == id then
+                    if not noobLastTriggerTime["Ghostburger"] or now - noobLastTriggerTime["Ghostburger"] >= NOOB_ANTI_SPAM_TIME then
+                        noobLastTriggerTime["Ghostburger"] = now
+                        local endTime = now + NOOB_GHOSTBURGER_COOLDOWN
+                        createNoobCooldownDisplay(noob, endTime, "Ghostburger")
+                        SendNotif("Noob", "Ghostburger used - " .. NOOB_GHOSTBURGER_COOLDOWN .. "s cooldown", 1.5)
+                    end
+                    return
+                end
+            end
+        end)
+    end
+    
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if animator then
+        setupAnimator(animator)
+    else
+        humanoid.ChildAdded:Connect(function(child)
+            if child:IsA("Animator") then
+                setupAnimator(child)
+            end
+        end)
+    end
+end
+
+local function scanForAllNoobs()
+    local noob = getNoobCharacter()
+    if noob and not noob:GetAttribute("NoobListener") then
+        listenForNoobAbilities(noob)
+        -- Initialize Slateskin state
+        local torso = noob:FindFirstChild("Torso")
+        if torso then
+            noobSlateskinActive = (torso.BrickColor == BrickColor.new("Dark stone grey"))
+            noobSlateskinWasActive = noobSlateskinActive
+            if noobSlateskinActive then
+                startNoobSlateskinActiveTimer(noob)
+            end
+        end
+    end
+end
+
+local function watchForNewNoobs()
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return end
+    local survivorsFolder = playersFolder:FindFirstChild("Survivors")
+    if not survivorsFolder then return end
+    
+    survivorsFolder.ChildAdded:Connect(function(child)
+        if child.Name == "Noob" then
+            task.wait(0.5)
+            listenForNoobAbilities(child)
+            -- Initialize Slateskin state
+            task.wait(0.5)
+            local torso = child:FindFirstChild("Torso")
+            if torso then
+                noobSlateskinActive = (torso.BrickColor == BrickColor.new("Dark stone grey"))
+                noobSlateskinWasActive = noobSlateskinActive
+                if noobSlateskinActive then
+                    startNoobSlateskinActiveTimer(child)
+                end
+            end
+        end
+    end)
+end
+
+local function startNoobSlateskinLoop()
+    if noobSlateskinConnection then return end
+    noobSlateskinConnection = RunService.Heartbeat:Connect(function()
+        if not noobTrackerEnabled then return end
+        local noob = getNoobCharacter()
+        if noob then
+            checkNoobSlateskinStatus(noob)
+        else
+            noobSlateskinActive = false
+            noobSlateskinTimerRunning = false
+        end
+    end)
+end
+
+local function stopNoobSlateskinLoop()
+    if noobSlateskinConnection then
+        noobSlateskinConnection:Disconnect()
+        noobSlateskinConnection = nil
+    end
+end
+
+function startNoobTracking()
+    if noobUpdateConnection then return end
+    
+    scanForAllNoobs()
+    watchForNewNoobs()
+    startNoobSlateskinLoop()
+    
+    noobUpdateConnection = RunService.Heartbeat:Connect(function()
+        if noobTrackerEnabled then
+            scanForAllNoobs()
+        end
+    end)
+end
+
+function stopNoobTracking()
+    if noobUpdateConnection then
+        noobUpdateConnection:Disconnect()
+        noobUpdateConnection = nil
+    end
+    
+    stopNoobSlateskinLoop()
+    
+    for noob, abilities in pairs(noobActiveCooldownTimers) do
+        for _, data in pairs(abilities) do
+            destroyNoobTimer(data)
+        end
+        if noob then
+            noob:SetAttribute("NoobListener", nil)
+        end
+    end
+    noobActiveCooldownTimers = {}
+    noobSlateskinActive = false
+    noobSlateskinWasActive = false
+    noobSlateskinTimerRunning = false
+end
+
 -- ===== ABILITY WARNER FUNCTIONS =====
 -- FIXED: Shockwave detection is now case-insensitive
 local function getShockwavePart(projectile)
@@ -2960,8 +3323,7 @@ local function checkSpecialKillerActions()
                         for _, sound in ipairs(shedletsky:GetDescendants()) do
                             if sound:IsA("Sound") and sound.IsPlaying then
                                 local soundId = extractNumericSoundId(sound)
-                                if soundId and triggerSoundIds[soundId] then
-                                    if blockdelay > 0 then task.wait(blockdelay) end
+                                if soundId and triggerSoundIds[soundId] then                                    if blockdelay > 0 then task.wait(blockdelay) end
                                     pressKey(Enum.KeyCode.R)
                                     lastSpecialAbilityTime = now
                                     SendNotif("JohnDoe", "404 Error used on Shedletsky", 1)
@@ -4495,9 +4857,7 @@ function startNoliTracking()
             scanForOtherNolis()
         end
     end)
-end
-
-function stopNoliTracking()
+endfunction stopNoliTracking()
     if noliUpdateConnection then
         noliUpdateConnection:Disconnect()
         noliUpdateConnection = nil
@@ -5481,6 +5841,23 @@ KillerCooldownToggle = VisualsTab:CreateToggle({
     end
 })
 
+-- ===== NOOB TRACKER (VISUALS TAB) =====
+NoobTrackerToggle = VisualsTab:CreateToggle({
+    Name = "Show Noob Ability Cooldowns",
+    CurrentValue = false,
+    Flag = "NoobCooldownToggle",
+    Callback = function(Value)
+        noobTrackerEnabled = Value
+        if Value then
+            startNoobTracking()
+            SendNotif("Noob Tracker", "Enabled - Tracking Bloxy Cola, Slateskin, Ghostburger", 2)
+        else
+            stopNoobTracking()
+            SendNotif("Noob Tracker", "Disabled", 1)
+        end
+    end
+})
+
 -- ===== ABILITY WARNER (VISUALS TAB) =====
 VisualsTab:CreateToggle({
     Name = "Ability Warner (1x1x1x1 Tracking)",
@@ -5681,6 +6058,13 @@ local function initCharacterListeners()
                     end
                     nosferatuActiveCooldownTimers[character] = nil
                 end
+                if noobActiveCooldownTimers[character] then
+                    for _, data in pairs(noobActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    noobActiveCooldownTimers[character] = nil
+                end
             end)
         end
     end
@@ -5708,3 +6092,4 @@ print("ADDED: Nosferatu Ability Cooldowns - Bloodhook 25s, Cataclysm 23s, Hunter
 print("FIXED: Shockwave detection is now case-insensitive ('Shockwave' or 'shockwave')")
 print("FIXED: Noli animation IDs updated with missing animations (15 instant, 5 startup, 5 cancel)")
 print("FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found")
+print("ADDED: Noob Ability Tracker - Bloxy Cola 50s, Slateskin Potion 55s (with 6s Active timer), Ghostburger 45s")
