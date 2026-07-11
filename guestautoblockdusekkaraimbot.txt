@@ -4857,7 +4857,9 @@ function startNoliTracking()
             scanForOtherNolis()
         end
     end)
-endfunction stopNoliTracking()
+end
+
+function stopNoliTracking()
     if noliUpdateConnection then
         noliUpdateConnection:Disconnect()
         noliUpdateConnection = nil
