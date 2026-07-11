@@ -4,7 +4,7 @@
 --  - Green highlight for other players
 --  - Names above characters
 --  - Health bars using Humanoid.Attributes.Health
---  - Aimbot (hold right click to aim at closest target)
+--  - Aimbot (hold right click to aim at closest NPC ONLY)
 --  - Wall check
 -- ============================================================
 
@@ -82,6 +82,13 @@ local function isPlayerCharacter(character)
         end
     end
     return false
+end
+
+-- ===== CHECK IF CHARACTER IS AN NPC =====
+local function isNPC(character)
+    if not character then return false end
+    if isLocalPlayerCharacter(character) then return false end
+    return not isPlayerCharacter(character)
 end
 
 -- ===== CHECK IF CHARACTER IS ALIVE =====
@@ -348,19 +355,21 @@ local function scanCharacters()
     end
 end
 
--- ===== AIMBOT FUNCTIONS =====
+-- ===== AIMBOT FUNCTIONS (NPC ONLY) =====
 local function getValidTargets()
     local targets = {}
     local charsFolder = getCharactersFolder()
     if not charsFolder then return targets end
     
     local mouseLocation = UserInputService:GetMouseLocation()
-    local viewportSize = Camera.ViewportSize
     
     for _, character in ipairs(charsFolder:GetChildren()) do
         if character:IsA("Model") then
             -- Skip self
             if isLocalPlayerCharacter(character) then continue end
+            
+            -- Skip players (NPC ONLY)
+            if isPlayerCharacter(character) then continue end
             
             -- Skip dead
             if not isCharacterAlive(character) then continue end
@@ -572,7 +581,7 @@ local TransparencySlider = MainTab:CreateSlider({
     end
 })
 
-MainTab:CreateSection("Aimbot")
+MainTab:CreateSection("Aimbot (NPCs ONLY)")
 
 local AimbotToggle = MainTab:CreateToggle({
     Name = "Enable Aimbot",
@@ -584,7 +593,7 @@ local AimbotToggle = MainTab:CreateToggle({
             startAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "Enabled - Hold Right Click to aim at closest target",
+                Content = "Enabled - Hold Right Click to aim at closest NPC (players excluded)",
                 Duration = 3,
             })
         else
@@ -676,7 +685,7 @@ MainTab:CreateParagraph({
               "Other Players → Green highlight\n" ..
               "Names appear above characters\n" ..
               "Health bars use Humanoid.Attributes.Health\n" ..
-              "Aimbot: Hold Right Click to aim\n" ..
+              "Aimbot targets NPCs ONLY (players excluded)\n" ..
               "Yourself is not highlighted"
 })
 
@@ -686,4 +695,4 @@ MainTab:CreateParagraph({
 
 Rayfield:LoadConfiguration()
 
-print("✅ Highlighter loaded - NPCs red, Players green, Health bars, Aimbot")
+print("✅ Highlighter loaded - NPCs red, Players green, Health bars, Aimbot (NPCs only)")
