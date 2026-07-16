@@ -13,7 +13,7 @@
 -- FIXED: Shockwave detection now case-insensitive ("Shockwave" or "shockwave")
 -- FIXED: Noli animation IDs updated with missing animations
 -- FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found
--- ADDED: Noob Ability Tracker (Bloxy Cola 50s, Slateskin Potion 55s, Ghostburger 45s)
+-- ADDED: Noob Ability Tracker (Bloxy Cola 50s, Slateskin Potion 55s, Ghostburger 45s) - MERGED with Survivors
 -- FIXED: Noob Slateskin Active timer (6s) with early cancel detection via Torso color
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -462,7 +462,6 @@ nosferatuHunterFeastTracked = {}
 nosferatuUpdateConnection = nil
 
 -- Noob Tracker Variables
-noobTrackerEnabled = false
 noobActiveCooldownTimers = {}
 noobSlateskinActive = false
 noobSlateskinWasActive = false
@@ -471,6 +470,7 @@ noobLastTriggerTime = {}
 noobSlateskinConnection = nil
 noobUpdateConnection = nil
 NOOB_ANTI_SPAM_TIME = 2
+noobTrackerEnabled = false  -- Now controlled by CooldownTrackerToggle
 
 -- Ability Cooldown Tracker Variables
 cooldownTrackerEnabled = false
@@ -518,7 +518,6 @@ abilityWarnerUpdateConnection = nil
 GuestToggle = nil
 SevenNToggle = nil
 twoTimeBackstabToggle = nil
-noobTrackerToggle = nil
 
 -- Performance Caches
 cachedBlockBtn = nil
@@ -843,9 +842,7 @@ local function amIElliot()
         end
     end
     return false, nil
-end
-
-local function amIDusekkar()
+endlocal function amIDusekkar()
     if SurvivorsFolder then
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
             if survivor.Name == "Dusekkar" then
@@ -1939,7 +1936,7 @@ local function createNoobCooldownDisplay(noob, cooldownEndTime, abilityName)
     local hrp = noob:FindFirstChild("HumanoidRootPart") or noob:FindFirstChild("Head") or noob:FindFirstChild("Torso")
     if not hrp then return end
     
-    -- Assign unique offsets
+    -- Assign unique offsets (same as other survivors)
     local offsetY = 3
     if abilityName == "Bloxy Cola" then offsetY = 3
     elseif abilityName == "Slateskin Active" or abilityName == "Slateskin Potion" then offsetY = 5
@@ -2070,7 +2067,7 @@ local function listenForNoobAbilities(noob)
         if not animator then return end
         
         animator.AnimationPlayed:Connect(function(animationTrack)
-            if not noobTrackerEnabled then return end
+            if not cooldownTrackerEnabled then return end  -- Now controlled by survivor tracker
             
             local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
             if not animId then return end
@@ -2174,7 +2171,7 @@ end
 local function startNoobSlateskinLoop()
     if noobSlateskinConnection then return end
     noobSlateskinConnection = RunService.Heartbeat:Connect(function()
-        if not noobTrackerEnabled then return end
+        if not cooldownTrackerEnabled then return end  -- Now controlled by survivor tracker
         local noob = getNoobCharacter()
         if noob then
             checkNoobSlateskinStatus(noob)
@@ -2200,7 +2197,7 @@ function startNoobTracking()
     startNoobSlateskinLoop()
     
     noobUpdateConnection = RunService.Heartbeat:Connect(function()
-        if noobTrackerEnabled then
+        if cooldownTrackerEnabled then  -- Now controlled by survivor tracker
             scanForAllNoobs()
         end
     end)
@@ -3324,8 +3321,7 @@ local function checkSpecialKillerActions()
             if not isLocalPlayer(shedletsky) then
                 local shedletskyHrp = shedletsky:FindFirstChild("HumanoidRootPart")
                 if shedletskyHrp then
-                    local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude
-                    if distance <= 20 then
+                    local distance = (shedletskyHrp.Position - myRoot.Position).Magnitude                    if distance <= 20 then
                         for _, sound in ipairs(shedletsky:GetDescendants()) do
                             if sound:IsA("Sound") and sound.IsPlaying then
                                 local soundId = extractNumericSoundId(sound)
@@ -4994,7 +4990,10 @@ local function listenForC00lkiddAbilities(c00lkidd)
             if not animator then return end
             
             animator.AnimationPlayed:Connect(function(animationTrack)
+                if not c00lkiddTrackerEnabled then return end
+                
                 local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+                if not animId then return end
                 
                 for _, id in ipairs(CORRUPT_NATURE_ANIMATIONS) do
                     if animId == id then
@@ -5824,8 +5823,49 @@ VisualsTab = Window:CreateTab("Visuals", 4483362458)
 
 VisualsTab:CreateToggle({ Name = "Show Stun Immune Indicator", CurrentValue = false, Flag = "StunImmuneToggle", Callback = function(Value) stunImmuneEnabled = Value; if Value then if KillersFolder then for _, killer in ipairs(KillersFolder:GetChildren()) do local hrp = killer:FindFirstChild("HumanoidRootPart") if hrp then local billboard = hrp:FindFirstChild("StunImmuneBillboard") if billboard then billboard:Destroy() end end end end; startStunImmuneLoop(); setupStunImmuneListeners(); SendNotif("Stun Immune", "Enabled - Shows STUN IMMUNE below stunned killers", 2) else if stunImmuneLoop then task.cancel(stunImmuneLoop); stunImmuneLoop = nil end; if KillersFolder then for _, killer in ipairs(KillersFolder:GetChildren()) do local hrp = killer:FindFirstChild("HumanoidRootPart") if hrp then local billboard = hrp:FindFirstChild("StunImmuneBillboard") if billboard then billboard:Destroy() end end end end; SendNotif("Stun Immune", "Disabled", 1) end end })
 
-CooldownTrackerToggle = VisualsTab:CreateToggle({ Name = "Show Ability Cooldowns (Survivors)", CurrentValue = false, Flag = "ShowCooldowns", Callback = function(Value) cooldownTrackerEnabled = Value; if Value then scanForAllCooldownSurvivors(); watchForNewCooldownSurvivors(); task.spawn(function() while cooldownTrackerEnabled do task.wait(5); scanForAllCooldownSurvivors() end end); SendNotif("Cooldown Tracker", "Enabled - Tracking survivor ability cooldowns", 2) else for survivor, data in pairs(activeCooldownTimers) do if data.billboard then pcall(function() data.billboard:Destroy() end) end; if data.connection then data.connection:Disconnect() end; if survivor then survivor:SetAttribute("CooldownListener", nil) end end; activeCooldownTimers = {}; lastGuest1337Trigger = {}; lastChanceTrigger = {}; SendNotif("Cooldown Tracker", "Disabled", 1) end end })
+-- ===== SURVIVOR COOLDOWN TRACKER (INCLUDES NOOB) =====
+CooldownTrackerToggle = VisualsTab:CreateToggle({
+    Name = "Show Ability Cooldowns (Survivors)",
+    CurrentValue = false,
+    Flag = "ShowCooldowns",
+    Callback = function(Value)
+        cooldownTrackerEnabled = Value
+        if Value then
+            -- Regular survivors
+            scanForAllCooldownSurvivors()
+            watchForNewCooldownSurvivors()
+            
+            -- Noob (also a survivor)
+            noobTrackerEnabled = Value
+            startNoobTracking()
+            
+            task.spawn(function()
+                while cooldownTrackerEnabled do
+                    task.wait(5)
+                    scanForAllCooldownSurvivors()
+                end
+            end)
+            SendNotif("Cooldown Tracker", "Enabled - Tracking survivor & Noob ability cooldowns", 2)
+        else
+            -- Stop regular survivors
+            for survivor, data in pairs(activeCooldownTimers) do
+                if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                if data.connection then data.connection:Disconnect() end
+                if survivor then survivor:SetAttribute("CooldownListener", nil) end
+            end
+            activeCooldownTimers = {}
+            lastGuest1337Trigger = {}
+            lastChanceTrigger = {}
+            
+            -- Stop Noob
+            stopNoobTracking()
+            
+            SendNotif("Cooldown Tracker", "Disabled", 1)
+        end
+    end
+})
 
+-- ===== KILLER COOLDOWN TRACKER =====
 KillerCooldownToggle = VisualsTab:CreateToggle({
     Name = "Show Ability Cooldowns (Killers)",
     CurrentValue = false,
@@ -5845,24 +5885,7 @@ KillerCooldownToggle = VisualsTab:CreateToggle({
         if Value then startJohnDoeTracking() else stopJohnDoeTracking() end
         nosferatuTrackerEnabled = Value
         if Value then startNosferatuTracking() else stopNosferatuTracking() end
-        SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer (with Blood Hunt reset & Blood Orb reduction), Noli, c00lkidd, John Doe & Nosferatu abilities" or "Disabled", 2) 
-    end
-})
-
--- ===== NOOB TRACKER (VISUALS TAB) =====
-NoobTrackerToggle = VisualsTab:CreateToggle({
-    Name = "Show Noob Ability Cooldowns",
-    CurrentValue = false,
-    Flag = "NoobCooldownToggle",
-    Callback = function(Value)
-        noobTrackerEnabled = Value
-        if Value then
-            startNoobTracking()
-            SendNotif("Noob Tracker", "Enabled - Tracking Bloxy Cola, Slateskin, Ghostburger", 2)
-        else
-            stopNoobTracking()
-            SendNotif("Noob Tracker", "Disabled", 1)
-        end
+        SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer, Noli, c00lkidd, John Doe & Nosferatu abilities" or "Disabled", 2) 
     end
 })
 
@@ -6100,4 +6123,4 @@ print("ADDED: Nosferatu Ability Cooldowns - Bloodhook 25s, Cataclysm 23s, Hunter
 print("FIXED: Shockwave detection is now case-insensitive ('Shockwave' or 'shockwave')")
 print("FIXED: Noli animation IDs updated with missing animations (15 instant, 5 startup, 5 cancel)")
 print("FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found")
-print("ADDED: Noob Ability Tracker - Bloxy Cola 50s, Slateskin Potion 55s (with 6s Active timer), Ghostburger 45s")
+print("ADDED: Noob Ability Tracker - Bloxy Cola 50s, Slateskin Potion 55s (with 6s Active timer), Ghostburger 45s - MERGED with Survivors")
