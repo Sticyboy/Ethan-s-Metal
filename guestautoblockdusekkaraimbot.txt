@@ -15,6 +15,7 @@
 -- FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found
 -- ADDED: Noob Ability Tracker (Bloxy Cola 50s, Slateskin Potion 55s, Ghostburger 45s) - MERGED with Survivors
 -- FIXED: Noob Slateskin Active timer (6s) with early cancel detection via Torso color
+-- ADDED: Azure Support - Beast form only (Q + E) with aimbot (Normal form has no Q aimbot)
 
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -377,6 +378,11 @@ aimbotActive = false
 aimbotActiveTimer = nil
 aimbotTargetCount = 0
 aimbotPredictionMultiplier = 1
+
+-- Azure specific (Beast form only)
+azureBeastQDuration = 0.8
+azureBeastEDuration = 1.0
+
 -- Shiftlock tracking
 shiftlockWasEnabled = false
 shiftlockWasAimbotActive = false
@@ -842,7 +848,8 @@ local function amIElliot()
         end
     end
     return false, nil
-endlocal function amIDusekkar()
+end
+local function amIDusekkar()
     if SurvivorsFolder then
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
             if survivor.Name == "Dusekkar" then
@@ -884,6 +891,20 @@ local function amINosferatu()
     return false
 end
 
+local function amIAzure()
+    if KillersFolder then
+        for _, killer in ipairs(KillersFolder:GetChildren()) do
+            if killer.Name == "Azure" or killer.Name == "@Azure" then
+                local usernameAttr = killer:GetAttribute("Username")
+                if usernameAttr and usernameAttr == lp.Name then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function getAllCharactersByName(name)
     local characters = {}
     if name == "Guest1337" or name == "Shedletsky" or name == "TwoTime" or name == "Chance" or name == "JaneDoe" or name == "Elliot" or name == "007n7" or name == "7n7" then
@@ -894,7 +915,7 @@ local function getAllCharactersByName(name)
                 end
             end
         end
-    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "Sixer" or name == "Noli" or name == "c00lkidd" or name == "Nosferatu" then
+    elseif name == "Slasher" or name == "JohnDoe" or name == "1x1x1x1" or name == "Sixer" or name == "Noli" or name == "c00lkidd" or name == "Nosferatu" or name == "Azure" or name == "@Azure" then
         if KillersFolder then
             for _, killer in ipairs(KillersFolder:GetChildren()) do
                 if killer.Name == name then
@@ -904,6 +925,57 @@ local function getAllCharactersByName(name)
         end
     end
     return characters
+end
+
+-- ===== AZURE FORM DETECTION =====
+local function isAzure()
+    return amIAzure()
+end
+
+local function getAzureForm()
+    if not isAzure() then return nil end
+    
+    local abilityContainer = PlayerGui and PlayerGui:FindFirstChild("MainUI")
+    if abilityContainer then
+        abilityContainer = abilityContainer:FindFirstChild("AbilityContainer")
+        if abilityContainer then
+            local unravel = abilityContainer:FindFirstChild("Unravel")
+            if unravel then
+                local abilityName = unravel:FindFirstChild("AbilityName")
+                if abilityName then
+                    local text = abilityName.Text or ""
+                    if text == "Inflorescence" or text == "Control" then
+                        return "Normal"
+                    elseif text == "Burrowing" then
+                        return "Beast"
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- ===== AZURE BEAST Q COOLDOWN CHECK =====
+local function isAzureBeastQReady()
+    if not isAzure() then return false end
+    if getAzureForm() ~= "Beast" then return false end
+    
+    local abilityContainer = PlayerGui and PlayerGui:FindFirstChild("MainUI")
+    if abilityContainer then
+        abilityContainer = abilityContainer:FindFirstChild("AbilityContainer")
+        if abilityContainer then
+            local burrowing = abilityContainer:FindFirstChild("Burrowing")
+            if burrowing then
+                local cooldownTime = burrowing:FindFirstChild("CooldownTime")
+                if cooldownTime then
+                    local text = cooldownTime.Text or ""
+                    return text == "" or text == "0" or text == "0.0" or text == "0.1"
+                end
+            end
+        end
+    end
+    return true
 end
 
 -- ===== INVENTORY ESP FUNCTIONS =====
@@ -3609,7 +3681,7 @@ function setupStunImmuneListeners()
     end)
 end
 
--- ===== INPUT HOOK FOR AIMBOT =====
+-- ===== INPUT HOOK FOR AIMBOT (WITH AZURE SUPPORT - BEAST ONLY, NO NOTIFICATIONS) =====
 function setupInputHook()
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
@@ -3627,6 +3699,9 @@ function setupInputHook()
         local isSixer = (myTeam == "Killer" and myCharacter == "Sixer")
         local isc00lkidd = (myTeam == "Killer" and myCharacter == "c00lkidd")
         local isNoli = (myTeam == "Killer" and myCharacter == "Noli")
+        local isAzure = (myTeam == "Killer" and (myCharacter == "Azure" or myCharacter == "@Azure"))
+        
+        -- M1 (Left Click) - Azure included
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if not aimbotEnabled then return end
             if myTeam == "Killer" then
@@ -3651,6 +3726,9 @@ function setupInputHook()
                     elseif myCharacter == "Sixer" then
                         local carvingSlash = abilityContainer:FindFirstChild("Carving Slash")
                         if carvingSlash then cooldownTime = carvingSlash:FindFirstChild("CooldownTime") end
+                    elseif isAzure then
+                        local slash = abilityContainer:FindFirstChild("Slash")
+                        if slash then cooldownTime = slash:FindFirstChild("CooldownTime") end
                     end
                     if cooldownTime then
                         local contentText = cooldownTime.ContentText
@@ -3665,8 +3743,30 @@ function setupInputHook()
                 startGeneralAimbot(0.65)
             end
         end
+        
+        -- Q Key
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Q then
             if not aimbotEnabled then return end
+            
+            -- Azure Q handling (BEAST FORM ONLY - Normal form does NOTHING, no notifications)
+            if isAzure then
+                local form = getAzureForm()
+                if form == "Beast" then
+                    -- Beast Azure Q: Burrowing
+                    if not isAzureBeastQReady() then
+                        return
+                    end
+                    local targets = getValidTargets()
+                    if #targets == 0 then 
+                        return 
+                    end
+                    startGeneralAimbot(azureBeastQDuration)
+                end
+                -- Normal form: do absolutely nothing (no notifications)
+                return
+            end
+            
+            -- Other killers Q
             if isTwoTime then
                 if not isTwoTimeDaggerReady() then SendNotif("TwoTime", "Dagger is on cooldown!", 1); return end
                 local targetKiller = getNearestKiller()
@@ -3689,8 +3789,26 @@ function setupInputHook()
             elseif isSlasher then startGeneralAimbot(0.95)
             elseif isElliot then startGeneralAimbot(0.5) end
         end
+        
+        -- E Key
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.E then
             if not aimbotEnabled then return end
+            
+            -- Azure E handling (BEAST FORM ONLY - Normal form does NOTHING, no notifications)
+            if isAzure then
+                local form = getAzureForm()
+                if form == "Beast" then
+                    local targets = getValidTargets()
+                    if #targets == 0 then 
+                        return 
+                    end
+                    startGeneralAimbot(azureBeastEDuration)
+                end
+                -- Normal form: do absolutely nothing (no notifications)
+                return
+            end
+            
+            -- Other killers E
             if isc00lkidd then startGeneralAimbot(0.6)
             elseif isSixer then startGeneralAimbot(1.0)
             elseif isChance then startGeneralAimbot(1.1)
@@ -3698,6 +3816,8 @@ function setupInputHook()
             elseif isSlasher then startGeneralAimbot(0.5)
             elseif isJaneDoe then startGeneralAimbot(0.9) end
         end
+        
+        -- R Key
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.R then
             if not aimbotEnabled then return end
             if isGuest1337 then startGeneralAimbot(0.95) end
@@ -3938,8 +4058,7 @@ local function setupSlasherEnrageTracking(slasher)
             local ragingPace = ragingPaceAttachment:FindFirstChild("RagingPace")
             if ragingPace and ragingPace:IsA("ParticleEmitter") then
                 ragingPace:GetPropertyChangedSignal("Enabled"):Connect(updateEnrageState)
-            end
-        end
+            end        end
     end
     if head then
         local ragingPace = head:FindFirstChild("RagingPace")
@@ -5818,6 +5937,7 @@ AimbotTab:CreateSlider({ Name = "Max Distance", Range = {10,200}, Increment = 5,
 FOVModeToggle = AimbotTab:CreateToggle({ Name = "FOV Mode (ON) / Nearest Mode (OFF)", CurrentValue = true, Flag = "FOVModeToggle", Callback = function(Value) aimbotUseFOV = Value; if aimbotEnabled then if Value then createFOVCircle(); SendNotif("Target Mode", "Using FOV circle for target selection", 2) else if aimbotFOVCircle then pcall(function() aimbotFOVCircle:Destroy() end); aimbotFOVCircle = nil end; SendNotif("Target Mode", "Using nearest target (ignores FOV)", 2) end end end })
 AimbotTab:CreateSlider({ Name = "Field of View Size", Range = {30,360}, Increment = 5, Suffix = "degrees", CurrentValue = 90, Flag = "AimbotFOV", Callback = function(Value) aimbotFOV = Value; if aimbotEnabled and aimbotUseFOV then createFOVCircle() end end })
 
+
 -- ===== VISUALS TAB =====
 VisualsTab = Window:CreateTab("Visuals", 4483362458)
 
@@ -6124,3 +6244,5 @@ print("FIXED: Shockwave detection is now case-insensitive ('Shockwave' or 'shock
 print("FIXED: Noli animation IDs updated with missing animations (15 instant, 5 startup, 5 cancel)")
 print("FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found")
 print("ADDED: Noob Ability Tracker - Bloxy Cola 50s, Slateskin Potion 55s (with 6s Active timer), Ghostburger 45s - MERGED with Survivors")
+print("ADDED: Azure Support - Beast form only (Q + E) with aimbot - Normal form has NO aimbot")
+print("Azure Beast Q: " .. azureBeastQDuration .. "s | Azure Beast E: " .. azureBeastEDuration .. "s")
