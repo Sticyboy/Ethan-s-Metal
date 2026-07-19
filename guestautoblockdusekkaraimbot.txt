@@ -434,12 +434,14 @@ SmoothShiftLock = nil
 shiftlockLoaded = false
 
 -- ===== ESP DATA =====
-highlightingEnabled = false
+playerESPEnabled = false
+generatorESPEnabled = false
 itemHighlightEnabled = false
 trapHighlightEnabled = false
 sprayHighlightEnabled = false
 espScanConnection = nil
 hpUpdateConnection = nil
+generatorUpdateConnection = nil
 staminaConnection = nil
 modulesDeleted = false
 healthGlitchFrameDeleted = false
@@ -769,11 +771,11 @@ local function getCharacterName(character)
     return character.Name
 end
 
+-- ===== GENERATOR ESP FUNCTIONS =====
 local function removeGeneratorESP(generator)
     if generatorData[generator] then
         if generatorData[generator].highlight then generatorData[generator].highlight:Destroy() end
         if generatorData[generator].billboard then generatorData[generator].billboard:Destroy() end
-        if generatorData[generator].textLabel then generatorData[generator].textLabel:Destroy() end
         generatorData[generator] = nil
     end
     if generator._progressConnection then
@@ -782,24 +784,59 @@ local function removeGeneratorESP(generator)
     end
 end
 
-local function removeTrapSprayESP(obj)
-    if trapSprayData[obj] then
-        if trapSprayData[obj].highlight then trapSprayData[obj].highlight:Destroy() end
-        if trapSprayData[obj].billboard then trapSprayData[obj].billboard:Destroy() end
-        trapSprayData[obj] = nil
+local function setupGeneratorESP(generator)
+    if not generatorESPEnabled then return end
+    if generatorData[generator] then return end
+    
+    -- Check if generator has Progress and it's not complete
+    if not generator:FindFirstChild("Progress") or generator.Progress.Value >= 100 then return end
+    
+    -- Use the generator itself as the model
+    local generatorModel = generator
+    
+    -- Create highlight on the generator
+    local h = Instance.new("Highlight", generatorModel)
+    h.FillColor = generatorHighlightColor
+    h.FillTransparency = 0.7
+    h.OutlineTransparency = 0.6
+    
+    -- Create billboard on the generator
+    local billboard = Instance.new("BillboardGui", generatorModel)
+    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.new(1, 1, 1)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    textLabel.TextSize = 14
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Text = string.format("%d%%", generator.Progress.Value)
+    textLabel.Parent = billboard
+    
+    generatorData[generator] = { highlight = h, billboard = billboard, textLabel = textLabel, generatorModel = generatorModel }
+    
+    -- Connect to Progress changes
+    if not generator._progressConnection then
+        generator._progressConnection = generator.Progress.Changed:Connect(function()
+            if not generatorESPEnabled then return end
+            if generator.Progress.Value >= 100 then
+                removeGeneratorESP(generator)
+                if generator._progressConnection then
+                    generator._progressConnection:Disconnect()
+                    generator._progressConnection = nil
+                end
+            elseif generatorData[generator] and generatorData[generator].textLabel then
+                generatorData[generator].textLabel.Text = string.format("%d%%", generator.Progress.Value)
+            end
+        end)
     end
 end
 
-local function removeItemESP(obj)
-    if itemData[obj] then
-        if itemData[obj].highlight then
-            for _, h in ipairs(itemData[obj].highlight) do h:Destroy() end
-        end
-        if itemData[obj].billboard then itemData[obj].billboard:Destroy() end
-        itemData[obj] = nil
-    end
-end
-
+-- ===== PLAYER ESP FUNCTIONS =====
 local function removePlayerESP(character)
     if espData[character] then
         if espData[character].billboard then espData[character].billboard:Destroy() end
@@ -868,59 +905,84 @@ local function setupPlayerESP(character, color, isKiller)
     end
 end
 
-local function setupGeneratorESP(generator)
-    if not highlightingEnabled then return end
-    if generatorData[generator] then return end
+-- ===== ITEM ESP FUNCTIONS =====
+local function removeItemESP(obj)
+    if itemData[obj] then
+        if itemData[obj].highlight then
+            for _, h in ipairs(itemData[obj].highlight) do h:Destroy() end
+        end
+        if itemData[obj].billboard then itemData[obj].billboard:Destroy() end
+        itemData[obj] = nil
+    end
+end
+
+local function setupItemESP(itemModel)
+    if not itemHighlightEnabled then return end
+    if itemData[itemModel] then return end
     
-    -- Check if generator has Progress and it's not complete
-    if not generator:FindFirstChild("Progress") or generator.Progress.Value >= 100 then return end
+    local itemName = itemModel.Name
+    local highlightParts = {}
     
-    -- Find the generator model (the actual visual part)
-    local generatorModel = generator:FindFirstChild("Instances") and generator.Instances:FindFirstChild("Generator")
-    if not generatorModel then 
-        -- If no Instances/Generator, use the generator itself
-        generatorModel = generator
+    -- Highlight all parts of the item
+    for _, child in ipairs(itemModel:GetChildren()) do
+        if child:IsA("BasePart") then
+            local h = Instance.new("Highlight", child)
+            h.FillColor = itemHighlightColor
+            h.FillTransparency = 0.7
+            h.OutlineTransparency = 0.6
+            table.insert(highlightParts, h)
+        end
     end
     
-    -- Create highlight
-    local h = Instance.new("Highlight", generatorModel)
-    h.FillColor = generatorHighlightColor
-    h.FillTransparency = 0.7
-    h.OutlineTransparency = 0.6
+    -- Find the highest point on the item for the billboard
+    local attachPart = nil
+    local highestY = -math.huge
     
-    -- Create billboard on the generator model
-    local billboard = Instance.new("BillboardGui", generatorModel)
-    billboard.Size = UDim2.new(0, 100, 0, 30)
-    billboard.StudsOffset = Vector3.new(0, 2, 0)
-    billboard.AlwaysOnTop = true
-    
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.TextColor3 = Color3.new(1, 1, 1)
-    textLabel.TextStrokeTransparency = 0
-    textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-    textLabel.TextSize = 14
-    textLabel.Font = Enum.Font.GothamBold
-    textLabel.Text = string.format("%d%%", generator.Progress.Value)
-    textLabel.Parent = billboard
-    
-    generatorData[generator] = { highlight = h, billboard = billboard, textLabel = textLabel, generatorModel = generatorModel }
-    
-    -- Connect to Progress changes
-    if not generator._progressConnection then
-        generator._progressConnection = generator.Progress.Changed:Connect(function()
-            if not highlightingEnabled then return end
-            if generator.Progress.Value >= 100 then
-                removeGeneratorESP(generator)
-                if generator._progressConnection then
-                    generator._progressConnection:Disconnect()
-                    generator._progressConnection = nil
-                end
-            elseif generatorData[generator] and generatorData[generator].textLabel then
-                generatorData[generator].textLabel.Text = string.format("%d%%", generator.Progress.Value)
+    for _, child in ipairs(itemModel:GetChildren()) do
+        if child:IsA("BasePart") then
+            local pos = child.Position
+            if pos.Y > highestY then
+                highestY = pos.Y
+                attachPart = child
             end
-        end)
+        end
+    end
+    
+    if not attachPart then
+        attachPart = itemModel:FindFirstChildOfClass("BasePart")
+    end
+    
+    if attachPart then
+        -- Create billboard with item name and color
+        local billboard = Instance.new("BillboardGui", attachPart)
+        billboard.Name = "ItemLabel"
+        billboard.Size = UDim2.new(0, 120, 0, 25)
+        billboard.StudsOffset = Vector3.new(0, 1.5, 0)
+        billboard.AlwaysOnTop = true
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = itemName
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        textLabel.TextSize = 14
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.Parent = billboard
+        
+        itemData[itemModel] = { highlight = highlightParts, billboard = billboard, textLabel = textLabel }
+    else
+        -- If no base part found, just store the highlights
+        itemData[itemModel] = { highlight = highlightParts, billboard = nil, textLabel = nil }
+    end
+end
+
+local function removeTrapSprayESP(obj)
+    if trapSprayData[obj] then
+        if trapSprayData[obj].highlight then trapSprayData[obj].highlight:Destroy() end
+        if trapSprayData[obj].billboard then trapSprayData[obj].billboard:Destroy() end
+        trapSprayData[obj] = nil
     end
 end
 
@@ -955,81 +1017,87 @@ local function setupTrapSprayESP(obj, isSpray)
     end
 end
 
-local function setupItemESP(itemModel)
-    if not itemHighlightEnabled then return end
-    if itemData[itemModel] then return end
-    local itemName = itemModel.Name
-    local highlightParts = {}
-    for _, child in ipairs(itemModel:GetChildren()) do
-        if child:IsA("BasePart") then
-            local h = Instance.new("Highlight", child)
-            h.FillColor = itemHighlightColor
-            h.FillTransparency = 0.7
-            h.OutlineTransparency = 0.6
-            table.insert(highlightParts, h)
+-- ===== SCAN FUNCTIONS =====
+local function scanPlayers()
+    if not playerESPEnabled then return end
+    pcall(function()
+        local playersFolder = Workspace:FindFirstChild("Players")
+        if not playersFolder then return end
+        
+        local survivorsFolder = playersFolder:FindFirstChild("Survivors")
+        local killersFolder = playersFolder:FindFirstChild("Killers")
+        
+        local seenPlayers = {}
+        
+        if survivorsFolder then
+            for _, obj in ipairs(survivorsFolder:GetChildren()) do
+                seenPlayers[obj] = true
+                if not espData[obj] then setupPlayerESP(obj, survivorHighlightColor, false) end
+            end
         end
-    end
-    local attachPart = itemModel:FindFirstChildOfClass("BasePart")
-    if attachPart then
-        local billboard = Instance.new("BillboardGui", attachPart)
-        billboard.Name = "ItemLabel"
-        billboard.Size = UDim2.new(0, 100, 0, 25)
-        billboard.StudsOffset = Vector3.new(0, 2, 0)
-        billboard.AlwaysOnTop = true
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(1, 0, 1, 0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.Text = itemName
-        textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-        textLabel.TextStrokeTransparency = 0
-        textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        textLabel.TextSize = 14
-        textLabel.Font = Enum.Font.GothamBold
-        textLabel.Parent = billboard
-        itemData[itemModel] = { highlight = highlightParts, billboard = billboard, textLabel = textLabel }
-    end
+        if killersFolder then
+            for _, obj in ipairs(killersFolder:GetChildren()) do
+                seenPlayers[obj] = true
+                if not espData[obj] then setupPlayerESP(obj, killerHighlightColor, true) end
+            end
+        end
+        
+        for obj, _ in pairs(espData) do
+            if not seenPlayers[obj] or not obj.Parent then
+                removePlayerESP(obj)
+            end
+        end
+    end)
+end
+
+local function scanGenerators()
+    if not generatorESPEnabled then return end
+    pcall(function()
+        local ingame = Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("Ingame")
+        if not ingame then return end
+        
+        local mapFolder = ingame:FindFirstChild("Map")
+        if not mapFolder then return end
+        
+        local seenGenerators = {}
+        
+        for _, obj in ipairs(mapFolder:GetChildren()) do
+            if obj.Name == "Generator" then
+                seenGenerators[obj] = true
+                if obj.Progress and obj.Progress.Value < 100 then
+                    if not generatorData[obj] then 
+                        setupGeneratorESP(obj)
+                    end
+                else
+                    removeGeneratorESP(obj)
+                end
+            end
+        end
+        
+        for obj, _ in pairs(generatorData) do
+            if not seenGenerators[obj] or not obj.Parent then
+                removeGeneratorESP(obj)
+            end
+        end
+    end)
 end
 
 local function scanAll()
-    if not highlightingEnabled then return end
-    pcall(function()
-        local playersFolder = Workspace:FindFirstChild("Players")
-        local ingame = Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("Ingame")
-        local seenPlayers, seenGenerators, seenTraps, seenItems = {}, {}, {}, {}
-        if playersFolder then
-            local survivorsFolder = playersFolder:FindFirstChild("Survivors")
-            local killersFolder = playersFolder:FindFirstChild("Killers")
-            if survivorsFolder then
-                for _, obj in ipairs(survivorsFolder:GetChildren()) do
-                    seenPlayers[obj] = true
-                    if not espData[obj] then setupPlayerESP(obj, survivorHighlightColor, false) end
-                end
-            end
-            if killersFolder then
-                for _, obj in ipairs(killersFolder:GetChildren()) do
-                    seenPlayers[obj] = true
-                    if not espData[obj] then setupPlayerESP(obj, killerHighlightColor, true) end
-                end
-            end
-        end
-        if ingame then
-            local mapFolder = ingame:FindFirstChild("Map")
-            if mapFolder then
-                for _, obj in ipairs(mapFolder:GetChildren()) do
-                    if obj.Name == "Generator" then
-                        seenGenerators[obj] = true
-                        if obj.Progress and obj.Progress.Value < 100 then
-                            if not generatorData[obj] then setupGeneratorESP(obj) end
-                        else
-                            removeGeneratorESP(obj)
-                        end
-                    end
-                end
-            end
+    scanPlayers()
+    scanGenerators()
+    
+    -- Items, traps, sprays
+    if itemHighlightEnabled or trapHighlightEnabled or sprayHighlightEnabled then
+        pcall(function()
+            local ingame = Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("Ingame")
+            if not ingame then return end
+            
+            local seenTraps, seenItems = {}, {}
             local allDescendants = ingame:GetDescendants()
             local trapNames = { ["BuildermanSentry"] = true, ["BuildermanDispenser"] = true, ["SubspaceTripmine"] = true }
             local itemNames = {}
             for _, name in ipairs(Items) do itemNames[name] = true end
+            
             for _, obj in ipairs(allDescendants) do
                 if obj:IsA("Model") then
                     local lowerName = string.lower(obj.Name)
@@ -1045,28 +1113,33 @@ local function scanAll()
                     end
                 end
             end
-        end
-        for obj, _ in pairs(espData) do if not seenPlayers[obj] or not obj.Parent then removePlayerESP(obj) end end
-        for obj, _ in pairs(generatorData) do if not seenGenerators[obj] or not obj.Parent then removeGeneratorESP(obj) end end
-        for obj, _ in pairs(trapSprayData) do if not seenTraps[obj] or not obj.Parent then removeTrapSprayESP(obj) end end
-        for obj, _ in pairs(itemData) do if not seenItems[obj] or not obj.Parent then removeItemESP(obj) end end
-    end)
+            
+            for obj, _ in pairs(trapSprayData) do if not seenTraps[obj] or not obj.Parent then removeTrapSprayESP(obj) end end
+            for obj, _ in pairs(itemData) do if not seenItems[obj] or not obj.Parent then removeItemESP(obj) end end
+        end)
+    end
 end
 
+-- ===== START/STOP ESP FUNCTIONS =====
 local function startESP()
-    if espScanConnection or hpUpdateConnection then return end
+    if espScanConnection then espScanConnection:Disconnect(); espScanConnection = nil end
+    if hpUpdateConnection then hpUpdateConnection:Disconnect(); hpUpdateConnection = nil end
+    if generatorUpdateConnection then generatorUpdateConnection:Disconnect(); generatorUpdateConnection = nil end
+    
     scanAll()
+    
     local timeElapsed = 0
     espScanConnection = RunService.Heartbeat:Connect(function(deltaTime)
-        if not highlightingEnabled then return end
+        if not playerESPEnabled and not generatorESPEnabled then return end
         timeElapsed = timeElapsed + deltaTime
         if timeElapsed >= 1 then
             timeElapsed = 0
             scanAll()
         end
     end)
+    
     hpUpdateConnection = RunService.Heartbeat:Connect(function()
-        if not highlightingEnabled then return end
+        if not playerESPEnabled then return end
         for character, data in pairs(espData) do
             if character and character.Parent then
                 if data.hasHP then
@@ -1080,11 +1153,26 @@ local function startESP()
             end
         end
     end)
+    
+    generatorUpdateConnection = RunService.Heartbeat:Connect(function()
+        if not generatorESPEnabled then return end
+        for generator, data in pairs(generatorData) do
+            if generator and generator.Parent and generator:FindFirstChild("Progress") then
+                if data.textLabel then
+                    data.textLabel.Text = string.format("%d%%", generator.Progress.Value)
+                end
+            else
+                removeGeneratorESP(generator)
+            end
+        end
+    end)
 end
 
 local function stopESP()
-    if espScanConnection then espScanConnection:Disconnect() espScanConnection = nil end
-    if hpUpdateConnection then hpUpdateConnection:Disconnect() hpUpdateConnection = nil end
+    if espScanConnection then espScanConnection:Disconnect(); espScanConnection = nil end
+    if hpUpdateConnection then hpUpdateConnection:Disconnect(); hpUpdateConnection = nil end
+    if generatorUpdateConnection then generatorUpdateConnection:Disconnect(); generatorUpdateConnection = nil end
+    
     for obj, _ in pairs(espData) do removePlayerESP(obj) end
     for obj, _ in pairs(generatorData) do removeGeneratorESP(obj) end
     for obj, _ in pairs(trapSprayData) do removeTrapSprayESP(obj) end
@@ -3873,25 +3961,45 @@ local EspTab = Window:CreateTab("ESP", 4483362458)
 
 EspTab:CreateSection("ESP Settings")
 
+-- Player ESP Toggle
 EspTab:CreateToggle({
-    Name = "Enable ESP",
-    Description = "Highlights players, killers, and generators with HP display",
+    Name = "Player ESP",
+    Description = "Highlights players and killers with HP display",
     CurrentValue = false,
-    Flag = "EnableESP",
+    Flag = "PlayerESP",
     Callback = function(Value)
-        highlightingEnabled = Value
-        if Value then
+        playerESPEnabled = Value
+        if Value or generatorESPEnabled then
             startESP()
-            SendNotif("ESP", "Enabled - Players, Killers & Generators highlighted", 2)
         else
             stopESP()
-            SendNotif("ESP", "Disabled", 1)
         end
+        SendNotif("Player ESP", Value and "Enabled" or "Disabled", 1)
     end
 })
 
 EspTab:CreateDivider()
 
+-- Generator ESP Toggle
+EspTab:CreateToggle({
+    Name = "Generator ESP",
+    Description = "Highlights generators with progress percentage",
+    CurrentValue = false,
+    Flag = "GeneratorESP",
+    Callback = function(Value)
+        generatorESPEnabled = Value
+        if Value or playerESPEnabled then
+            startESP()
+        else
+            stopESP()
+        end
+        SendNotif("Generator ESP", Value and "Enabled" or "Disabled", 1)
+    end
+})
+
+EspTab:CreateDivider()
+
+-- Item ESP Toggle
 EspTab:CreateToggle({
     Name = "Item ESP",
     Description = "Highlights items on the ground with labels (Medkit, BloxyCola)",
@@ -3910,6 +4018,7 @@ EspTab:CreateToggle({
 
 EspTab:CreateDivider()
 
+-- Trap ESP Toggle
 EspTab:CreateToggle({
     Name = "Trap ESP",
     Description = "Highlights traps (Sentry, Dispenser, Tripwire, SubspaceTripmine)",
@@ -3928,6 +4037,9 @@ EspTab:CreateToggle({
     end
 })
 
+EspTab:CreateDivider()
+
+-- Spray ESP Toggle
 EspTab:CreateToggle({
     Name = "Spray ESP",
     Description = "Highlights sprays",
@@ -3953,9 +4065,9 @@ EspTab:CreateColorPicker({
     Color = generatorHighlightColor,
     Callback = function(Value)
         generatorHighlightColor = Value
-        if highlightingEnabled then
-            stopESP()
-            startESP()
+        if generatorESPEnabled then
+            for obj, _ in pairs(generatorData) do removeGeneratorESP(obj) end
+            scanGenerators()
         end
     end
 })
@@ -3965,9 +4077,11 @@ EspTab:CreateColorPicker({
     Color = survivorHighlightColor,
     Callback = function(Value)
         survivorHighlightColor = Value
-        if highlightingEnabled then
-            stopESP()
-            startESP()
+        if playerESPEnabled then
+            for obj, _ in pairs(espData) do 
+                if not espData[obj].isKiller then removePlayerESP(obj) end
+            end
+            scanPlayers()
         end
     end
 })
@@ -3977,9 +4091,11 @@ EspTab:CreateColorPicker({
     Color = killerHighlightColor,
     Callback = function(Value)
         killerHighlightColor = Value
-        if highlightingEnabled then
-            stopESP()
-            startESP()
+        if playerESPEnabled then
+            for obj, _ in pairs(espData) do 
+                if espData[obj].isKiller then removePlayerESP(obj) end
+            end
+            scanPlayers()
         end
     end
 })
