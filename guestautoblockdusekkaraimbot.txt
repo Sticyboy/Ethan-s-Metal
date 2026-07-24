@@ -879,8 +879,7 @@ local function amINosferatu()
 end
 
 local function amIAzure()
-    if KillersFolder then
-        for _, killer in ipairs(KillersFolder:GetChildren()) do
+    if KillersFolder then        for _, killer in ipairs(KillersFolder:GetChildren()) do
             if killer.Name == "Azure" or killer.Name == "@Azure" then
                 local usernameAttr = killer:GetAttribute("Username")
                 if usernameAttr and usernameAttr == lp.Name then
@@ -1658,8 +1657,7 @@ local function bringBloodOrbsToPlayer()
                 if contentText then
                     local timeValue = contentText.Text
                     if timeValue ~= "0" and timeValue ~= "TIME'S UP" then return end
-                end
-            end
+                end            end
         end
     end
     local bloodOrbContainer = Workspace:FindFirstChild("Map")
@@ -1954,7 +1952,7 @@ function stopNosferatuTracking()
     nosferatuHunterFeastTracked = {}
 end
 
--- ===== NOOB ABILITY TRACKER FUNCTIONS =====
+-- ===== NOOB ABILITY TRACKER FUNCTIONS (FIXED) =====
 local function getNoobCharacter()
     local playersFolder = Workspace:FindFirstChild("Players")
     if not playersFolder then return nil end
@@ -1983,6 +1981,10 @@ end
 
 local function createNoobCooldownDisplay(noob, cooldownEndTime, abilityName)
     if not noob then return end
+    
+    -- Don't show cooldowns on local player
+    if isLocalPlayer(noob) then return end
+    
     if not noobActiveCooldownTimers[noob] then noobActiveCooldownTimers[noob] = {} end
     
     -- Remove existing timer for this ability
@@ -2049,6 +2051,9 @@ local function createNoobCooldownDisplay(noob, cooldownEndTime, abilityName)
 end
 
 local function startNoobSlateskinActiveTimer(noob)
+    -- Don't track local player
+    if isLocalPlayer(noob) then return end
+    
     -- Clear any existing Slateskin timers
     if noobActiveCooldownTimers[noob] then
         if noobActiveCooldownTimers[noob]["Slateskin Active"] then
@@ -2068,6 +2073,9 @@ local function startNoobSlateskinActiveTimer(noob)
 end
 
 local function startNoobSlateskinCooldown(noob)
+    -- Don't track local player
+    if isLocalPlayer(noob) then return end
+    
     -- Clear Active timer if running
     if noobActiveCooldownTimers[noob] and noobActiveCooldownTimers[noob]["Slateskin Active"] then
         destroyNoobTimer(noobActiveCooldownTimers[noob]["Slateskin Active"])
@@ -2080,7 +2088,7 @@ local function startNoobSlateskinCooldown(noob)
         noobLastTriggerTime["SlateskinPotion"] = now
         local endTime = now + NOOB_SLATESKIN_COOLDOWN
         createNoobCooldownDisplay(noob, endTime, "Slateskin Potion")
-        SendNotif("Noob", "Slateskin Potion ended - " .. NOOB_SLATESKIN_COOLDOWN .. "s cooldown", 1.5)
+        -- No notification
     end
 end
 
@@ -2113,6 +2121,7 @@ end
 
 local function listenForNoobAbilities(noob)
     if not noob then return end
+    if isLocalPlayer(noob) then return end
     if noob:GetAttribute("NoobListener") then return end
     noob:SetAttribute("NoobListener", true)
     
@@ -2126,7 +2135,7 @@ local function listenForNoobAbilities(noob)
         if not animator then return end
         
         animator.AnimationPlayed:Connect(function(animationTrack)
-            if not cooldownTrackerEnabled then return end  -- Now controlled by survivor tracker
+            if not cooldownTrackerEnabled then return end
             
             local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
             if not animId then return end
@@ -2140,7 +2149,7 @@ local function listenForNoobAbilities(noob)
                         noobLastTriggerTime["BloxyCola"] = now
                         local endTime = now + NOOB_BLOXYCOLA_COOLDOWN
                         createNoobCooldownDisplay(noob, endTime, "Bloxy Cola")
-                        SendNotif("Noob", "Bloxy Cola used - " .. NOOB_BLOXYCOLA_COOLDOWN .. "s cooldown", 1.5)
+                        -- No notification
                     end
                     return
                 end
@@ -2167,7 +2176,7 @@ local function listenForNoobAbilities(noob)
                         noobLastTriggerTime["Ghostburger"] = now
                         local endTime = now + NOOB_GHOSTBURGER_COOLDOWN
                         createNoobCooldownDisplay(noob, endTime, "Ghostburger")
-                        SendNotif("Noob", "Ghostburger used - " .. NOOB_GHOSTBURGER_COOLDOWN .. "s cooldown", 1.5)
+                        -- No notification
                     end
                     return
                 end
@@ -2189,7 +2198,7 @@ end
 
 local function scanForAllNoobs()
     local noob = getNoobCharacter()
-    if noob and not noob:GetAttribute("NoobListener") then
+    if noob and not isLocalPlayer(noob) and not noob:GetAttribute("NoobListener") then
         listenForNoobAbilities(noob)
         -- Initialize Slateskin state
         local torso = noob:FindFirstChild("Torso")
@@ -2212,15 +2221,17 @@ local function watchForNewNoobs()
     survivorsFolder.ChildAdded:Connect(function(child)
         if child.Name == "Noob" then
             task.wait(0.5)
-            listenForNoobAbilities(child)
-            -- Initialize Slateskin state
-            task.wait(0.5)
-            local torso = child:FindFirstChild("Torso")
-            if torso then
-                noobSlateskinActive = (torso.BrickColor == BrickColor.new("Dark stone grey"))
-                noobSlateskinWasActive = noobSlateskinActive
-                if noobSlateskinActive then
-                    startNoobSlateskinActiveTimer(child)
+            if not isLocalPlayer(child) then
+                listenForNoobAbilities(child)
+                -- Initialize Slateskin state
+                task.wait(0.5)
+                local torso = child:FindFirstChild("Torso")
+                if torso then
+                    noobSlateskinActive = (torso.BrickColor == BrickColor.new("Dark stone grey"))
+                    noobSlateskinWasActive = noobSlateskinActive
+                    if noobSlateskinActive then
+                        startNoobSlateskinActiveTimer(child)
+                    end
                 end
             end
         end
@@ -2230,9 +2241,9 @@ end
 local function startNoobSlateskinLoop()
     if noobSlateskinConnection then return end
     noobSlateskinConnection = RunService.Heartbeat:Connect(function()
-        if not cooldownTrackerEnabled then return end  -- Now controlled by survivor tracker
+        if not cooldownTrackerEnabled then return end
         local noob = getNoobCharacter()
-        if noob then
+        if noob and not isLocalPlayer(noob) then
             checkNoobSlateskinStatus(noob)
         else
             noobSlateskinActive = false
@@ -2256,7 +2267,7 @@ function startNoobTracking()
     startNoobSlateskinLoop()
     
     noobUpdateConnection = RunService.Heartbeat:Connect(function()
-        if cooldownTrackerEnabled then  -- Now controlled by survivor tracker
+        if cooldownTrackerEnabled then
             scanForAllNoobs()
         end
     end)
@@ -6206,4 +6217,4 @@ setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("lodaded, also matthew sucks")
+print("loaded, also matthew sucks")
