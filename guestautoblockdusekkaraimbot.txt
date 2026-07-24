@@ -1,22 +1,3 @@
--- Pillager Cheats - Full Script (OPTIMIZED: Globals for config, Locals for functions)
--- FIXED POSITION ESP: All ability cooldowns have permanent Y-offsets (text NEVER shifts)
--- INCLUDES: Noli, c00lkidd, John Doe, Nosferatu Ability Trackers - NO NOTIFICATIONS
--- FIXED: Dusekkar Silent Aim (stack overflow resolved)
--- UPDATED: Sixer Tracker with Blood Hunt reset, Kill reset during Blood Hunt, & Blood Orb reduction (3s)
--- FIXED: Sixer custom skin support - finds ALL Animators in the model
--- ADDED: Ability Warner (1x1x1x1 Mass Infection & Entanglement line tracking)
--- ADDED: TwoTime Backstab Mode with toggle and keybind (Facing Same Side TRUE/FALSE)
--- FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)
--- ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)
--- FIXED: Noli aimbot timer cancellation error (cannot cancel thread)
--- ADDED: Nosferatu Ability Cooldowns (Bloodhook 25s, Cataclysm 23s, Hunter's Feast 17s, Ascension 33s)
--- FIXED: Shockwave detection now case-insensitive ("Shockwave" or "shockwave")
--- FIXED: Noli animation IDs updated with missing animations
--- FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found
--- ADDED: Noob Ability Tracker (Bloxy Cola 50s, Slateskin Potion 55s, Ghostburger 45s) - MERGED with Survivors
--- FIXED: Noob Slateskin Active timer (6s) with early cancel detection via Torso color
--- ADDED: Azure Support - Beast form only (Q + E) with aimbot (Normal form has no Q aimbot)
-
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- LOCAL variables for frequently accessed services (performance)
@@ -295,7 +276,7 @@ NOOB_GHOSTBURGER_ANIMATIONS = {
     "99628926500394",
 }
 
--- FIXED POSITIONS FOR KILLER ABILITIES
+-- POSITIONS FOR KILLER ABILITIES
 SLASHER_ABILITY_OFFSETS = {
     ["Behead"] = 3,
     ["Gashing Wound"] = 5,
@@ -492,7 +473,7 @@ lastChanceTrigger = {}
 GUEST1337_ANTI_SPAM_TIME = 3
 CHANCE_ANTI_SPAM_TIME = 3
 
--- ===== DUSEKKAR SILENT AIM VARIABLES (FIXED) =====
+-- ===== DUSEKKAR SILENT AIM VARIABLES =====
 dusekkarEnabled = false
 dusekkarTargetMode = "Survivors"
 silentAimActive = false
@@ -2304,7 +2285,7 @@ function stopNoobTracking()
 end
 
 -- ===== ABILITY WARNER FUNCTIONS =====
--- FIXED: Shockwave detection is now case-insensitive
+-- Shockwave detection is now case-insensitive
 local function getShockwavePart(projectile)
     if not projectile then return nil end
     
@@ -4433,7 +4414,7 @@ function stopOnexTracking()
 end
 
 -- ===== SIXER ABILITY TRACKER FUNCTIONS (UPDATED with Blood Hunt reset & Blood Orb reduction) =====
--- FIXED: Now finds ALL Animators in the model (fixes custom skin issue)
+-- Now finds ALL Animators in the model 
 local function getAllSixers()
     local sixers = {}
     local playersFolder = Workspace:FindFirstChild("Players")
@@ -4581,7 +4562,7 @@ local function reduceSixerCooldownByBloodOrb(sixer)
     end
 end
 
--- 🔥 FIXED: Finds ALL Animators in the model (fixes custom skin issue)
+-- Finds ALL Animators in the model
 local function listenForSixerAbilities(sixer)
     if not sixer then return end
     if sixer:GetAttribute("SixerListener") then return end
@@ -4610,7 +4591,7 @@ local function listenForSixerAbilities(sixer)
         sixerBloodOrbSoundConnections[sixer] = soundAddedConn
     end
     
-    -- 🔥 FIND ALL ANIMATORS (fixes custom skin issue)
+    -- FIND ALL ANIMATORS 
     local function findAllAnimators(model)
         local animators = {}
         for _, descendant in ipairs(model:GetDescendants()) do
@@ -4895,7 +4876,7 @@ local function listenForNoliVoidRush(noli)
         end)
     end
     
-    -- 🔥 ONLY use the Animator inside Humanoid (fixes custom skin issue)
+    -- ONLY use the Animator inside Humanoid 
     if humanoid then
         local animator = humanoid:FindFirstChildOfClass("Animator")
         if animator then
@@ -5625,7 +5606,7 @@ function stopJohnDoeTracking()
     johnDoeIsAnnihilationSkin = {}
 end
 
--- ===== DUSEKKAR SILENT AIM FUNCTIONS (FIXED - NO STACK OVERFLOW) =====
+-- ===== DUSEKKAR SILENT AIM FUNCTIONS =====
 local function isPlasmaBeamOnCooldown()
     local success, cooldownText = pcall(function()
         return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
@@ -5861,7 +5842,7 @@ AutoBlockTab:CreateKeybind({
 })
 
 SevenNToggle = AutoBlockTab:CreateToggle({
-    Name = "2. 7n7 Auto Clone + Rotation - Presses Q", CurrentValue = false, Flag = "SevenNAutoCloneToggle",
+    Name = "2. 7n7 Auto Clone", CurrentValue = false, Flag = "SevenNAutoCloneToggle",
     Callback = function(Value) local is7n7 = amI7n7() if is7n7 then autoCloneFor7n7 = Value; SendNotif("7n7 Auto Clone", Value and "Enabled" or "Disabled", 1) end end
 })
 AutoBlockTab:CreateKeybind({
@@ -6080,16 +6061,6 @@ VisualsTab:CreateSlider({
     end
 })
 
-VisualsTab:CreateParagraph({
-    Title = "Ability Warner Info",
-    Content = "🔴 Mass Infection - Red line\n" ..
-               "   • First appears on 1x1x1x1\n" ..
-               "   • Transfers to the Shockwave projectile when it spawns!\n" ..
-               "   • Follows the projectile in real-time\n\n" ..
-               "🟠 Entanglement - Orange line\n" ..
-               "   • Appears on 1x1x1x1 for the duration set above"
-})
-
 VisualsTab:CreateButton({
     Name = "Clear All Warner Lines",
     Callback = function()
@@ -6235,20 +6206,4 @@ setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("Pillager Cheats Loaded - All features working (Dusekkar Silent Aim FIXED - no stack overflow)")
-print("Sixer Tracker: Blood Hunt reset, Kill reset during Blood Hunt, Blood Orb reduction (3s)")
-print("Added new Slasher slash animation, Raging Pace startup animation, and sound IDs for Guest auto block")
-print("Sixer cooldown text now uses fixed offsets - no more overlapping!")
-print("FIXED: Sixer custom skin support - finds ALL Animators in the model")
-print("ADDED: Ability Warner - Tracks 1x1x1x1 Mass Infection & Entanglement with lines!")
-print("ADDED: TwoTime Backstab Mode toggle with keybind (Facing Same Side TRUE/FALSE)")
-print("FIXED: Prediction now matches old reliable script (Dusekkar uses its own multiplier)")
-print("ADDED: Noli Q aimbot with early stop on damage (HitsoundID / KillsoundID detection via Sounds module hook)")
-print("FIXED: Noli aimbot timer cancellation error (cannot cancel thread)")
-print("ADDED: Nosferatu Ability Cooldowns - Bloodhook 25s, Cataclysm 23s, Hunter's Feast 17s, Ascension 33s")
-print("FIXED: Shockwave detection is now case-insensitive ('Shockwave' or 'shockwave')")
-print("FIXED: Noli animation IDs updated with missing animations (15 instant, 5 startup, 5 cancel)")
-print("FIXED: Shiftlock now restores previous state instead of forcing off, and does NOT enable when no target is found")
-print("ADDED: Noob Ability Tracker - Bloxy Cola 50s, Slateskin Potion 55s (with 6s Active timer), Ghostburger 45s - MERGED with Survivors")
-print("ADDED: Azure Support - Beast form only (Q + E) with aimbot - Normal form has NO aimbot")
-print("Azure Beast Q: " .. azureBeastQDuration .. "s | Azure Beast E: " .. azureBeastEDuration .. "s")
+print("lodaded, also matthew sucks")
