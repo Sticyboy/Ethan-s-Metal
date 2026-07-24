@@ -228,10 +228,10 @@ CATACLYSM_ANIMATION = "72186169160926"
 ASCENSION_ANIMATION = "97279203534534"
 
 -- Nosferatu Cooldown values
-BLOODHOOK_COOLDOWN = 25
-CATACLYSM_COOLDOWN = 23
+BLOODHOOK_COOLDOWN = 24
+CATACLYSM_COOLDOWN = 22
 HUNTERS_FEAST_COOLDOWN = 17
-ASCENSION_COOLDOWN = 33
+ASCENSION_COOLDOWN = 32
 
 -- Cooldown values
 SHEDLETSKY_COOLDOWN = 40
@@ -1805,7 +1805,7 @@ local function resetNosferatuBloodhookCooldown(nosferatu)
     end
     
     -- Start a fresh 25-second timer
-    local cooldownEndTime = tick() + BLOODHOOK_COOLDOWN
+    local cooldownEndTime = tick() + 
     createNosferatuCooldownDisplay(nosferatu, cooldownEndTime, "Bloodhook")
 end
 
