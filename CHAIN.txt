@@ -1,0 +1,1006 @@
+-- ===== ADONIS BYPASS =====
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+local getinfo = getinfo or debug.getinfo
+local DEBUG = false
+local Hooked = {}
+
+local Detected, Kill
+
+setthreadidentity(2)
+
+for i, v in getgc(true) do
+    if typeof(v) == "table" then
+        local DetectFunc = rawget(v, "Detected")
+        local KillFunc = rawget(v, "Kill")
+    
+        if typeof(DetectFunc) == "function" and not Detected then
+            Detected = DetectFunc
+            
+            local Old; Old = hookfunction(Detected, function(Action, Info, NoCrash)
+                if Action ~= "_" then
+                    if DEBUG then
+                        warn(`Adonis AntiCheat flagged\nMethod: {Action}\nInfo: {Info}`)
+                    end
+                end
+                
+                return true
+            end)
+
+            table.insert(Hooked, Detected)
+        end
+
+        if rawget(v, "Variables") and rawget(v, "Process") and typeof(KillFunc) == "function" and not Kill then
+            Kill = KillFunc
+            local Old; Old = hookfunction(Kill, function(Info)
+                if DEBUG then
+                    warn(`Adonis AntiCheat tried to kill (fallback): {Info}`)
+                end
+            end)
+
+            table.insert(Hooked, Kill)
+        end
+    end
+end
+
+local Old; Old = hookfunction(getrenv().debug.info, newcclosure(function(...)
+    local LevelOrFunc, Info = ...
+
+    if Detected and LevelOrFunc == Detected then
+        if DEBUG then
+            warn(`zins | adonis bypassed`)
+        end
+
+        return coroutine.yield(coroutine.running())
+    end
+    
+    return Old(...)
+end))
+setthreadidentity(7)
+
+-- ===== MAIN SCRIPT =====
+-- i got suggested to jst put this in github blah blah whatever heres ur code
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- hi if ur seeing the source code also alan used to like skibidi toilet tower defense alot (dont tell him i said this)
+
+local Window = Rayfield:CreateWindow({
+   Name = "XCHain - 2.6.5",
+   Icon = 16310770488,
+   LoadingTitle = "Chain mods when Neonicf is lazy on script",
+   LoadingSubtitle = "by Neonicf/Notezfc & Alan",
+   Theme = {
+    TextColor = Color3.fromRGB(143, 46, 62),
+
+    Background = Color3.fromRGB(3, 2, 2),
+    Topbar = Color3.fromRGB(0, 0, 0),
+    Shadow = Color3.fromRGB(82, 29, 29),
+
+    NotificationBackground = Color3.fromRGB(0, 0, 0),
+    NotificationActionsBackground = Color3.fromRGB(207, 204, 204),
+
+    TabBackground = Color3.fromRGB(0, 0, 0),
+    TabStroke = Color3.fromRGB(255, 255, 255),
+    TabBackgroundSelected = Color3.fromRGB(0, 0, 0),
+    TabTextColor = Color3.fromRGB(255, 230, 255),
+    SelectedTabTextColor = Color3.fromRGB(230, 230, 230),
+
+    ElementBackground = Color3.fromRGB(0, 0, 0),
+    ElementBackgroundHover = Color3.fromRGB(0, 0, 0),
+    SecondaryElementBackground = Color3.fromRGB(0, 0, 0),
+    ElementStroke = Color3.fromRGB(71, 24, 24),
+    SecondaryElementStroke = Color3.fromRGB(71, 24, 24),
+            
+    SliderBackground = Color3.fromRGB(0, 0, 0),
+    SliderProgress = Color3.fromRGB(0, 0, 0),
+    SliderStroke = Color3.fromRGB(230, 230, 230),
+
+    ToggleBackground = Color3.fromRGB(0, 0, 0),
+    ToggleEnabled = Color3.fromRGB(207, 204, 204),
+    ToggleDisabled = Color3.fromRGB(255, 255, 255),
+    ToggleEnabledStroke = Color3.fromRGB(0, 0, 0),
+    ToggleDisabledStroke = Color3.fromRGB(0, 0, 0),
+    ToggleEnabledOuterStroke = Color3.fromRGB(71, 24, 24),
+    ToggleDisabledOuterStroke = Color3.fromRGB(71, 24, 24),
+
+    DropdownSelected = Color3.fromRGB(71, 24, 24),
+    DropdownUnselected = Color3.fromRGB(0, 0, 0),
+
+    InputBackground = Color3.fromRGB(0, 0, 0),
+    InputStroke = Color3.fromRGB(65, 65, 65),
+    PlaceholderColor = Color3.fromRGB(71, 24, 24)
+},
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = XCHain,
+      FileName = "Chain script - Made by Neonicf, an ios user"
+   },
+
+   Discord = {
+      Enabled = true,
+      Invite = "UG7bH5QUVA",
+      RememberJoins = true
+   },
+
+   KeySystem = false,
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"Hello"}
+   }
+})
+
+-- ===== COMBAT TAB =====
+local Tab = Window:CreateTab("Combat", "axe")
+
+local Section = Tab:CreateSection("some of these might be bugged or unstable")
+
+local Divider = Tab:CreateDivider()
+
+local infiniteStaminaEnabled = false
+local staminaLoopConnection = nil
+
+local Toggle = Tab:CreateToggle({
+   Name = "Inf Stamina",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      infiniteStaminaEnabled = Value
+
+      if infiniteStaminaEnabled then
+         staminaLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if game.Players.LocalPlayer and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Stats") and game.Players.LocalPlayer.Character.Stats:FindFirstChild("Stamina") then
+               game.Players.LocalPlayer.Character.Stats.Stamina.Value = 100
+            end
+         end)
+      else
+         if staminaLoopConnection then
+            staminaLoopConnection:Disconnect()
+            staminaLoopConnection = nil
+         end
+      end
+   end,
+})
+
+local infiniteCombatStaminaEnabled = false
+local combatStaminaLoopConnection = nil
+
+local Toggle = Tab:CreateToggle({
+   Name = "Inf Combat Stamina",
+   CurrentValue = false,
+   Flag = "InfCom",
+   Callback = function(Value)
+      infiniteCombatStaminaEnabled = Value
+
+      if infiniteCombatStaminaEnabled then
+         combatStaminaLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if game.Players.LocalPlayer and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Stats") and game.Players.LocalPlayer.Character.Stats:FindFirstChild("CombatStamina") then
+               game.Players.LocalPlayer.Character.Stats.CombatStamina.Value = 100
+            end
+         end)
+      else
+         if combatStaminaLoopConnection then
+            combatStaminaLoopConnection:Disconnect()
+            combatStaminaLoopConnection = nil
+         end
+      end
+   end,
+})
+
+local autoWinXSawClashEnabled = false
+local xSawClashLoopConnection = nil
+
+local Toggle = Tab:CreateToggle({
+   Name = "Clash Strength",
+   CurrentValue = false,
+   Flag = "ClashS",
+   Callback = function(Value)
+      autoWinXSawClashEnabled = Value
+
+      if autoWinXSawClashEnabled then
+         xSawClashLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if game.Players.LocalPlayer and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Stats") and game.Players.LocalPlayer.Character.Stats:FindFirstChild("ClashStrength") then
+               game.Players.LocalPlayer.Character.Stats.ClashStrength.Value = 100
+            end
+         end)
+      else
+         if xSawClashLoopConnection then
+            xSawClashLoopConnection:Disconnect()
+            xSawClashLoopConnection = nil
+         end
+      end
+   end,
+})
+
+local Label = Tab:CreateLabel("Sadly Xsaw and Ammo has been patched and removed aimbot due to not working", "cloud-hail")
+
+local Divider = Tab:CreateDivider()
+
+local Button = Tab:CreateButton({
+   Name = "Bypass beartrap placement",
+   Callback = function()
+      game.Character.LocalPlayer.PlayerStats:SetAttribute("BearTrapPlaced",false)
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "ThirdPerson",
+   Callback = function()
+		game.Players.LocalPlayer.CameraMode = Enum.CameraMode.Classic game.Players.LocalPlayer.CameraMaxZoomDistance = 1280 game.Players.LocalPlayer.CameraMinZoomDistance = 0.5
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Remove Mask on head - third person",
+   Callback = function()
+		game.Players.LocalPlayer.Character.Sack.SurfaceAppearance.Parent:Destroy()
+   end,
+})
+
+local Divider = Tab:CreateDivider()
+
+local Section = Tab:CreateSection("Inf dodge is sadly patched")
+
+-- ===== AUTO QTE TOGGLE =====
+local autoQTEEnabled = false
+local qteConnections = {}
+local qtePollingThreads = {}
+
+-- Function to press a key
+local function pressKey(key)
+    print("Attempting to press key: " .. key)
+    
+    -- Handle special keys
+    local keyMap = {
+        ["Space"] = Enum.KeyCode.Space,
+        ["Enter"] = Enum.KeyCode.Return,
+        ["Shift"] = Enum.KeyCode.LeftShift,
+        ["Control"] = Enum.KeyCode.LeftControl,
+        ["Alt"] = Enum.KeyCode.LeftAlt,
+        ["Tab"] = Enum.KeyCode.Tab,
+        ["Backspace"] = Enum.KeyCode.Backspace,
+        ["Delete"] = Enum.KeyCode.Delete,
+        ["Escape"] = Enum.KeyCode.Escape,
+        ["Up"] = Enum.KeyCode.Up,
+        ["Down"] = Enum.KeyCode.Down,
+        ["Left"] = Enum.KeyCode.Left,
+        ["Right"] = Enum.KeyCode.Right,
+    }
+    
+    local keyCode
+    
+    -- Check if it's a special key
+    if keyMap[key] then
+        keyCode = keyMap[key]
+    else
+        -- Try to get the key code directly
+        keyCode = Enum.KeyCode[key]
+        
+        -- If that fails, try to find it by name
+        if not keyCode then
+            for _, enum in ipairs(Enum.KeyCode:GetEnumItems()) do
+                if enum.Name == key then
+                    keyCode = enum
+                    break
+                end
+            end
+        end
+    end
+    
+    if keyCode then
+        print("Pressing key: " .. tostring(keyCode))
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+        print("Pressed key: " .. key)
+    else
+        print("Could not find key: " .. key)
+    end
+end
+
+-- Function to monitor a specific QTE
+local function monitorQTE(qtePath, qteName)
+    local qteText = game.Players.LocalPlayer.PlayerGui:FindFirstChild("Ingame")
+    if qteText then
+        qteText = qteText:FindFirstChild("MechanicsFrame")
+        if qteText then
+            qteText = qteText:FindFirstChild(qtePath)
+            if qteText then
+                qteText = qteText:FindFirstChild("ImageButton")
+                if qteText then
+                    qteText = qteText:FindFirstChild("PC")
+                end
+            end
+        end
+    end
+    
+    if not qteText then
+        warn("QTE UI not found: " .. qteName)
+        return false
+    end
+    
+    print("QTE monitor started for: " .. qteName)
+    
+    -- Property change listener
+    local connection = qteText:GetPropertyChangedSignal("Text"):Connect(function()
+        if not autoQTEEnabled then return end
+        local currentText = qteText.Text
+        if currentText ~= "Hi" and currentText ~= "" then
+            print("[" .. qteName .. "] QTE Key detected: " .. currentText)
+            pressKey(currentText)
+            task.wait(0.1)
+            qteText.Text = "Hi"
+        end
+    end)
+    table.insert(qteConnections, connection)
+    
+    -- Polling loop as backup
+    local thread = task.spawn(function()
+        while autoQTEEnabled do
+            task.wait(0.1)
+            if not autoQTEEnabled then break end
+            local currentText = qteText.Text
+            if currentText ~= "Hi" and currentText ~= "" then
+                print("[" .. qteName .. "] QTE Key detected (poll): " .. currentText)
+                pressKey(currentText)
+                task.wait(0.1)
+                qteText.Text = "Hi"
+            end
+        end
+    end)
+    table.insert(qtePollingThreads, thread)
+    
+    return true
+end
+
+-- Toggle function
+local function toggleQTE(Value)
+    autoQTEEnabled = Value
+    
+    if Value then
+        -- Clean up old connections if any
+        for _, conn in ipairs(qteConnections) do
+            conn:Disconnect()
+        end
+        qteConnections = {}
+        
+        for _, thread in ipairs(qtePollingThreads) do
+            task.cancel(thread)
+        end
+        qtePollingThreads = {}
+        
+        -- Start monitoring both QTEs
+        monitorQTE("QTEToma", "QTEToma")
+        monitorQTE("QTE", "QTE")
+    else
+        -- Clean up connections
+        for _, conn in ipairs(qteConnections) do
+            conn:Disconnect()
+        end
+        qteConnections = {}
+        
+        for _, thread in ipairs(qtePollingThreads) do
+            task.cancel(thread)
+        end
+        qtePollingThreads = {}
+    end
+end
+
+local Toggle = Tab:CreateToggle({
+   Name = "Auto QTE",
+   CurrentValue = false,
+   Flag = "AutoQTE",
+   Callback = function(Value)
+      toggleQTE(Value)
+   end,
+})
+
+-- ===== AUTO DODGE CHOKE TOGGLE =====
+local autoDodgeChokeEnabled = false
+local soundConnections = {}
+local dodgeChokeCooldown = 0
+local TARGET_AUDIO_ID = "16214979367"
+local DODGE_COOLDOWN = 0.65
+
+-- Function to check distance to CHAIN
+local function isNearChain()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return false end
+    
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    
+    local chain = workspace:FindFirstChild("Misc")
+    if chain then
+        chain = chain:FindFirstChild("AI")
+        if chain then
+            chain = chain:FindFirstChild("CHAIN")
+        end
+    end
+    
+    if not chain then return false end
+    
+    local chainHrp = chain:FindFirstChild("HumanoidRootPart")
+    if not chainHrp then return false end
+    
+    local distance = (hrp.Position - chainHrp.Position).Magnitude
+    return distance <= 15
+end
+
+-- Function to press Q (dodge)
+local function pressQKey()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+end
+
+-- Process sound for dodge choke
+local function hookSound(sound)
+    if not sound:IsA("Sound") then return end
+    
+    local function checkAndTrigger()
+        if not autoDodgeChokeEnabled then return end
+        
+        local soundId = tostring(sound.SoundId)
+        if soundId:find(TARGET_AUDIO_ID) then
+            local now = os.clock()
+            if (now - dodgeChokeCooldown) >= DODGE_COOLDOWN then
+                -- Check if player is near CHAIN (within 15 studs)
+                if isNearChain() then
+                    dodgeChokeCooldown = now
+                    pressQKey()
+                    print("Auto Dodge Choke triggered!")
+                else
+                    print("CHAIN too far (" .. math.floor((workspace.Misc.AI.CHAIN.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. " studs) - not dodging")
+                end
+            end
+        end
+    end
+    
+    -- Connect to Played event
+    sound.Played:Connect(checkAndTrigger)
+    
+    -- Also check when IsPlaying changes
+    sound:GetPropertyChangedSignal("IsPlaying"):Connect(function()
+        if sound.IsPlaying then
+            checkAndTrigger()
+        end
+    end)
+    
+    table.insert(soundConnections, sound)
+end
+
+-- Setup sound hooks
+local function setupDodgeChoke()
+    -- Hook all existing sounds
+    for _, desc in pairs(game:GetDescendants()) do
+        pcall(function()
+            hookSound(desc)
+        end)
+    end
+    
+    -- Hook new sounds as they're added
+    game.DescendantAdded:Connect(function(desc)
+        pcall(function()
+            hookSound(desc)
+        end)
+    end)
+end
+
+-- Toggle function for Auto Dodge Choke
+local function toggleDodgeChoke(Value)
+    autoDodgeChokeEnabled = Value
+    
+    if Value then
+        setupDodgeChoke()
+        print("Auto Dodge Choke Enabled!")
+    else
+        print("Auto Dodge Choke Disabled!")
+    end
+end
+
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Dodge Choke",
+   CurrentValue = false,
+   Flag = "AutoDodgeChoke",
+   Callback = function(Value)
+      toggleDodgeChoke(Value)
+   end,
+})
+
+-- ===== GUI INTERFACE TAB =====
+local Tab = Window:CreateTab("GUI interface", "square-terminal")
+
+local Button = Tab:CreateButton({
+   Name = "Watch and Power Gui",
+   Callback = function()
+      loadstring(game:HttpGet('https://pastebin.com/raw/9gdApaSy'))()
+   end,
+})
+
+local Toggle = Tab:CreateToggle({
+   Name = "Shop Gui - Only works during day",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      local player = game.Players.LocalPlayer
+local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
+local Shop = ingameGui:WaitForChild("Shop")
+
+local isVisible = Shop.Visible
+
+if not isVisible then
+	Shop.Visible = true
+else
+	Shop.Visible = false
+end
+   end,
+})
+
+local Divider = Tab:CreateDivider()
+
+local Label = Tab:CreateLabel("These are somewhat useless Guis, deconstructor and workbench may not work cuz u have to be near it", "rewind")
+
+local Toggle = Tab:CreateToggle({
+   Name = "Deconstructor Gui",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      local player = game.Players.LocalPlayer
+local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
+local De = ingameGui:WaitForChild("Deconstructor")
+
+local isVisible = De.Visible
+
+if not isVisible then
+	De.Visible = true
+else
+	De.Visible = false
+end
+   end,
+})
+
+local Toggle = Tab:CreateToggle({
+   Name = "Workbench Gui",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      local player = game.Players.LocalPlayer
+local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
+local Work = ingameGui:WaitForChild("Workbench")
+
+local isVisible = Work.Visible
+
+if not isVisible then
+	Work.Visible = true
+else
+	Work.Visible = false
+end
+   end,
+})
+
+-- ===== RENDER TAB =====
+local Tab = Window:CreateTab("Render", "fire-extinguisher")
+
+local Section = Tab:CreateSection("Lightening - recommended to use both")
+
+local Divider = Tab:CreateDivider()
+
+local Button = Tab:CreateButton({
+   Name = "nofog",
+   Callback = function()
+		-- Services
+local Lighting = game:GetService("Lighting")
+
+-- FogEnd
+Lighting.FogEnd = 100000
+
+Lighting:GetPropertyChangedSignal("FogEnd"):Connect(function()
+    Lighting.FogEnd = 100000
+end)
+
+-- Atmosphere
+for _,v in ipairs(Lighting:GetDescendants()) do
+    if v:IsA("Atmosphere") then
+        v.Density = 0
+
+        v:GetPropertyChangedSignal("Density"):Connect(function()
+            v.Density = 0
+        end)
+    end
+end
+
+Lighting.DescendantAdded:Connect(function(v)
+    if v:IsA("Atmosphere") then
+        v.Density = 0
+
+        v:GetPropertyChangedSignal("Density"):Connect(function()
+            v.Density = 0
+        end)
+    end
+end)
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "fullbright",
+   Callback = function()
+		if not _G.FullBrightExecuted then
+
+	_G.FullBrightEnabled = false
+
+	_G.NormalLightingSettings = {
+		Brightness = game:GetService("Lighting").Brightness,
+		ClockTime = game:GetService("Lighting").ClockTime,
+		FogEnd = game:GetService("Lighting").FogEnd,
+		GlobalShadows = game:GetService("Lighting").GlobalShadows,
+		Ambient = game:GetService("Lighting").Ambient
+	}
+
+	game:GetService("Lighting"):GetPropertyChangedSignal("Brightness"):Connect(function()
+		if game:GetService("Lighting").Brightness ~= 1 and game:GetService("Lighting").Brightness ~= _G.NormalLightingSettings.Brightness then
+			_G.NormalLightingSettings.Brightness = game:GetService("Lighting").Brightness
+			if not _G.FullBrightEnabled then
+				repeat
+					wait()
+				until _G.FullBrightEnabled
+			end
+			game:GetService("Lighting").Brightness = 1
+		end
+	end)
+
+	game:GetService("Lighting"):GetPropertyChangedSignal("ClockTime"):Connect(function()
+		if game:GetService("Lighting").ClockTime ~= 12 and game:GetService("Lighting").ClockTime ~= _G.NormalLightingSettings.ClockTime then
+			_G.NormalLightingSettings.ClockTime = game:GetService("Lighting").ClockTime
+			if not _G.FullBrightEnabled then
+				repeat
+					wait()
+				until _G.FullBrightEnabled
+			end
+			game:GetService("Lighting").ClockTime = 12
+		end
+	end)
+
+	game:GetService("Lighting"):GetPropertyChangedSignal("FogEnd"):Connect(function()
+		if game:GetService("Lighting").FogEnd ~= 786543 and game:GetService("Lighting").FogEnd ~= _G.NormalLightingSettings.FogEnd then
+			_G.NormalLightingSettings.FogEnd = game:GetService("Lighting").FogEnd
+			if not _G.FullBrightEnabled then
+				repeat
+					wait()
+				until _G.FullBrightEnabled
+			end
+			game:GetService("Lighting").FogEnd = 786543
+		end
+	end)
+
+	game:GetService("Lighting"):GetPropertyChangedSignal("GlobalShadows"):Connect(function()
+		if game:GetService("Lighting").GlobalShadows ~= false and game:GetService("Lighting").GlobalShadows ~= _G.NormalLightingSettings.GlobalShadows then
+			_G.NormalLightingSettings.GlobalShadows = game:GetService("Lighting").GlobalShadows
+			if not _G.FullBrightEnabled then
+				repeat
+					wait()
+				until _G.FullBrightEnabled
+			end
+			game:GetService("Lighting").GlobalShadows = false
+		end
+	end)
+
+	game:GetService("Lighting"):GetPropertyChangedSignal("Ambient"):Connect(function()
+		if game:GetService("Lighting").Ambient ~= Color3.fromRGB(178, 178, 178) and game:GetService("Lighting").Ambient ~= _G.NormalLightingSettings.Ambient then
+			_G.NormalLightingSettings.Ambient = game:GetService("Lighting").Ambient
+			if not _G.FullBrightEnabled then
+				repeat
+					wait()
+				until _G.FullBrightEnabled
+			end
+			game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
+		end
+	end)
+
+	game:GetService("Lighting").Brightness = 1
+	game:GetService("Lighting").ClockTime = 12
+	game:GetService("Lighting").FogEnd = 786543
+	game:GetService("Lighting").GlobalShadows = false
+	game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
+
+	local LatestValue = true
+	spawn(function()
+		repeat
+			wait()
+		until _G.FullBrightEnabled
+		while wait() do
+			if _G.FullBrightEnabled ~= LatestValue then
+				if not _G.FullBrightEnabled then
+					game:GetService("Lighting").Brightness = _G.NormalLightingSettings.Brightness
+					game:GetService("Lighting").ClockTime = _G.NormalLightingSettings.ClockTime
+					game:GetService("Lighting").FogEnd = _G.NormalLightingSettings.FogEnd
+					game:GetService("Lighting").GlobalShadows = _G.NormalLightingSettings.GlobalShadows
+					game:GetService("Lighting").Ambient = _G.NormalLightingSettings.Ambient
+				else
+					game:GetService("Lighting").Brightness = 1
+					game:GetService("Lighting").ClockTime = 12
+					game:GetService("Lighting").FogEnd = 786543
+					game:GetService("Lighting").GlobalShadows = false
+					game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
+				end
+				LatestValue = not LatestValue
+			end
+		end
+	end)
+end
+
+_G.FullBrightExecuted = true
+_G.FullBrightEnabled = not _G.FullBrightEnabled
+   end,
+})
+
+local Divider = Tab:CreateDivider()
+
+-- ===== SCRAP ESP (HIGHLIGHT VERSION) =====
+local scrapESPEnabled = false
+local scrapHighlightConnections = {}
+
+local function clearScrapHighlights()
+    for _, data in pairs(scrapHighlightConnections) do
+        if data.highlight then
+            pcall(function() data.highlight:Destroy() end)
+        end
+        if data.connection then
+            pcall(function() data.connection:Disconnect() end)
+        end
+    end
+    scrapHighlightConnections = {}
+end
+
+local function updateScrapESP()
+    clearScrapHighlights()
+    
+    if not scrapESPEnabled then return end
+    
+    local scrapFolder = workspace:FindFirstChild("Misc")
+    if scrapFolder then
+        scrapFolder = scrapFolder:FindFirstChild("Zones")
+        if scrapFolder then
+            scrapFolder = scrapFolder:FindFirstChild("LootingItems")
+            if scrapFolder then
+                scrapFolder = scrapFolder:FindFirstChild("Scrap")
+            end
+        end
+    end
+    
+    if not scrapFolder then return end
+    
+    for _, scrapItem in ipairs(scrapFolder:GetChildren()) do
+        if scrapItem:IsA("Model") then
+            local highlight = Instance.new("Highlight")
+            highlight.Parent = scrapItem
+            highlight.FillColor = Color3.fromRGB(255, 255, 0)
+            highlight.OutlineColor = Color3.fromRGB(255, 200, 0)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineTransparency = 0.3
+            
+            local connection
+            connection = scrapItem.AncestryChanged:Connect(function()
+                if not scrapItem or not scrapItem.Parent then
+                    if connection then connection:Disconnect() end
+                    pcall(function() highlight:Destroy() end)
+                end
+            end)
+            
+            scrapHighlightConnections[scrapItem] = {
+                highlight = highlight,
+                connection = connection
+            }
+        end
+    end
+end
+
+local scrapScanConnection = nil
+
+local Toggle = Tab:CreateToggle({
+   Name = "Scrap ESP",
+   CurrentValue = false,
+   Flag = "ScrapESP",
+   Callback = function(Value)
+      scrapESPEnabled = Value
+      
+      if scrapScanConnection then
+         scrapScanConnection:Disconnect()
+         scrapScanConnection = nil
+      end
+      
+      if Value then
+         clearScrapHighlights()
+         updateScrapESP()
+         scrapScanConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if scrapESPEnabled then
+               updateScrapESP()
+            else
+               if scrapScanConnection then scrapScanConnection:Disconnect() end
+            end
+         end)
+      else
+         clearScrapHighlights()
+      end
+   end,
+})
+
+local Toggle = Tab:CreateToggle({
+   Name = "Artifact ESP - not mine",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local plr = Players.LocalPlayer
+local chr = plr.Character or plr.CharacterAdded:Wait()
+local hrp = chr:WaitForChild("HumanoidRootPart")
+local artifactsFolder = workspace.Misc.Zones.LootingItems.Artifacts
+
+local function createDistanceGui(part)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "DistanceGui"
+    billboard.Adornee = part
+    billboard.Size = UDim2.new(0, 100, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.BackgroundTransparency = 1
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.TextColor3 = Color3.new(1, 0, 0)
+    textLabel.TextStrokeTransparency = 0.5
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.Parent = billboard
+
+    billboard.Parent = part
+    return textLabel
+end
+
+for _, model in ipairs(artifactsFolder:GetChildren()) do
+    if model:IsA("Model") then
+        for _, part in ipairs(model:GetChildren()) do
+            if part:IsA("MeshPart") then
+                local highlight = Instance.new("Highlight")
+                highlight.Adornee = part
+                highlight.FillColor = Color3.new(1, 0, 0)
+                highlight.OutlineColor = Color3.new(1, 0, 0)
+                highlight.Parent = part
+
+                local distanceLabel = createDistanceGui(part)
+
+                RunService.Heartbeat:Connect(function()
+                    if hrp and hrp.Parent then
+                        local dist = (hrp.Position - part.Position).Magnitude
+                        distanceLabel.Text = string.format("%.1f studs", dist)
+                    end
+                end)
+            end
+        end
+    end
+end
+   end,
+})
+
+-- ===== CHAIN ESP (FIXED - properly re-adds highlight when CHAIN reappears) =====
+local chainESPEnabled = false
+local chainHighlight = nil
+local chainConnection = nil
+local chainCheckConnection = nil
+
+local function updateChainESP()
+    -- Remove existing highlight
+    if chainHighlight then
+        pcall(function() chainHighlight:Destroy() end)
+        chainHighlight = nil
+    end
+    
+    if chainConnection then
+        pcall(function() chainConnection:Disconnect() end)
+        chainConnection = nil
+    end
+    
+    if not chainESPEnabled then return end
+    
+    -- Find CHAIN
+    local chain = workspace:FindFirstChild("Misc")
+    if chain then
+        chain = chain:FindFirstChild("AI")
+        if chain then
+            chain = chain:FindFirstChild("CHAIN")
+        end
+    end
+    
+    if chain and chain:IsA("Model") then
+        -- Create highlight
+        chainHighlight = Instance.new("Highlight")
+        chainHighlight.Parent = chain
+        chainHighlight.FillColor = Color3.fromRGB(255, 21, 21)
+        chainHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        chainHighlight.FillTransparency = 0.60
+        chainHighlight.OutlineTransparency = 0
+        
+        -- Watch for CHAIN being removed
+        chainConnection = chain.AncestryChanged:Connect(function()
+            if not chain or not chain.Parent then
+                if chainHighlight then
+                    pcall(function() chainHighlight:Destroy() end)
+                    chainHighlight = nil
+                end
+                if chainConnection then
+                    pcall(function() chainConnection:Disconnect() end)
+                    chainConnection = nil
+                end
+            end
+        end)
+    end
+end
+
+local Toggle = Tab:CreateToggle({
+   Name = "Chain ESP - red",
+   CurrentValue = false,
+   Flag = "ChainESP",
+   Callback = function(Value)
+      chainESPEnabled = Value
+      
+      -- Stop the check loop
+      if chainCheckConnection then
+         pcall(function() chainCheckConnection:Disconnect() end)
+         chainCheckConnection = nil
+      end
+      
+      if Value then
+         -- Initial setup
+         updateChainESP()
+         
+         -- Keep checking for CHAIN to reappear
+         chainCheckConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if chainESPEnabled then
+               -- If highlight doesn't exist but CHAIN does, re-add it
+               if not chainHighlight then
+                  local chain = workspace:FindFirstChild("Misc")
+                  if chain then
+                     chain = chain:FindFirstChild("AI")
+                     if chain then
+                        chain = chain:FindFirstChild("CHAIN")
+                     end
+                  end
+                  
+                  if chain and chain:IsA("Model") then
+                     updateChainESP()
+                  end
+               end
+            else
+               if chainCheckConnection then
+                  pcall(function() chainCheckConnection:Disconnect() end)
+                  chainCheckConnection = nil
+               end
+            end
+         end)
+      else
+         -- Clean up
+         if chainHighlight then
+            pcall(function() chainHighlight:Destroy() end)
+            chainHighlight = nil
+         end
+         if chainConnection then
+            pcall(function() chainConnection:Disconnect() end)
+            chainConnection = nil
+         end
+      end
+   end,
+})
