@@ -412,6 +412,7 @@ local soundConnections = {}
 local dodgeChokeCooldown = 0
 local TARGET_AUDIO_ID = "16214979367"
 local DODGE_COOLDOWN = 0.65
+local DODGE_DELAY = 0.3 -- 0.3 second delay before dodging
 
 -- Function to check distance to CHAIN
 local function isNearChain()
@@ -439,8 +440,9 @@ local function isNearChain()
     return distance <= 15
 end
 
--- Function to press Q (dodge)
-local function pressQKey()
+-- Function to press Q (dodge) with delay
+local function pressQKeyWithDelay()
+    task.wait(DODGE_DELAY) -- Wait 0.3 seconds before dodging
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
     task.wait(0.05)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
@@ -460,10 +462,24 @@ local function hookSound(sound)
                 -- Check if player is near CHAIN (within 15 studs)
                 if isNearChain() then
                     dodgeChokeCooldown = now
-                    pressQKey()
-                    print("Auto Dodge Choke triggered!")
+                    task.spawn(pressQKeyWithDelay) -- Dodge with 0.3s delay
+                    print("Auto Dodge Choke triggered! (0.3s delay)")
                 else
-                    print("CHAIN too far (" .. math.floor((workspace.Misc.AI.CHAIN.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. " studs) - not dodging")
+                    local chain = workspace:FindFirstChild("Misc")
+                    if chain then
+                        chain = chain:FindFirstChild("AI")
+                        if chain then
+                            chain = chain:FindFirstChild("CHAIN")
+                        end
+                    end
+                    if chain and chain:FindFirstChild("HumanoidRootPart") then
+                        local player = game.Players.LocalPlayer
+                        local character = player.Character
+                        if character and character:FindFirstChild("HumanoidRootPart") then
+                            local distance = (character.HumanoidRootPart.Position - chain.HumanoidRootPart.Position).Magnitude
+                            print("CHAIN too far (" .. math.floor(distance) .. " studs) - not dodging")
+                        end
+                    end
                 end
             end
         end
@@ -505,7 +521,7 @@ local function toggleDodgeChoke(Value)
     
     if Value then
         setupDodgeChoke()
-        print("Auto Dodge Choke Enabled!")
+        print("Auto Dodge Choke Enabled! (0.3s delay)")
     else
         print("Auto Dodge Choke Disabled!")
     end
