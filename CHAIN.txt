@@ -141,6 +141,210 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
+-- ===== BLUEPRINTS TAB =====
+local BlueprintsTab = Window:CreateTab("Blueprints", "printer")
+
+local Section = BlueprintsTab:CreateSection("These only unlock blueprints btw")
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock all Blueprints",
+   Callback = function()
+		local player = game.Players.LocalPlayer
+		local playerStats = player:WaitForChild("PlayerStats")
+		local blueprints = playerStats:WaitForChild("Blueprints")
+
+		for _, name in ipairs(blueprints:GetAttributeNames()) do
+			blueprints:SetAttribute(name, true)
+		end
+        Rayfield:Notify({
+            Title = "Blueprints",
+            Content = "All blueprints unlocked!",
+            Duration = 3,
+            Image = "check"
+        })
+   end,
+})
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock CombatKnife",
+   Callback = function()
+		local player = game.Players.LocalPlayer
+        local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
+
+        local attributeName = "CombatKnife"
+
+        if blueprints:GetAttribute(attributeName) ~= nil then
+            blueprints:SetAttribute(attributeName, true)
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "CombatKnife unlocked!",
+                Duration = 2,
+                Image = "check"
+            })
+        else
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "CombatKnife not found.",
+                Duration = 2,
+                Image = "ban"
+            })
+        end
+   end,
+})
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock Deagle",
+   Callback = function()
+		local player = game.Players.LocalPlayer
+        local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
+
+        local attributeName = "Deagle"
+
+        if blueprints:GetAttribute(attributeName) ~= nil then
+            blueprints:SetAttribute(attributeName, true)
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "Deagle unlocked!",
+                Duration = 2,
+                Image = "check"
+            })
+        else
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "Deagle not found.",
+                Duration = 2,
+                Image = "ban"
+            })
+        end
+   end,
+})
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock DoubleBarrel",
+   Callback = function()
+		local player = game.Players.LocalPlayer
+        local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
+
+        local attributeName = "DoubleBarrel"
+
+        if blueprints:GetAttribute(attributeName) ~= nil then
+            blueprints:SetAttribute(attributeName, true)
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "DoubleBarrel unlocked!",
+                Duration = 2,
+                Image = "check"
+            })
+        else
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "DoubleBarrel not found.",
+                Duration = 2,
+                Image = "ban"
+            })
+        end
+   end,
+})
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock M1911",
+   Callback = function()
+		local player = game.Players.LocalPlayer
+        local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
+
+        local attributeName = "M1911"
+
+        if blueprints:GetAttribute(attributeName) ~= nil then
+            blueprints:SetAttribute(attributeName, true)
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "M1911 unlocked!",
+                Duration = 2,
+                Image = "check"
+            })
+        else
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "M1911 not found.",
+                Duration = 2,
+                Image = "ban"
+            })
+        end
+   end,
+})
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock Machete",
+   Callback = function()
+		local player = game.Players.LocalPlayer
+        local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
+
+        local attributeName = "Machete"
+
+        if blueprints:GetAttribute(attributeName) ~= nil then
+            blueprints:SetAttribute(attributeName, true)
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "Machete unlocked!",
+                Duration = 2,
+                Image = "check"
+            })
+        else
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "Machete not found.",
+                Duration = 2,
+                Image = "ban"
+            })
+        end
+   end,
+})
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock SpellBook (may be glitched)",
+   Callback = function()
+		local player = game.Players.LocalPlayer
+        local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
+
+        local attributeName = "SpellBook"
+
+        if blueprints:GetAttribute(attributeName) ~= nil then
+            blueprints:SetAttribute(attributeName, true)
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "SpellBook unlocked!",
+                Duration = 2,
+                Image = "check"
+            })
+        else
+            Rayfield:Notify({
+                Title = "Blueprints",
+                Content = "SpellBook not found.",
+                Duration = 2,
+                Image = "ban"
+            })
+        end
+   end,
+})
+
+local Divider = BlueprintsTab:CreateDivider()
+
+local Button = BlueprintsTab:CreateButton({
+   Name = "Unlock Artifact Quest (might fix spellbook blueprint)",
+   Callback = function()
+      local playerStats = game.Players.LocalPlayer:WaitForChild("PlayerStats")
+      local quests = playerStats:WaitForChild("Quests")
+
+      quests:SetAttribute("ArtifactQuest", true)
+      Rayfield:Notify({
+            Title = "Blueprints",
+            Content = "Artifact Quest unlocked!",
+            Duration = 2,
+            Image = "check"
+        })
+   end,
+})
+
 -- ===== COMBAT TAB =====
 local Tab = Window:CreateTab("Combat", "axe")
 
@@ -764,27 +968,199 @@ _G.FullBrightEnabled = not _G.FullBrightEnabled
 
 local Divider = Tab:CreateDivider()
 
--- ===== SCRAP ESP (HIGHLIGHT VERSION) =====
+-- ===== SCRAP ESP (WITH DEATH CLEANUP) =====
 local scrapESPEnabled = false
-local scrapHighlightConnections = {}
+local scrapComponents = {}
+local scrapScreenGui = nil
+local scrapBin = nil
+local scrapScanConnection = nil
+local scrapDeathConnection = nil
 
-local function clearScrapHighlights()
-    for _, data in pairs(scrapHighlightConnections) do
-        if data.highlight then
-            pcall(function() data.highlight:Destroy() end)
-        end
-        if data.connection then
-            pcall(function() data.connection:Disconnect() end)
-        end
+-- Create Bin class for cleanup
+local function createBin()
+    local bin = {}
+    local items = {}
+    
+    function bin:add(item)
+        table.insert(items, item)
+        return self
     end
-    scrapHighlightConnections = {}
+    
+    function bin:destroy()
+        for _, item in ipairs(items) do
+            if type(item) == "function" then
+                pcall(item)
+            elseif typeof(item) == "RBXScriptConnection" then
+                pcall(function() item:Disconnect() end)
+            elseif type(item) == "thread" then
+                pcall(function() task.cancel(item) end)
+            elseif item and type(item) == "table" and item.destroy then
+                pcall(function() item:destroy() end)
+            elseif item and item.Destroy then
+                pcall(function() item:Destroy() end)
+            end
+        end
+        items = {}
+    end
+    
+    return bin
 end
 
-local function updateScrapESP()
-    clearScrapHighlights()
+-- Function to clear all scrap ESP
+local function clearScrapESP()
+    if scrapBin then
+        pcall(function() scrapBin:destroy() end)
+        scrapBin = nil
+    end
+    
+    if scrapScreenGui then
+        pcall(function() scrapScreenGui:Destroy() end)
+        scrapScreenGui = nil
+    end
+    
+    scrapComponents = {}
+end
+
+-- Function to format numbers
+local function formatNum(num, format)
+    local formatted = string.format(`%.{format}f`, num)
+    return formatted
+end
+
+-- LootableComponent class for each scrap item
+local LootableComponent = {}
+LootableComponent.__index = LootableComponent
+
+function LootableComponent.new(scrap, pivot)
+    local self = setmetatable({}, LootableComponent)
+    self.object = scrap
+    self.pivotPos = pivot
+    self.bin = createBin()
+    self.isAvailable = true
+    
+    -- Check if scrap has Values folder with Available attribute
+    local values = scrap:FindFirstChild("Values")
+    if values then
+        self.isAvailable = values:GetAttribute("Available") ~= false
+    end
+    
+    -- Create UI elements
+    self.container = Instance.new("Frame")
+    self.nameLabel = Instance.new("TextLabel")
+    
+    self.container.Visible = false
+    self.container.AnchorPoint = Vector2.new(0.5, 0)
+    self.container.BackgroundTransparency = 1
+    self.container.Size = UDim2.new(0, 100, 0, 50)
+    
+    self.nameLabel.BackgroundTransparency = 1
+    self.nameLabel.Font = Enum.Font.Nunito
+    self.nameLabel.Text = "Scrap"
+    self.nameLabel.TextColor3 = Color3.new(0, 1, 0)
+    self.nameLabel.TextSize = 15
+    self.nameLabel.TextStrokeTransparency = 0.5
+    self.nameLabel.Size = UDim2.new(1, 0, 0, 14)
+    
+    self.nameLabel.Parent = self.container
+    
+    -- Add to ScreenGui
+    if scrapScreenGui then
+        self.container.Parent = scrapScreenGui
+    end
+    
+    -- Track availability changes
+    if values then
+        local conn = values:GetAttributeChangedSignal("Available"):Connect(function()
+            self.isAvailable = values:GetAttribute("Available")
+        end)
+        self.bin:add(conn)
+    end
+    
+    -- Render loop
+    local renderConn
+    renderConn = game:GetService("RunService").RenderStepped:Connect(function()
+        self:render()
+    end)
+    self.bin:add(renderConn)
+    
+    -- Track object death
+    local deathConn = scrap.AncestryChanged:Connect(function()
+        if not scrap or not scrap.Parent then
+            self:destroy()
+        end
+    end)
+    self.bin:add(deathConn)
+    
+    return self
+end
+
+function LootableComponent:render()
+    local camera = workspace.CurrentCamera
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    
+    if not camera or not character then
+        self.container.Visible = false
+        return
+    end
+    
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        self.container.Visible = false
+        return
+    end
+    
+    if not self.object or not self.object.Parent then
+        self:destroy()
+        return
+    end
+    
+    local position, visible = camera:WorldToViewportPoint(self.pivotPos.Position)
+    
+    if visible and self.isAvailable then
+        local scale = 1 / (position.Z * math.tan(math.rad(camera.FieldOfView * 0.5)) * 2) * 1000
+        local width, height = math.floor(1 * scale), math.floor(3 * scale)
+        local x, y = math.floor(position.X), math.floor(position.Y)
+        local xPosition, yPosition = math.floor(x - width * 0.5), math.floor((y - height * 0.5) + (0.5 * scale))
+        
+        self.container.Visible = true
+        self.container.Position = UDim2.new(0, xPosition, 0, yPosition)
+        
+        local distance = (hrp.Position - self.pivotPos.Position).Magnitude
+        self.nameLabel.Text = string.format("Scrap [%.1f]", distance)
+    else
+        self.container.Visible = false
+    end
+end
+
+function LootableComponent:destroy()
+    if self.bin then
+        pcall(function() self.bin:destroy() end)
+        self.bin = nil
+    end
+    if self.container then
+        pcall(function() self.container:Destroy() end)
+        self.container = nil
+    end
+    self.object = nil
+end
+
+-- Function to setup scrap ESP
+local function setupScrapESP()
+    clearScrapESP()
     
     if not scrapESPEnabled then return end
     
+    -- Create ScreenGui
+    scrapScreenGui = Instance.new("ScreenGui")
+    scrapScreenGui.DisplayOrder = 10
+    scrapScreenGui.IgnoreGuiInset = true
+    scrapScreenGui.Parent = game:GetService("CoreGui")
+    scrapScreenGui.Name = "ScrapESP"
+    
+    scrapBin = createBin()
+    
+    -- Find scrap folder
     local scrapFolder = workspace:FindFirstChild("Misc")
     if scrapFolder then
         scrapFolder = scrapFolder:FindFirstChild("Zones")
@@ -798,117 +1174,302 @@ local function updateScrapESP()
     
     if not scrapFolder then return end
     
-    for _, scrapItem in ipairs(scrapFolder:GetChildren()) do
-        if scrapItem:IsA("Model") then
-            local highlight = Instance.new("Highlight")
-            highlight.Parent = scrapItem
-            highlight.FillColor = Color3.fromRGB(255, 255, 0)
-            highlight.OutlineColor = Color3.fromRGB(255, 200, 0)
-            highlight.FillTransparency = 0.5
-            highlight.OutlineTransparency = 0.3
-            
-            local connection
-            connection = scrapItem.AncestryChanged:Connect(function()
-                if not scrapItem or not scrapItem.Parent then
-                    if connection then connection:Disconnect() end
-                    pcall(function() highlight:Destroy() end)
+    -- Create components for existing scrap
+    for _, scrap in ipairs(scrapFolder:GetChildren()) do
+        if scrap:IsA("Model") then
+            local component = LootableComponent.new(scrap, scrap:GetPivot())
+            table.insert(scrapComponents, component)
+        end
+    end
+    
+    -- Watch for new scrap
+    local newConn = scrapFolder.ChildAdded:Connect(function(child)
+        if child:IsA("Model") then
+            local component = LootableComponent.new(child, child:GetPivot())
+            table.insert(scrapComponents, component)
+        end
+    end)
+    scrapBin:add(newConn)
+    
+    -- Watch for scrap removal
+    local removedConn = scrapFolder.ChildRemoved:Connect(function(child)
+        for i, comp in ipairs(scrapComponents) do
+            if comp.object == child then
+                pcall(function() comp:destroy() end)
+                table.remove(scrapComponents, i)
+                break
+            end
+        end
+    end)
+    scrapBin:add(removedConn)
+end
+
+-- Function to handle player death/respawn
+local function setupDeathHandling()
+    local player = game.Players.LocalPlayer
+    
+    -- When character dies, clear ESP
+    local deathConn = player.CharacterAdded:Connect(function(character)
+        -- Clear everything when respawning
+        clearScrapESP()
+        
+        -- Wait a moment then re-setup if enabled
+        task.wait(0.5)
+        if scrapESPEnabled then
+            setupScrapESP()
+        end
+    end)
+    
+    scrapDeathConnection = deathConn
+end
+
+-- Toggle for Scrap ESP
+local function toggleScrapESP(Value)
+    scrapESPEnabled = Value
+    
+    if scrapScanConnection then
+        pcall(function() scrapScanConnection:Disconnect() end)
+        scrapScanConnection = nil
+    end
+    
+    if Value then
+        setupScrapESP()
+        setupDeathHandling()
+        
+        -- Periodic scan for new scrap
+        scrapScanConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if scrapESPEnabled then
+                -- Check if scrap folder exists and has new items
+                local scrapFolder = workspace:FindFirstChild("Misc")
+                if scrapFolder then
+                    scrapFolder = scrapFolder:FindFirstChild("Zones")
+                    if scrapFolder then
+                        scrapFolder = scrapFolder:FindFirstChild("LootingItems")
+                        if scrapFolder then
+                            scrapFolder = scrapFolder:FindFirstChild("Scrap")
+                        end
+                    end
                 end
-            end)
-            
-            scrapHighlightConnections[scrapItem] = {
-                highlight = highlight,
-                connection = connection
-            }
+                
+                if not scrapFolder then
+                    clearScrapESP()
+                    return
+                end
+                
+                -- Check for any scrap items without components
+                local existingObjects = {}
+                for _, comp in ipairs(scrapComponents) do
+                    if comp.object then
+                        existingObjects[comp.object] = true
+                    end
+                end
+                
+                for _, scrap in ipairs(scrapFolder:GetChildren()) do
+                    if scrap:IsA("Model") and not existingObjects[scrap] then
+                        local component = LootableComponent.new(scrap, scrap:GetPivot())
+                        table.insert(scrapComponents, component)
+                    end
+                end
+            else
+                if scrapScanConnection then
+                    pcall(function() scrapScanConnection:Disconnect() end)
+                    scrapScanConnection = nil
+                end
+            end
+        end)
+    else
+        clearScrapESP()
+        if scrapDeathConnection then
+            pcall(function() scrapDeathConnection:Disconnect() end)
+            scrapDeathConnection = nil
         end
     end
 end
-
-local scrapScanConnection = nil
 
 local Toggle = Tab:CreateToggle({
    Name = "Scrap ESP",
    CurrentValue = false,
    Flag = "ScrapESP",
    Callback = function(Value)
-      scrapESPEnabled = Value
-      
-      if scrapScanConnection then
-         scrapScanConnection:Disconnect()
-         scrapScanConnection = nil
-      end
-      
-      if Value then
-         clearScrapHighlights()
-         updateScrapESP()
-         scrapScanConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if scrapESPEnabled then
-               updateScrapESP()
-            else
-               if scrapScanConnection then scrapScanConnection:Disconnect() end
-            end
-         end)
-      else
-         clearScrapHighlights()
-      end
+      toggleScrapESP(Value)
    end,
 })
 
-local Toggle = Tab:CreateToggle({
-   Name = "Artifact ESP - not mine",
-   CurrentValue = false,
-   Flag = "Toggle1",
-   Callback = function(Value)
-      local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+-- ===== LOCATION ESP TOGGLE =====
+local locationESPEnabled = false
+local locationESPObjects = {}
+local locationESPBin = nil
+local locationESPScanConnection = nil
+local locationESPDeathConnection = nil
 
-local plr = Players.LocalPlayer
-local chr = plr.Character or plr.CharacterAdded:Wait()
-local hrp = chr:WaitForChild("HumanoidRootPart")
-local artifactsFolder = workspace.Misc.Zones.LootingItems.Artifacts
+-- Location data
+local LOCATIONS = {
+    {
+        name = "Power Station",
+        path = {"GameStuff", "GameSections", "POWERSTATION"}
+    },
+    {
+        name = "Radio Station",
+        path = {"GameStuff", "GameSections", "RadioTowerRemake"}
+    },
+    {
+        name = "Big House",
+        path = {"GameStuff", "GameSections", "StorageShedRemake"}
+    },
+    {
+        name = "Shop",
+        path = {"GameStuff", "GameSections", "SHOP"}
+    },
+    {
+        name = "Small House",
+        path = {"GameStuff", "GameSections", "SmallCabinRemake"}
+    },
+    {
+        name = "Workshop",
+        path = {"GameStuff", "GameSections", "WorkshopRemake"}
+    },
+    {
+        name = "Warehouse",
+        path = {"GameStuff", "GameSections", "WarehouseRemake"}
+    },
+    {
+        name = "Ritual",
+        path = {"Misc", "AISpawnLocations", "Model"}
+    }
+}
 
-local function createDistanceGui(part)
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "DistanceGui"
-    billboard.Adornee = part
-    billboard.Size = UDim2.new(0, 100, 0, 40)
-    billboard.StudsOffset = Vector3.new(0, 2, 0)
-    billboard.AlwaysOnTop = true
-
-    local textLabel = Instance.new("TextLabel")
-    textLabel.BackgroundTransparency = 1
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.TextColor3 = Color3.new(1, 0, 0)
-    textLabel.TextStrokeTransparency = 0.5
-    textLabel.TextScaled = true
-    textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.Parent = billboard
-
-    billboard.Parent = part
-    return textLabel
+-- Function to find a location by path
+local function findLocation(path)
+    local current = workspace
+    for _, part in ipairs(path) do
+        current = current:FindFirstChild(part)
+        if not current then
+            return nil
+        end
+    end
+    return current
 end
 
-for _, model in ipairs(artifactsFolder:GetChildren()) do
-    if model:IsA("Model") then
-        for _, part in ipairs(model:GetChildren()) do
-            if part:IsA("MeshPart") then
-                local highlight = Instance.new("Highlight")
-                highlight.Adornee = part
-                highlight.FillColor = Color3.new(1, 0, 0)
-                highlight.OutlineColor = Color3.new(1, 0, 0)
-                highlight.Parent = part
+-- Function to clear location ESP
+local function clearLocationESP()
+    if locationESPBin then
+        pcall(function() locationESPBin:destroy() end)
+        locationESPBin = nil
+    end
+    
+    for _, data in ipairs(locationESPObjects) do
+        if data.billboard then
+            pcall(function() data.billboard:Destroy() end)
+        end
+        if data.connection then
+            pcall(function() data.connection:Disconnect() end)
+        end
+    end
+    locationESPObjects = {}
+end
 
-                local distanceLabel = createDistanceGui(part)
-
-                RunService.Heartbeat:Connect(function()
-                    if hrp and hrp.Parent then
-                        local dist = (hrp.Position - part.Position).Magnitude
-                        distanceLabel.Text = string.format("%.1f studs", dist)
-                    end
-                end)
+-- Function to setup location ESP
+local function setupLocationESP()
+    clearLocationESP()
+    
+    if not locationESPEnabled then return end
+    
+    locationESPBin = createBin()
+    
+    for _, locationData in ipairs(LOCATIONS) do
+        local location = findLocation(locationData.path)
+        if location then
+            -- Find a part to attach the billboard to
+            local attachPart = location:FindFirstChild("HumanoidRootPart") or location:FindFirstChild("Head") or location:FindFirstChildOfClass("BasePart")
+            if not attachPart then
+                attachPart = location
             end
+            
+            -- Create BillboardGui
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "LocationESP_" .. locationData.name
+            billboard.Size = UDim2.new(0, 200, 0, 40)
+            billboard.StudsOffset = Vector3.new(0, 5, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = attachPart
+            
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = locationData.name
+            textLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+            textLabel.TextStrokeTransparency = 0
+            textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            textLabel.TextScaled = true
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.Parent = billboard
+            
+            -- Watch for location being destroyed
+            local conn = location.AncestryChanged:Connect(function()
+                if not location or not location.Parent then
+                    pcall(function() billboard:Destroy() end)
+                    if conn then pcall(function() conn:Disconnect() end) end
+                end
+            end)
+            
+            table.insert(locationESPObjects, {
+                name = locationData.name,
+                location = location,
+                billboard = billboard,
+                textLabel = textLabel,
+                connection = conn
+            })
+            
+            locationESPBin:add(conn)
         end
     end
 end
+
+-- Toggle for Location ESP
+local function toggleLocationESP(Value)
+    locationESPEnabled = Value
+    
+    if locationESPScanConnection then
+        pcall(function() locationESPScanConnection:Disconnect() end)
+        locationESPScanConnection = nil
+    end
+    
+    if Value then
+        setupLocationESP()
+        
+        -- Periodic scan for locations that might have been destroyed/recreated
+        locationESPScanConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if locationESPEnabled then
+                -- Check if any locations are missing
+                local needsRescan = false
+                for _, data in ipairs(locationESPObjects) do
+                    if not data.location or not data.location.Parent then
+                        needsRescan = true
+                        break
+                    end
+                end
+                
+                if needsRescan then
+                    setupLocationESP()
+                end
+            else
+                if locationESPScanConnection then
+                    pcall(function() locationESPScanConnection:Disconnect() end)
+                    locationESPScanConnection = nil
+                end
+            end
+        end)
+    else
+        clearLocationESP()
+    end
+end
+
+local Toggle = Tab:CreateToggle({
+   Name = "Location ESP",
+   CurrentValue = false,
+   Flag = "LocationESP",
+   Callback = function(Value)
+      toggleLocationESP(Value)
    end,
 })
 
