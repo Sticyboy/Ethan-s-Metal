@@ -1408,7 +1408,7 @@ local function setupLocationESP()
             local conn = location.AncestryChanged:Connect(function()
                 if not location or not location.Parent then
                     pcall(function() billboard:Destroy() end)
-                    if conn then pcall(function() conn:Disconnect() end) end
+                    if conn then pcall(function() conn:Disconnect() end)
                 end
             end)
             
@@ -1473,12 +1473,87 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
--- ===== CHAIN ESP (FIXED - properly re-adds highlight when CHAIN reappears) =====
+-- ===== CHAIN ESP (WITH QTE IMMUNITY & CLASHING CHECKS) =====
 local chainESPEnabled = false
 local chainHighlight = nil
 local chainConnection = nil
 local chainCheckConnection = nil
+local chainStatusBillboards = {}
+local chainStatusConnections = {}
 
+-- Status offsets (stacked vertically)
+local STATUS_OFFSETS = {
+    Clashing = 3,
+    QTEImmunity = 5
+}
+
+-- Function to update a specific status display
+local function updateChainStatus(chain, statusName, attributeName, displayText, color, offset)
+    if not chain then return end
+    
+    -- Check if the attribute is true
+    local isActive = chain:GetAttribute(attributeName) == true
+    
+    -- Check if billboard already exists
+    local existing = chainStatusBillboards[statusName]
+    
+    if isActive then
+        -- If active and no billboard, create one
+        if not existing then
+            local hrp = chain:FindFirstChild("HumanoidRootPart") or chain:FindFirstChild("Head") or chain:FindFirstChildOfClass("BasePart")
+            if hrp then
+                local billboard = Instance.new("BillboardGui")
+                billboard.Name = "ChainStatus_" .. statusName
+                billboard.Size = UDim2.new(0, 150, 0, 30)
+                billboard.StudsOffset = Vector3.new(0, offset, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Parent = hrp
+                
+                local textLabel = Instance.new("TextLabel")
+                textLabel.Size = UDim2.new(1, 0, 1, 0)
+                textLabel.BackgroundTransparency = 1
+                textLabel.Text = displayText
+                textLabel.TextColor3 = color
+                textLabel.TextStrokeTransparency = 0
+                textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                textLabel.TextScaled = true
+                textLabel.Font = Enum.Font.GothamBold
+                textLabel.Parent = billboard
+                
+                chainStatusBillboards[statusName] = billboard
+                
+                -- Watch for attribute changes
+                local attrConn = chain:GetAttributeChangedSignal(attributeName):Connect(function()
+                    updateChainStatus(chain, statusName, attributeName, displayText, color, offset)
+                end)
+                chainStatusConnections[statusName] = attrConn
+            end
+        end
+    else
+        -- If not active, remove billboard
+        if existing then
+            pcall(function() existing:Destroy() end)
+            chainStatusBillboards[statusName] = nil
+        end
+        if chainStatusConnections[statusName] then
+            pcall(function() chainStatusConnections[statusName]:Disconnect() end)
+            chainStatusConnections[statusName] = nil
+        end
+    end
+end
+
+-- Function to update all chain statuses
+local function updateAllChainStatuses(chain)
+    if not chain then return end
+    
+    -- Update Clashing status
+    updateChainStatus(chain, "Clashing", "Clashing", "⚔️ Clashing ⚔️", Color3.fromRGB(255, 100, 100), STATUS_OFFSETS.Clashing)
+    
+    -- Update QTEImmunity status
+    updateChainStatus(chain, "QTEImmunity", "QTEImmunity", "⚡ Clash Immune ⚡", Color3.fromRGB(255, 255, 0), STATUS_OFFSETS.QTEImmunity)
+end
+
+-- Function to update Chain ESP
 local function updateChainESP()
     -- Remove existing highlight
     if chainHighlight then
@@ -1489,6 +1564,16 @@ local function updateChainESP()
     if chainConnection then
         pcall(function() chainConnection:Disconnect() end)
         chainConnection = nil
+    end
+    
+    -- Clear status billboards
+    for name, billboard in pairs(chainStatusBillboards) do
+        pcall(function() billboard:Destroy() end)
+        chainStatusBillboards[name] = nil
+    end
+    for name, conn in pairs(chainStatusConnections) do
+        pcall(function() conn:Disconnect() end)
+        chainStatusConnections[name] = nil
     end
     
     if not chainESPEnabled then return end
@@ -1511,6 +1596,9 @@ local function updateChainESP()
         chainHighlight.FillTransparency = 0.60
         chainHighlight.OutlineTransparency = 0
         
+        -- Update status displays
+        updateAllChainStatuses(chain)
+        
         -- Watch for CHAIN being removed
         chainConnection = chain.AncestryChanged:Connect(function()
             if not chain or not chain.Parent then
@@ -1521,6 +1609,15 @@ local function updateChainESP()
                 if chainConnection then
                     pcall(function() chainConnection:Disconnect() end)
                     chainConnection = nil
+                end
+                -- Clear status billboards when CHAIN is removed
+                for name, billboard in pairs(chainStatusBillboards) do
+                    pcall(function() billboard:Destroy() end)
+                    chainStatusBillboards[name] = nil
+                end
+                for name, conn in pairs(chainStatusConnections) do
+                    pcall(function() conn:Disconnect() end)
+                    chainStatusConnections[name] = nil
                 end
             end
         end)
@@ -1577,6 +1674,15 @@ local Toggle = Tab:CreateToggle({
          if chainConnection then
             pcall(function() chainConnection:Disconnect() end)
             chainConnection = nil
+         end
+         -- Clear status billboards
+         for name, billboard in pairs(chainStatusBillboards) do
+            pcall(function() billboard:Destroy() end)
+            chainStatusBillboards[name] = nil
+         end
+         for name, conn in pairs(chainStatusConnections) do
+            pcall(function() conn:Disconnect() end)
+            chainStatusConnections[name] = nil
          end
       end
    end,
