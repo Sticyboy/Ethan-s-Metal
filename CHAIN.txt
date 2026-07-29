@@ -60,12 +60,8 @@ end))
 setthreadidentity(7)
 
 -- ===== MAIN SCRIPT =====
--- i got suggested to jst put this in github blah blah whatever heres ur code
-
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local VirtualInputManager = game:GetService("VirtualInputManager")
-
--- hi if ur seeing the source code also alan used to like skibidi toilet tower defense alot (dont tell him i said this)
 
 local Window = Rayfield:CreateWindow({
    Name = "XCHain - 2.6.5",
@@ -143,7 +139,6 @@ local Window = Rayfield:CreateWindow({
 
 -- ===== BLUEPRINTS TAB =====
 local BlueprintsTab = Window:CreateTab("Blueprints", "printer")
-
 local Section = BlueprintsTab:CreateSection("These only unlock blueprints btw")
 
 local Button = BlueprintsTab:CreateButton({
@@ -152,16 +147,10 @@ local Button = BlueprintsTab:CreateButton({
 		local player = game.Players.LocalPlayer
 		local playerStats = player:WaitForChild("PlayerStats")
 		local blueprints = playerStats:WaitForChild("Blueprints")
-
 		for _, name in ipairs(blueprints:GetAttributeNames()) do
 			blueprints:SetAttribute(name, true)
 		end
-        Rayfield:Notify({
-            Title = "Blueprints",
-            Content = "All blueprints unlocked!",
-            Duration = 3,
-            Image = "check"
-        })
+        Rayfield:Notify({Title = "Blueprints", Content = "All blueprints unlocked!", Duration = 3, Image = "check"})
    end,
 })
 
@@ -170,24 +159,12 @@ local Button = BlueprintsTab:CreateButton({
    Callback = function()
 		local player = game.Players.LocalPlayer
         local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
-
         local attributeName = "CombatKnife"
-
         if blueprints:GetAttribute(attributeName) ~= nil then
             blueprints:SetAttribute(attributeName, true)
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "CombatKnife unlocked!",
-                Duration = 2,
-                Image = "check"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "CombatKnife unlocked!", Duration = 2, Image = "check"})
         else
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "CombatKnife not found.",
-                Duration = 2,
-                Image = "ban"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "CombatKnife not found.", Duration = 2, Image = "ban"})
         end
    end,
 })
@@ -197,24 +174,12 @@ local Button = BlueprintsTab:CreateButton({
    Callback = function()
 		local player = game.Players.LocalPlayer
         local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
-
         local attributeName = "Deagle"
-
         if blueprints:GetAttribute(attributeName) ~= nil then
             blueprints:SetAttribute(attributeName, true)
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "Deagle unlocked!",
-                Duration = 2,
-                Image = "check"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "Deagle unlocked!", Duration = 2, Image = "check"})
         else
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "Deagle not found.",
-                Duration = 2,
-                Image = "ban"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "Deagle not found.", Duration = 2, Image = "ban"})
         end
    end,
 })
@@ -224,24 +189,12 @@ local Button = BlueprintsTab:CreateButton({
    Callback = function()
 		local player = game.Players.LocalPlayer
         local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
-
         local attributeName = "DoubleBarrel"
-
         if blueprints:GetAttribute(attributeName) ~= nil then
             blueprints:SetAttribute(attributeName, true)
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "DoubleBarrel unlocked!",
-                Duration = 2,
-                Image = "check"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "DoubleBarrel unlocked!", Duration = 2, Image = "check"})
         else
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "DoubleBarrel not found.",
-                Duration = 2,
-                Image = "ban"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "DoubleBarrel not found.", Duration = 2, Image = "ban"})
         end
    end,
 })
@@ -251,24 +204,12 @@ local Button = BlueprintsTab:CreateButton({
    Callback = function()
 		local player = game.Players.LocalPlayer
         local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
-
         local attributeName = "M1911"
-
         if blueprints:GetAttribute(attributeName) ~= nil then
             blueprints:SetAttribute(attributeName, true)
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "M1911 unlocked!",
-                Duration = 2,
-                Image = "check"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "M1911 unlocked!", Duration = 2, Image = "check"})
         else
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "M1911 not found.",
-                Duration = 2,
-                Image = "ban"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "M1911 not found.", Duration = 2, Image = "ban"})
         end
    end,
 })
@@ -278,24 +219,12 @@ local Button = BlueprintsTab:CreateButton({
    Callback = function()
 		local player = game.Players.LocalPlayer
         local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
-
         local attributeName = "Machete"
-
         if blueprints:GetAttribute(attributeName) ~= nil then
             blueprints:SetAttribute(attributeName, true)
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "Machete unlocked!",
-                Duration = 2,
-                Image = "check"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "Machete unlocked!", Duration = 2, Image = "check"})
         else
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "Machete not found.",
-                Duration = 2,
-                Image = "ban"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "Machete not found.", Duration = 2, Image = "ban"})
         end
    end,
 })
@@ -305,24 +234,12 @@ local Button = BlueprintsTab:CreateButton({
    Callback = function()
 		local player = game.Players.LocalPlayer
         local blueprints = player:WaitForChild("PlayerStats"):WaitForChild("Blueprints")
-
         local attributeName = "SpellBook"
-
         if blueprints:GetAttribute(attributeName) ~= nil then
             blueprints:SetAttribute(attributeName, true)
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "SpellBook unlocked!",
-                Duration = 2,
-                Image = "check"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "SpellBook unlocked!", Duration = 2, Image = "check"})
         else
-            Rayfield:Notify({
-                Title = "Blueprints",
-                Content = "SpellBook not found.",
-                Duration = 2,
-                Image = "ban"
-            })
+            Rayfield:Notify({Title = "Blueprints", Content = "SpellBook not found.", Duration = 2, Image = "ban"})
         end
    end,
 })
@@ -334,34 +251,24 @@ local Button = BlueprintsTab:CreateButton({
    Callback = function()
       local playerStats = game.Players.LocalPlayer:WaitForChild("PlayerStats")
       local quests = playerStats:WaitForChild("Quests")
-
       quests:SetAttribute("ArtifactQuest", true)
-      Rayfield:Notify({
-            Title = "Blueprints",
-            Content = "Artifact Quest unlocked!",
-            Duration = 2,
-            Image = "check"
-        })
+      Rayfield:Notify({Title = "Blueprints", Content = "Artifact Quest unlocked!", Duration = 2, Image = "check"})
    end,
 })
 
 -- ===== COMBAT TAB =====
 local Tab = Window:CreateTab("Combat", "axe")
-
 local Section = Tab:CreateSection("some of these might be bugged or unstable")
-
 local Divider = Tab:CreateDivider()
 
 local infiniteStaminaEnabled = false
 local staminaLoopConnection = nil
-
 local Toggle = Tab:CreateToggle({
    Name = "Inf Stamina",
    CurrentValue = false,
    Flag = "Toggle1",
    Callback = function(Value)
       infiniteStaminaEnabled = Value
-
       if infiniteStaminaEnabled then
          staminaLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
             if game.Players.LocalPlayer and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Stats") and game.Players.LocalPlayer.Character.Stats:FindFirstChild("Stamina") then
@@ -379,14 +286,12 @@ local Toggle = Tab:CreateToggle({
 
 local infiniteCombatStaminaEnabled = false
 local combatStaminaLoopConnection = nil
-
 local Toggle = Tab:CreateToggle({
    Name = "Inf Combat Stamina",
    CurrentValue = false,
    Flag = "InfCom",
    Callback = function(Value)
       infiniteCombatStaminaEnabled = Value
-
       if infiniteCombatStaminaEnabled then
          combatStaminaLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
             if game.Players.LocalPlayer and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Stats") and game.Players.LocalPlayer.Character.Stats:FindFirstChild("CombatStamina") then
@@ -404,14 +309,12 @@ local Toggle = Tab:CreateToggle({
 
 local autoWinXSawClashEnabled = false
 local xSawClashLoopConnection = nil
-
 local Toggle = Tab:CreateToggle({
    Name = "Clash Strength",
    CurrentValue = false,
    Flag = "ClashS",
    Callback = function(Value)
       autoWinXSawClashEnabled = Value
-
       if autoWinXSawClashEnabled then
          xSawClashLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
             if game.Players.LocalPlayer and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Stats") and game.Players.LocalPlayer.Character.Stats:FindFirstChild("ClashStrength") then
@@ -428,7 +331,6 @@ local Toggle = Tab:CreateToggle({
 })
 
 local Label = Tab:CreateLabel("Sadly Xsaw and Ammo has been patched and removed aimbot due to not working", "cloud-hail")
-
 local Divider = Tab:CreateDivider()
 
 local Button = Tab:CreateButton({
@@ -441,7 +343,9 @@ local Button = Tab:CreateButton({
 local Button = Tab:CreateButton({
    Name = "ThirdPerson",
    Callback = function()
-		game.Players.LocalPlayer.CameraMode = Enum.CameraMode.Classic game.Players.LocalPlayer.CameraMaxZoomDistance = 1280 game.Players.LocalPlayer.CameraMinZoomDistance = 0.5
+		game.Players.LocalPlayer.CameraMode = Enum.CameraMode.Classic
+        game.Players.LocalPlayer.CameraMaxZoomDistance = 1280
+        game.Players.LocalPlayer.CameraMinZoomDistance = 0.5
    end,
 })
 
@@ -453,7 +357,6 @@ local Button = Tab:CreateButton({
 })
 
 local Divider = Tab:CreateDivider()
-
 local Section = Tab:CreateSection("Inf dodge is sadly patched")
 
 -- ===== AUTO QTE TOGGLE =====
@@ -461,11 +364,8 @@ local autoQTEEnabled = false
 local qteConnections = {}
 local qtePollingThreads = {}
 
--- Function to press a key
 local function pressKey(key)
     print("Attempting to press key: " .. key)
-    
-    -- Handle special keys
     local keyMap = {
         ["Space"] = Enum.KeyCode.Space,
         ["Enter"] = Enum.KeyCode.Return,
@@ -481,17 +381,11 @@ local function pressKey(key)
         ["Left"] = Enum.KeyCode.Left,
         ["Right"] = Enum.KeyCode.Right,
     }
-    
     local keyCode
-    
-    -- Check if it's a special key
     if keyMap[key] then
         keyCode = keyMap[key]
     else
-        -- Try to get the key code directly
         keyCode = Enum.KeyCode[key]
-        
-        -- If that fails, try to find it by name
         if not keyCode then
             for _, enum in ipairs(Enum.KeyCode:GetEnumItems()) do
                 if enum.Name == key then
@@ -501,9 +395,7 @@ local function pressKey(key)
             end
         end
     end
-    
     if keyCode then
-        print("Pressing key: " .. tostring(keyCode))
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
         task.wait(0.05)
         VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
@@ -513,7 +405,6 @@ local function pressKey(key)
     end
 end
 
--- Function to monitor a specific QTE
 local function monitorQTE(qtePath, qteName)
     local qteText = game.Players.LocalPlayer.PlayerGui:FindFirstChild("Ingame")
     if qteText then
@@ -528,35 +419,27 @@ local function monitorQTE(qtePath, qteName)
             end
         end
     end
-    
     if not qteText then
         warn("QTE UI not found: " .. qteName)
         return false
     end
-    
     print("QTE monitor started for: " .. qteName)
-    
-    -- Property change listener
     local connection = qteText:GetPropertyChangedSignal("Text"):Connect(function()
         if not autoQTEEnabled then return end
         local currentText = qteText.Text
         if currentText ~= "Hi" and currentText ~= "" then
-            print("[" .. qteName .. "] QTE Key detected: " .. currentText)
             pressKey(currentText)
             task.wait(0.1)
             qteText.Text = "Hi"
         end
     end)
     table.insert(qteConnections, connection)
-    
-    -- Polling loop as backup
     local thread = task.spawn(function()
         while autoQTEEnabled do
             task.wait(0.1)
             if not autoQTEEnabled then break end
             local currentText = qteText.Text
             if currentText ~= "Hi" and currentText ~= "" then
-                print("[" .. qteName .. "] QTE Key detected (poll): " .. currentText)
                 pressKey(currentText)
                 task.wait(0.1)
                 qteText.Text = "Hi"
@@ -564,39 +447,22 @@ local function monitorQTE(qtePath, qteName)
         end
     end)
     table.insert(qtePollingThreads, thread)
-    
     return true
 end
 
--- Toggle function
 local function toggleQTE(Value)
     autoQTEEnabled = Value
-    
     if Value then
-        -- Clean up old connections if any
-        for _, conn in ipairs(qteConnections) do
-            conn:Disconnect()
-        end
+        for _, conn in ipairs(qteConnections) do conn:Disconnect() end
         qteConnections = {}
-        
-        for _, thread in ipairs(qtePollingThreads) do
-            task.cancel(thread)
-        end
+        for _, thread in ipairs(qtePollingThreads) do task.cancel(thread) end
         qtePollingThreads = {}
-        
-        -- Start monitoring both QTEs
         monitorQTE("QTEToma", "QTEToma")
         monitorQTE("QTE", "QTE")
     else
-        -- Clean up connections
-        for _, conn in ipairs(qteConnections) do
-            conn:Disconnect()
-        end
+        for _, conn in ipairs(qteConnections) do conn:Disconnect() end
         qteConnections = {}
-        
-        for _, thread in ipairs(qtePollingThreads) do
-            task.cancel(thread)
-        end
+        for _, thread in ipairs(qtePollingThreads) do task.cancel(thread) end
         qtePollingThreads = {}
     end
 end
@@ -605,9 +471,7 @@ local Toggle = Tab:CreateToggle({
    Name = "Auto QTE",
    CurrentValue = false,
    Flag = "AutoQTE",
-   Callback = function(Value)
-      toggleQTE(Value)
-   end,
+   Callback = function(Value) toggleQTE(Value) end,
 })
 
 -- ===== AUTO DODGE CHOKE TOGGLE =====
@@ -616,113 +480,67 @@ local soundConnections = {}
 local dodgeChokeCooldown = 0
 local TARGET_AUDIO_ID = "16214979367"
 local DODGE_COOLDOWN = 0.65
-local DODGE_DELAY = 0.3 -- 0.3 second delay before dodging
+local DODGE_DELAY = 0.3
 
--- Function to check distance to CHAIN
 local function isNearChain()
     local player = game.Players.LocalPlayer
     local character = player.Character
     if not character then return false end
-    
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    
     local chain = workspace:FindFirstChild("Misc")
-    if chain then
-        chain = chain:FindFirstChild("AI")
-        if chain then
-            chain = chain:FindFirstChild("CHAIN")
-        end
-    end
-    
+    if chain then chain = chain:FindFirstChild("AI") end
+    if chain then chain = chain:FindFirstChild("CHAIN") end
     if not chain then return false end
-    
     local chainHrp = chain:FindFirstChild("HumanoidRootPart")
     if not chainHrp then return false end
-    
     local distance = (hrp.Position - chainHrp.Position).Magnitude
     return distance <= 15
 end
 
--- Function to press Q (dodge) with delay
 local function pressQKeyWithDelay()
-    task.wait(DODGE_DELAY) -- Wait 0.3 seconds before dodging
+    task.wait(DODGE_DELAY)
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
     task.wait(0.05)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
 end
 
--- Process sound for dodge choke
 local function hookSound(sound)
     if not sound:IsA("Sound") then return end
-    
     local function checkAndTrigger()
         if not autoDodgeChokeEnabled then return end
-        
         local soundId = tostring(sound.SoundId)
         if soundId:find(TARGET_AUDIO_ID) then
             local now = os.clock()
             if (now - dodgeChokeCooldown) >= DODGE_COOLDOWN then
-                -- Check if player is near CHAIN (within 15 studs)
                 if isNearChain() then
                     dodgeChokeCooldown = now
-                    task.spawn(pressQKeyWithDelay) -- Dodge with 0.3s delay
+                    task.spawn(pressQKeyWithDelay)
                     print("Auto Dodge Choke triggered! (0.3s delay)")
                 else
-                    local chain = workspace:FindFirstChild("Misc")
-                    if chain then
-                        chain = chain:FindFirstChild("AI")
-                        if chain then
-                            chain = chain:FindFirstChild("CHAIN")
-                        end
-                    end
-                    if chain and chain:FindFirstChild("HumanoidRootPart") then
-                        local player = game.Players.LocalPlayer
-                        local character = player.Character
-                        if character and character:FindFirstChild("HumanoidRootPart") then
-                            local distance = (character.HumanoidRootPart.Position - chain.HumanoidRootPart.Position).Magnitude
-                            print("CHAIN too far (" .. math.floor(distance) .. " studs) - not dodging")
-                        end
-                    end
+                    print("CHAIN too far - not dodging")
                 end
             end
         end
     end
-    
-    -- Connect to Played event
     sound.Played:Connect(checkAndTrigger)
-    
-    -- Also check when IsPlaying changes
     sound:GetPropertyChangedSignal("IsPlaying"):Connect(function()
-        if sound.IsPlaying then
-            checkAndTrigger()
-        end
+        if sound.IsPlaying then checkAndTrigger() end
     end)
-    
     table.insert(soundConnections, sound)
 end
 
--- Setup sound hooks
 local function setupDodgeChoke()
-    -- Hook all existing sounds
     for _, desc in pairs(game:GetDescendants()) do
-        pcall(function()
-            hookSound(desc)
-        end)
+        pcall(function() hookSound(desc) end)
     end
-    
-    -- Hook new sounds as they're added
     game.DescendantAdded:Connect(function(desc)
-        pcall(function()
-            hookSound(desc)
-        end)
+        pcall(function() hookSound(desc) end)
     end)
 end
 
--- Toggle function for Auto Dodge Choke
 local function toggleDodgeChoke(Value)
     autoDodgeChokeEnabled = Value
-    
     if Value then
         setupDodgeChoke()
         print("Auto Dodge Choke Enabled! (0.3s delay)")
@@ -735,19 +553,14 @@ local Toggle = Tab:CreateToggle({
    Name = "Auto Dodge Choke",
    CurrentValue = false,
    Flag = "AutoDodgeChoke",
-   Callback = function(Value)
-      toggleDodgeChoke(Value)
-   end,
+   Callback = function(Value) toggleDodgeChoke(Value) end,
 })
 
 -- ===== GUI INTERFACE TAB =====
 local Tab = Window:CreateTab("GUI interface", "square-terminal")
-
 local Button = Tab:CreateButton({
    Name = "Watch and Power Gui",
-   Callback = function()
-      loadstring(game:HttpGet('https://pastebin.com/raw/9gdApaSy'))()
-   end,
+   Callback = function() loadstring(game:HttpGet('https://pastebin.com/raw/9gdApaSy'))() end,
 })
 
 local Toggle = Tab:CreateToggle({
@@ -756,21 +569,14 @@ local Toggle = Tab:CreateToggle({
    Flag = "Toggle1",
    Callback = function(Value)
       local player = game.Players.LocalPlayer
-local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
-local Shop = ingameGui:WaitForChild("Shop")
-
-local isVisible = Shop.Visible
-
-if not isVisible then
-	Shop.Visible = true
-else
-	Shop.Visible = false
-end
+      local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
+      local Shop = ingameGui:WaitForChild("Shop")
+      local isVisible = Shop.Visible
+      Shop.Visible = not isVisible
    end,
 })
 
 local Divider = Tab:CreateDivider()
-
 local Label = Tab:CreateLabel("These are somewhat useless Guis, deconstructor and workbench may not work cuz u have to be near it", "rewind")
 
 local Toggle = Tab:CreateToggle({
@@ -779,16 +585,9 @@ local Toggle = Tab:CreateToggle({
    Flag = "Toggle1",
    Callback = function(Value)
       local player = game.Players.LocalPlayer
-local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
-local De = ingameGui:WaitForChild("Deconstructor")
-
-local isVisible = De.Visible
-
-if not isVisible then
-	De.Visible = true
-else
-	De.Visible = false
-end
+      local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
+      local De = ingameGui:WaitForChild("Deconstructor")
+      De.Visible = not De.Visible
    end,
 })
 
@@ -798,59 +597,35 @@ local Toggle = Tab:CreateToggle({
    Flag = "Toggle1",
    Callback = function(Value)
       local player = game.Players.LocalPlayer
-local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
-local Work = ingameGui:WaitForChild("Workbench")
-
-local isVisible = Work.Visible
-
-if not isVisible then
-	Work.Visible = true
-else
-	Work.Visible = false
-end
+      local ingameGui = player:WaitForChild("PlayerGui"):WaitForChild("Ingame")
+      local Work = ingameGui:WaitForChild("Workbench")
+      Work.Visible = not Work.Visible
    end,
 })
 
 -- ===== RENDER TAB =====
 local Tab = Window:CreateTab("Render", "fire-extinguisher")
-
 local Section = Tab:CreateSection("Lightening - recommended to use both")
-
 local Divider = Tab:CreateDivider()
 
 local Button = Tab:CreateButton({
    Name = "nofog",
    Callback = function()
-		-- Services
-local Lighting = game:GetService("Lighting")
-
--- FogEnd
-Lighting.FogEnd = 100000
-
-Lighting:GetPropertyChangedSignal("FogEnd"):Connect(function()
-    Lighting.FogEnd = 100000
-end)
-
--- Atmosphere
-for _,v in ipairs(Lighting:GetDescendants()) do
-    if v:IsA("Atmosphere") then
-        v.Density = 0
-
-        v:GetPropertyChangedSignal("Density"):Connect(function()
-            v.Density = 0
-        end)
-    end
-end
-
-Lighting.DescendantAdded:Connect(function(v)
-    if v:IsA("Atmosphere") then
-        v.Density = 0
-
-        v:GetPropertyChangedSignal("Density"):Connect(function()
-            v.Density = 0
-        end)
-    end
-end)
+		local Lighting = game:GetService("Lighting")
+		Lighting.FogEnd = 100000
+		Lighting:GetPropertyChangedSignal("FogEnd"):Connect(function() Lighting.FogEnd = 100000 end)
+		for _,v in ipairs(Lighting:GetDescendants()) do
+			if v:IsA("Atmosphere") then
+				v.Density = 0
+				v:GetPropertyChangedSignal("Density"):Connect(function() v.Density = 0 end)
+			end
+		end
+		Lighting.DescendantAdded:Connect(function(v)
+			if v:IsA("Atmosphere") then
+				v.Density = 0
+				v:GetPropertyChangedSignal("Density"):Connect(function() v.Density = 0 end)
+			end
+		end)
    end,
 })
 
@@ -858,111 +633,89 @@ local Button = Tab:CreateButton({
    Name = "fullbright",
    Callback = function()
 		if not _G.FullBrightExecuted then
-
-	_G.FullBrightEnabled = false
-
-	_G.NormalLightingSettings = {
-		Brightness = game:GetService("Lighting").Brightness,
-		ClockTime = game:GetService("Lighting").ClockTime,
-		FogEnd = game:GetService("Lighting").FogEnd,
-		GlobalShadows = game:GetService("Lighting").GlobalShadows,
-		Ambient = game:GetService("Lighting").Ambient
-	}
-
-	game:GetService("Lighting"):GetPropertyChangedSignal("Brightness"):Connect(function()
-		if game:GetService("Lighting").Brightness ~= 1 and game:GetService("Lighting").Brightness ~= _G.NormalLightingSettings.Brightness then
-			_G.NormalLightingSettings.Brightness = game:GetService("Lighting").Brightness
-			if not _G.FullBrightEnabled then
-				repeat
-					wait()
-				until _G.FullBrightEnabled
-			end
-			game:GetService("Lighting").Brightness = 1
-		end
-	end)
-
-	game:GetService("Lighting"):GetPropertyChangedSignal("ClockTime"):Connect(function()
-		if game:GetService("Lighting").ClockTime ~= 12 and game:GetService("Lighting").ClockTime ~= _G.NormalLightingSettings.ClockTime then
-			_G.NormalLightingSettings.ClockTime = game:GetService("Lighting").ClockTime
-			if not _G.FullBrightEnabled then
-				repeat
-					wait()
-				until _G.FullBrightEnabled
-			end
-			game:GetService("Lighting").ClockTime = 12
-		end
-	end)
-
-	game:GetService("Lighting"):GetPropertyChangedSignal("FogEnd"):Connect(function()
-		if game:GetService("Lighting").FogEnd ~= 786543 and game:GetService("Lighting").FogEnd ~= _G.NormalLightingSettings.FogEnd then
-			_G.NormalLightingSettings.FogEnd = game:GetService("Lighting").FogEnd
-			if not _G.FullBrightEnabled then
-				repeat
-					wait()
-				until _G.FullBrightEnabled
-			end
-			game:GetService("Lighting").FogEnd = 786543
-		end
-	end)
-
-	game:GetService("Lighting"):GetPropertyChangedSignal("GlobalShadows"):Connect(function()
-		if game:GetService("Lighting").GlobalShadows ~= false and game:GetService("Lighting").GlobalShadows ~= _G.NormalLightingSettings.GlobalShadows then
-			_G.NormalLightingSettings.GlobalShadows = game:GetService("Lighting").GlobalShadows
-			if not _G.FullBrightEnabled then
-				repeat
-					wait()
-				until _G.FullBrightEnabled
-			end
-			game:GetService("Lighting").GlobalShadows = false
-		end
-	end)
-
-	game:GetService("Lighting"):GetPropertyChangedSignal("Ambient"):Connect(function()
-		if game:GetService("Lighting").Ambient ~= Color3.fromRGB(178, 178, 178) and game:GetService("Lighting").Ambient ~= _G.NormalLightingSettings.Ambient then
-			_G.NormalLightingSettings.Ambient = game:GetService("Lighting").Ambient
-			if not _G.FullBrightEnabled then
-				repeat
-					wait()
-				until _G.FullBrightEnabled
-			end
-			game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
-		end
-	end)
-
-	game:GetService("Lighting").Brightness = 1
-	game:GetService("Lighting").ClockTime = 12
-	game:GetService("Lighting").FogEnd = 786543
-	game:GetService("Lighting").GlobalShadows = false
-	game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
-
-	local LatestValue = true
-	spawn(function()
-		repeat
-			wait()
-		until _G.FullBrightEnabled
-		while wait() do
-			if _G.FullBrightEnabled ~= LatestValue then
-				if not _G.FullBrightEnabled then
-					game:GetService("Lighting").Brightness = _G.NormalLightingSettings.Brightness
-					game:GetService("Lighting").ClockTime = _G.NormalLightingSettings.ClockTime
-					game:GetService("Lighting").FogEnd = _G.NormalLightingSettings.FogEnd
-					game:GetService("Lighting").GlobalShadows = _G.NormalLightingSettings.GlobalShadows
-					game:GetService("Lighting").Ambient = _G.NormalLightingSettings.Ambient
-				else
+			_G.FullBrightEnabled = false
+			_G.NormalLightingSettings = {
+				Brightness = game:GetService("Lighting").Brightness,
+				ClockTime = game:GetService("Lighting").ClockTime,
+				FogEnd = game:GetService("Lighting").FogEnd,
+				GlobalShadows = game:GetService("Lighting").GlobalShadows,
+				Ambient = game:GetService("Lighting").Ambient
+			}
+			game:GetService("Lighting"):GetPropertyChangedSignal("Brightness"):Connect(function()
+				if game:GetService("Lighting").Brightness ~= 1 and game:GetService("Lighting").Brightness ~= _G.NormalLightingSettings.Brightness then
+					_G.NormalLightingSettings.Brightness = game:GetService("Lighting").Brightness
+					if not _G.FullBrightEnabled then
+						repeat wait() until _G.FullBrightEnabled
+					end
 					game:GetService("Lighting").Brightness = 1
+				end
+			end)
+			game:GetService("Lighting"):GetPropertyChangedSignal("ClockTime"):Connect(function()
+				if game:GetService("Lighting").ClockTime ~= 12 and game:GetService("Lighting").ClockTime ~= _G.NormalLightingSettings.ClockTime then
+					_G.NormalLightingSettings.ClockTime = game:GetService("Lighting").ClockTime
+					if not _G.FullBrightEnabled then
+						repeat wait() until _G.FullBrightEnabled
+					end
 					game:GetService("Lighting").ClockTime = 12
+				end
+			end)
+			game:GetService("Lighting"):GetPropertyChangedSignal("FogEnd"):Connect(function()
+				if game:GetService("Lighting").FogEnd ~= 786543 and game:GetService("Lighting").FogEnd ~= _G.NormalLightingSettings.FogEnd then
+					_G.NormalLightingSettings.FogEnd = game:GetService("Lighting").FogEnd
+					if not _G.FullBrightEnabled then
+						repeat wait() until _G.FullBrightEnabled
+					end
 					game:GetService("Lighting").FogEnd = 786543
+				end
+			end)
+			game:GetService("Lighting"):GetPropertyChangedSignal("GlobalShadows"):Connect(function()
+				if game:GetService("Lighting").GlobalShadows ~= false and game:GetService("Lighting").GlobalShadows ~= _G.NormalLightingSettings.GlobalShadows then
+					_G.NormalLightingSettings.GlobalShadows = game:GetService("Lighting").GlobalShadows
+					if not _G.FullBrightEnabled then
+						repeat wait() until _G.FullBrightEnabled
+					end
 					game:GetService("Lighting").GlobalShadows = false
+				end
+			end)
+			game:GetService("Lighting"):GetPropertyChangedSignal("Ambient"):Connect(function()
+				if game:GetService("Lighting").Ambient ~= Color3.fromRGB(178, 178, 178) and game:GetService("Lighting").Ambient ~= _G.NormalLightingSettings.Ambient then
+					_G.NormalLightingSettings.Ambient = game:GetService("Lighting").Ambient
+					if not _G.FullBrightEnabled then
+						repeat wait() until _G.FullBrightEnabled
+					end
 					game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
 				end
-				LatestValue = not LatestValue
-			end
+			end)
+			game:GetService("Lighting").Brightness = 1
+			game:GetService("Lighting").ClockTime = 12
+			game:GetService("Lighting").FogEnd = 786543
+			game:GetService("Lighting").GlobalShadows = false
+			game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
+			local LatestValue = true
+			spawn(function()
+				repeat wait() until _G.FullBrightEnabled
+				while wait() do
+					if _G.FullBrightEnabled ~= LatestValue then
+						if not _G.FullBrightEnabled then
+							game:GetService("Lighting").Brightness = _G.NormalLightingSettings.Brightness
+							game:GetService("Lighting").ClockTime = _G.NormalLightingSettings.ClockTime
+							game:GetService("Lighting").FogEnd = _G.NormalLightingSettings.FogEnd
+							game:GetService("Lighting").GlobalShadows = _G.NormalLightingSettings.GlobalShadows
+							game:GetService("Lighting").Ambient = _G.NormalLightingSettings.Ambient
+						else
+							game:GetService("Lighting").Brightness = 1
+							game:GetService("Lighting").ClockTime = 12
+							game:GetService("Lighting").FogEnd = 786543
+							game:GetService("Lighting").GlobalShadows = false
+							game:GetService("Lighting").Ambient = Color3.fromRGB(178, 178, 178)
+						end
+						LatestValue = not LatestValue
+					end
+				end
+			end)
 		end
-	end)
-end
-
-_G.FullBrightExecuted = true
-_G.FullBrightEnabled = not _G.FullBrightEnabled
+		_G.FullBrightExecuted = true
+		_G.FullBrightEnabled = not _G.FullBrightEnabled
    end,
 })
 
@@ -976,58 +729,34 @@ local scrapBin = nil
 local scrapScanConnection = nil
 local scrapDeathConnection = nil
 
--- Create Bin class for cleanup
 local function createBin()
     local bin = {}
     local items = {}
-    
-    function bin:add(item)
-        table.insert(items, item)
-        return self
-    end
-    
+    function bin:add(item) table.insert(items, item) return self end
     function bin:destroy()
         for _, item in ipairs(items) do
-            if type(item) == "function" then
-                pcall(item)
-            elseif typeof(item) == "RBXScriptConnection" then
-                pcall(function() item:Disconnect() end)
-            elseif type(item) == "thread" then
-                pcall(function() task.cancel(item) end)
-            elseif item and type(item) == "table" and item.destroy then
-                pcall(function() item:destroy() end)
-            elseif item and item.Destroy then
-                pcall(function() item:Destroy() end)
+            if type(item) == "function" then pcall(item)
+            elseif typeof(item) == "RBXScriptConnection" then pcall(function() item:Disconnect() end)
+            elseif type(item) == "thread" then pcall(function() task.cancel(item) end)
+            elseif item and type(item) == "table" and item.destroy then pcall(function() item:destroy() end)
+            elseif item and item.Destroy then pcall(function() item:Destroy() end)
             end
         end
         items = {}
     end
-    
     return bin
 end
 
--- Function to clear all scrap ESP
 local function clearScrapESP()
-    if scrapBin then
-        pcall(function() scrapBin:destroy() end)
-        scrapBin = nil
-    end
-    
-    if scrapScreenGui then
-        pcall(function() scrapScreenGui:Destroy() end)
-        scrapScreenGui = nil
-    end
-    
+    if scrapBin then pcall(function() scrapBin:destroy() end) scrapBin = nil end
+    if scrapScreenGui then pcall(function() scrapScreenGui:Destroy() end) scrapScreenGui = nil end
     scrapComponents = {}
 end
 
--- Function to format numbers
 local function formatNum(num, format)
-    local formatted = string.format("%." .. format .. "f", num)
-    return formatted
+    return string.format("%." .. format .. "f", num)
 end
 
--- LootableComponent class for each scrap item
 local LootableComponent = {}
 LootableComponent.__index = LootableComponent
 
@@ -1037,22 +766,16 @@ function LootableComponent.new(scrap, pivot)
     self.pivotPos = pivot
     self.bin = createBin()
     self.isAvailable = true
-    
-    -- Check if scrap has Values folder with Available attribute
     local values = scrap:FindFirstChild("Values")
     if values then
         self.isAvailable = values:GetAttribute("Available") ~= false
     end
-    
-    -- Create UI elements
     self.container = Instance.new("Frame")
     self.nameLabel = Instance.new("TextLabel")
-    
     self.container.Visible = false
     self.container.AnchorPoint = Vector2.new(0.5, 0)
     self.container.BackgroundTransparency = 1
     self.container.Size = UDim2.new(0, 100, 0, 50)
-    
     self.nameLabel.BackgroundTransparency = 1
     self.nameLabel.Font = Enum.Font.Nunito
     self.nameLabel.Text = "Scrap"
@@ -1060,37 +783,20 @@ function LootableComponent.new(scrap, pivot)
     self.nameLabel.TextSize = 15
     self.nameLabel.TextStrokeTransparency = 0.5
     self.nameLabel.Size = UDim2.new(1, 0, 0, 14)
-    
     self.nameLabel.Parent = self.container
-    
-    -- Add to ScreenGui
-    if scrapScreenGui then
-        self.container.Parent = scrapScreenGui
-    end
-    
-    -- Track availability changes
+    if scrapScreenGui then self.container.Parent = scrapScreenGui end
     if values then
         local conn = values:GetAttributeChangedSignal("Available"):Connect(function()
             self.isAvailable = values:GetAttribute("Available")
         end)
         self.bin:add(conn)
     end
-    
-    -- Render loop
-    local renderConn
-    renderConn = game:GetService("RunService").RenderStepped:Connect(function()
-        self:render()
-    end)
+    local renderConn = game:GetService("RunService").RenderStepped:Connect(function() self:render() end)
     self.bin:add(renderConn)
-    
-    -- Track object death
     local deathConn = scrap.AncestryChanged:Connect(function()
-        if not scrap or not scrap.Parent then
-            self:destroy()
-        end
+        if not scrap or not scrap.Parent then self:destroy() end
     end)
     self.bin:add(deathConn)
-    
     return self
 end
 
@@ -1098,34 +804,27 @@ function LootableComponent:render()
     local camera = workspace.CurrentCamera
     local player = game.Players.LocalPlayer
     local character = player.Character
-    
     if not camera or not character then
         self.container.Visible = false
         return
     end
-    
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then
         self.container.Visible = false
         return
     end
-    
     if not self.object or not self.object.Parent then
         self:destroy()
         return
     end
-    
     local position, visible = camera:WorldToViewportPoint(self.pivotPos.Position)
-    
     if visible and self.isAvailable then
         local scale = 1 / (position.Z * math.tan(math.rad(camera.FieldOfView * 0.5)) * 2) * 1000
         local width, height = math.floor(1 * scale), math.floor(3 * scale)
         local x, y = math.floor(position.X), math.floor(position.Y)
         local xPosition, yPosition = math.floor(x - width * 0.5), math.floor((y - height * 0.5) + (0.5 * scale))
-        
         self.container.Visible = true
         self.container.Position = UDim2.new(0, xPosition, 0, yPosition)
-        
         local distance = (hrp.Position - self.pivotPos.Position).Magnitude
         self.nameLabel.Text = string.format("Scrap [%.1f]", distance)
     else
@@ -1134,55 +833,31 @@ function LootableComponent:render()
 end
 
 function LootableComponent:destroy()
-    if self.bin then
-        pcall(function() self.bin:destroy() end)
-        self.bin = nil
-    end
-    if self.container then
-        pcall(function() self.container:Destroy() end)
-        self.container = nil
-    end
+    if self.bin then pcall(function() self.bin:destroy() end) self.bin = nil end
+    if self.container then pcall(function() self.container:Destroy() end) self.container = nil end
     self.object = nil
 end
 
--- Function to setup scrap ESP
 local function setupScrapESP()
     clearScrapESP()
-    
     if not scrapESPEnabled then return end
-    
-    -- Create ScreenGui
     scrapScreenGui = Instance.new("ScreenGui")
     scrapScreenGui.DisplayOrder = 10
     scrapScreenGui.IgnoreGuiInset = true
     scrapScreenGui.Parent = game:GetService("CoreGui")
     scrapScreenGui.Name = "ScrapESP"
-    
     scrapBin = createBin()
-    
-    -- Find scrap folder
     local scrapFolder = workspace:FindFirstChild("Misc")
-    if scrapFolder then
-        scrapFolder = scrapFolder:FindFirstChild("Zones")
-        if scrapFolder then
-            scrapFolder = scrapFolder:FindFirstChild("LootingItems")
-            if scrapFolder then
-                scrapFolder = scrapFolder:FindFirstChild("Scrap")
-            end
-        end
-    end
-    
+    if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Zones") end
+    if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("LootingItems") end
+    if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Scrap") end
     if not scrapFolder then return end
-    
-    -- Create components for existing scrap
     for _, scrap in ipairs(scrapFolder:GetChildren()) do
         if scrap:IsA("Model") then
             local component = LootableComponent.new(scrap, scrap:GetPivot())
             table.insert(scrapComponents, component)
         end
     end
-    
-    -- Watch for new scrap
     local newConn = scrapFolder.ChildAdded:Connect(function(child)
         if child:IsA("Model") then
             local component = LootableComponent.new(child, child:GetPivot())
@@ -1190,8 +865,6 @@ local function setupScrapESP()
         end
     end)
     scrapBin:add(newConn)
-    
-    -- Watch for scrap removal
     local removedConn = scrapFolder.ChildRemoved:Connect(function(child)
         for i, comp in ipairs(scrapComponents) do
             if comp.object == child then
@@ -1204,66 +877,36 @@ local function setupScrapESP()
     scrapBin:add(removedConn)
 end
 
--- Function to handle player death/respawn
 local function setupDeathHandling()
     local player = game.Players.LocalPlayer
-    
-    -- When character dies, clear ESP
     local deathConn = player.CharacterAdded:Connect(function(character)
-        -- Clear everything when respawning
         clearScrapESP()
-        
-        -- Wait a moment then re-setup if enabled
         task.wait(0.5)
-        if scrapESPEnabled then
-            setupScrapESP()
-        end
+        if scrapESPEnabled then setupScrapESP() end
     end)
-    
     scrapDeathConnection = deathConn
 end
 
--- Toggle for Scrap ESP
 local function toggleScrapESP(Value)
     scrapESPEnabled = Value
-    
     if scrapScanConnection then
         pcall(function() scrapScanConnection:Disconnect() end)
         scrapScanConnection = nil
     end
-    
     if Value then
         setupScrapESP()
         setupDeathHandling()
-        
-        -- Periodic scan for new scrap
         scrapScanConnection = game:GetService("RunService").Heartbeat:Connect(function()
             if scrapESPEnabled then
-                -- Check if scrap folder exists and has new items
                 local scrapFolder = workspace:FindFirstChild("Misc")
-                if scrapFolder then
-                    scrapFolder = scrapFolder:FindFirstChild("Zones")
-                    if scrapFolder then
-                        scrapFolder = scrapFolder:FindFirstChild("LootingItems")
-                        if scrapFolder then
-                            scrapFolder = scrapFolder:FindFirstChild("Scrap")
-                        end
-                    end
-                end
-                
-                if not scrapFolder then
-                    clearScrapESP()
-                    return
-                end
-                
-                -- Check for any scrap items without components
+                if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Zones") end
+                if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("LootingItems") end
+                if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Scrap") end
+                if not scrapFolder then clearScrapESP() return end
                 local existingObjects = {}
                 for _, comp in ipairs(scrapComponents) do
-                    if comp.object then
-                        existingObjects[comp.object] = true
-                    end
+                    if comp.object then existingObjects[comp.object] = true end
                 end
-                
                 for _, scrap in ipairs(scrapFolder:GetChildren()) do
                     if scrap:IsA("Model") and not existingObjects[scrap] then
                         local component = LootableComponent.new(scrap, scrap:GetPivot())
@@ -1279,10 +922,7 @@ local function toggleScrapESP(Value)
         end)
     else
         clearScrapESP()
-        if scrapDeathConnection then
-            pcall(function() scrapDeathConnection:Disconnect() end)
-            scrapDeathConnection = nil
-        end
+        if scrapDeathConnection then pcall(function() scrapDeathConnection:Disconnect() end) scrapDeathConnection = nil end
     end
 end
 
@@ -1290,9 +930,7 @@ local Toggle = Tab:CreateToggle({
    Name = "Scrap ESP",
    CurrentValue = false,
    Flag = "ScrapESP",
-   Callback = function(Value)
-      toggleScrapESP(Value)
-   end,
+   Callback = function(Value) toggleScrapESP(Value) end,
 })
 
 -- ===== LOCATION ESP TOGGLE =====
@@ -1302,76 +940,37 @@ local locationESPBin = nil
 local locationESPScanConnection = nil
 local locationESPDeathConnection = nil
 
--- Location data
 local LOCATIONS = {
-    {
-        name = "Power Station",
-        path = {"GameStuff", "GameSections", "POWERSTATION"}
-    },
-    {
-        name = "Radio Station",
-        path = {"GameStuff", "GameSections", "RadioTowerRemake"}
-    },
-    {
-        name = "Big House",
-        path = {"GameStuff", "GameSections", "StorageShedRemake"}
-    },
-    {
-        name = "Shop",
-        path = {"GameStuff", "GameSections", "SHOP"}
-    },
-    {
-        name = "Small House",
-        path = {"GameStuff", "GameSections", "SmallCabinRemake"}
-    },
-    {
-        name = "Workshop",
-        path = {"GameStuff", "GameSections", "WorkshopRemake"}
-    },
-    {
-        name = "Warehouse",
-        path = {"GameStuff", "GameSections", "WarehouseRemake"}
-    },
-    {
-        name = "Ritual",
-        path = {"Misc", "AISpawnLocations", "Model"}
-    }
+    { name = "Power Station", path = {"GameStuff", "GameSections", "POWERSTATION"} },
+    { name = "Radio Station", path = {"GameStuff", "GameSections", "RadioTowerRemake"} },
+    { name = "Big House", path = {"GameStuff", "GameSections", "StorageShedRemake"} },
+    { name = "Shop", path = {"GameStuff", "GameSections", "SHOP"} },
+    { name = "Small House", path = {"GameStuff", "GameSections", "SmallCabinRemake"} },
+    { name = "Workshop", path = {"GameStuff", "GameSections", "WorkshopRemake"} },
+    { name = "Warehouse", path = {"GameStuff", "GameSections", "WarehouseRemake"} },
+    { name = "Ritual", path = {"Misc", "AISpawnLocations", "Model"} }
 }
 
--- Function to find a location by path
 local function findLocation(path)
     local current = workspace
     for _, part in ipairs(path) do
         current = current:FindFirstChild(part)
-        if not current then
-            return nil
-        end
+        if not current then return nil end
     end
     return current
 end
 
--- Function to clear location ESP
 local function clearLocationESP()
-    if locationESPBin then
-        pcall(function() locationESPBin:destroy() end)
-        locationESPBin = nil
-    end
-    
+    if locationESPBin then pcall(function() locationESPBin:destroy() end) locationESPBin = nil end
     for _, data in ipairs(locationESPObjects) do
-        if data.billboard then
-            pcall(function() data.billboard:Destroy() end)
-        end
-        if data.connection then
-            pcall(function() data.connection:Disconnect() end)
-        end
+        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+        if data.connection then pcall(function() data.connection:Disconnect() end) end
     end
     locationESPObjects = {}
 end
 
--- Function to setup location ESP
 local function setupLocationESP()
     clearLocationESP()
-    
     if not locationESPEnabled then return end
     
     locationESPBin = createBin()
@@ -1379,13 +978,11 @@ local function setupLocationESP()
     for _, locationData in ipairs(LOCATIONS) do
         local location = findLocation(locationData.path)
         if location then
-            -- Find a part to attach the billboard to
-            local attachPart = location:FindFirstChild("HumanoidRootPart") or location:FindFirstChild("Head") or location:FindFirstChildOfClass("BasePart")
-            if not attachPart then
-                attachPart = location
-            end
+            local attachPart = location:FindFirstChild("HumanoidRootPart") 
+                or location:FindFirstChild("Head") 
+                or location:FindFirstChildOfClass("BasePart")
+            if not attachPart then attachPart = location end
             
-            -- Create BillboardGui
             local billboard = Instance.new("BillboardGui")
             billboard.Name = "LocationESP_" .. locationData.name
             billboard.Size = UDim2.new(0, 200, 0, 40)
@@ -1404,11 +1001,11 @@ local function setupLocationESP()
             textLabel.Font = Enum.Font.GothamBold
             textLabel.Parent = billboard
             
-            -- Watch for location being destroyed
-            local conn = location.AncestryChanged:Connect(function()
+            local conn
+            conn = location.AncestryChanged:Connect(function()
                 if not location or not location.Parent then
                     pcall(function() billboard:Destroy() end)
-                    if conn then
+                    if conn then 
                         pcall(function() conn:Disconnect() end)
                     end
                 end
@@ -1427,22 +1024,16 @@ local function setupLocationESP()
     end
 end
 
--- Toggle for Location ESP
 local function toggleLocationESP(Value)
     locationESPEnabled = Value
-    
     if locationESPScanConnection then
         pcall(function() locationESPScanConnection:Disconnect() end)
         locationESPScanConnection = nil
     end
-    
     if Value then
         setupLocationESP()
-        
-        -- Periodic scan for locations that might have been destroyed/recreated
         locationESPScanConnection = game:GetService("RunService").Heartbeat:Connect(function()
             if locationESPEnabled then
-                -- Check if any locations are missing
                 local needsRescan = false
                 for _, data in ipairs(locationESPObjects) do
                     if not data.location or not data.location.Parent then
@@ -1450,10 +1041,7 @@ local function toggleLocationESP(Value)
                         break
                     end
                 end
-                
-                if needsRescan then
-                    setupLocationESP()
-                end
+                if needsRescan then setupLocationESP() end
             else
                 if locationESPScanConnection then
                     pcall(function() locationESPScanConnection:Disconnect() end)
@@ -1470,12 +1058,10 @@ local Toggle = Tab:CreateToggle({
    Name = "Location ESP",
    CurrentValue = false,
    Flag = "LocationESP",
-   Callback = function(Value)
-      toggleLocationESP(Value)
-   end,
+   Callback = function(Value) toggleLocationESP(Value) end,
 })
 
--- ===== CHAIN ESP (WITH STATUS TEXTS - NO OFFSET ISSUES) =====
+-- ===== CHAIN ESP =====
 local chainESPEnabled = false
 local chainHighlight = nil
 local chainConnection = nil
@@ -1483,37 +1069,42 @@ local chainCheckConnection = nil
 local chainStatusBillboard = nil
 local chainStatusLabels = {}
 
--- Function to update chain status display
+local MAX_ANGER = 190
+
+local function calculateHealthFromAnger(anger)
+    if anger <= 0 then
+        return 100
+    end
+    local healthPercent = 100 - (anger / MAX_ANGER * 100)
+    return math.max(0, math.min(100, healthPercent))
+end
+
 local function updateChainStatusDisplay(chain)
     if not chain then return end
-    
-    -- Clear existing billboard
     if chainStatusBillboard then
         pcall(function() chainStatusBillboard:Destroy() end)
         chainStatusBillboard = nil
     end
     chainStatusLabels = {}
     
-    -- Get the attachment point
     local hrp = chain:FindFirstChild("HumanoidRootPart") or chain:FindFirstChild("Head") or chain:FindFirstChild("Torso")
     if not hrp then return end
     
-    -- Check attributes
     local isClashing = chain:GetAttribute("Clashing") == true
     local isQTEImmune = chain:GetAttribute("QTEImmunity") == true
+    local anger = chain:GetAttribute("Anger") or 0
+    local health = calculateHealthFromAnger(anger)
+    local healthText = string.format("Health: %.1f%%", health)
     
-    -- If neither is true, don't show anything
-    if not isClashing and not isQTEImmune then return end
+    local hasAnyStatus = isClashing or isQTEImmune
     
-    -- Create a single BillboardGui
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "ChainStatus"
-    billboard.Size = UDim2.new(0, 200, 0, 60)  -- Tall enough for two lines
-    billboard.StudsOffset = Vector3.new(0, 3, 0)  -- Fixed offset above head
+    billboard.Size = UDim2.new(0, 200, 0, hasAnyStatus and 85 or 30)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
     billboard.AlwaysOnTop = true
     billboard.Parent = hrp
     
-    -- Create UIListLayout to stack texts vertically
     local layout = Instance.new("UIListLayout")
     layout.FillDirection = Enum.FillDirection.Vertical
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1521,7 +1112,26 @@ local function updateChainStatusDisplay(chain)
     layout.Padding = UDim.new(0, 2)
     layout.Parent = billboard
     
-    -- Add Clashing text if true
+    local healthLabel = Instance.new("TextLabel")
+    healthLabel.Size = UDim2.new(1, 0, 0, 25)
+    healthLabel.BackgroundTransparency = 1
+    healthLabel.Text = healthText
+    
+    if health > 50 then
+        healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    elseif health > 25 then
+        healthLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+    else
+        healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    end
+    
+    healthLabel.TextStrokeTransparency = 0
+    healthLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    healthLabel.TextScaled = true
+    healthLabel.Font = Enum.Font.GothamBold
+    healthLabel.Parent = billboard
+    table.insert(chainStatusLabels, healthLabel)
+    
     if isClashing then
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 0, 25)
@@ -1536,7 +1146,6 @@ local function updateChainStatusDisplay(chain)
         table.insert(chainStatusLabels, label)
     end
     
-    -- Add QTE Immunity text if true
     if isQTEImmune then
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 0, 25)
@@ -1554,32 +1163,22 @@ local function updateChainStatusDisplay(chain)
     chainStatusBillboard = billboard
 end
 
--- Function to find CHAIN
 local function findChain()
     local chain = workspace:FindFirstChild("Misc")
-    if chain then
-        chain = chain:FindFirstChild("AI")
-        if chain then
-            chain = chain:FindFirstChild("CHAIN")
-        end
-    end
+    if chain then chain = chain:FindFirstChild("AI") end
+    if chain then chain = chain:FindFirstChild("CHAIN") end
     return chain
 end
 
--- Function to update Chain ESP
 local function updateChainESP()
-    -- Remove existing highlight
     if chainHighlight then
         pcall(function() chainHighlight:Destroy() end)
         chainHighlight = nil
     end
-    
     if chainConnection then
         pcall(function() chainConnection:Disconnect() end)
         chainConnection = nil
     end
-    
-    -- Clear status billboard
     if chainStatusBillboard then
         pcall(function() chainStatusBillboard:Destroy() end)
         chainStatusBillboard = nil
@@ -1588,11 +1187,8 @@ local function updateChainESP()
     
     if not chainESPEnabled then return end
     
-    -- Find CHAIN
     local chain = findChain()
-    
     if chain and chain:IsA("Model") then
-        -- Create highlight
         chainHighlight = Instance.new("Highlight")
         chainHighlight.Parent = chain
         chainHighlight.FillColor = Color3.fromRGB(255, 21, 21)
@@ -1600,24 +1196,20 @@ local function updateChainESP()
         chainHighlight.FillTransparency = 0.60
         chainHighlight.OutlineTransparency = 0
         
-        -- Update status display
         updateChainStatusDisplay(chain)
         
-        -- Watch for attribute changes
         local function onAttributeChanged()
             if chain and chain.Parent then
                 updateChainStatusDisplay(chain)
             end
         end
         
-        -- Connect to both attributes
         local clashingConn = chain:GetAttributeChangedSignal("Clashing"):Connect(onAttributeChanged)
         local qteConn = chain:GetAttributeChangedSignal("QTEImmunity"):Connect(onAttributeChanged)
+        local angerConn = chain:GetAttributeChangedSignal("Anger"):Connect(onAttributeChanged)
         
-        -- Store connections for cleanup
-        chainStatusLabels = {clashingConn, qteConn}
+        chainStatusLabels = {clashingConn, qteConn, angerConn}
         
-        -- Watch for CHAIN being removed
         chainConnection = chain.AncestryChanged:Connect(function()
             if not chain or not chain.Parent then
                 if chainHighlight then
@@ -1633,7 +1225,9 @@ local function updateChainESP()
                     chainStatusBillboard = nil
                 end
                 for _, conn in ipairs(chainStatusLabels) do
-                    if conn then pcall(function() conn:Disconnect() end)
+                    if conn then 
+                        pcall(function() conn:Disconnect() end)
+                    end
                 end
                 chainStatusLabels = {}
             end
@@ -1647,21 +1241,14 @@ local Toggle = Tab:CreateToggle({
    Flag = "ChainESP",
    Callback = function(Value)
       chainESPEnabled = Value
-      
-      -- Stop the check loop
       if chainCheckConnection then
          pcall(function() chainCheckConnection:Disconnect() end)
          chainCheckConnection = nil
       end
-      
       if Value then
-         -- Initial setup
          updateChainESP()
-         
-         -- Keep checking for CHAIN to reappear
          chainCheckConnection = game:GetService("RunService").Heartbeat:Connect(function()
             if chainESPEnabled then
-               -- If highlight doesn't exist but CHAIN does, re-add it
                if not chainHighlight then
                   local chain = findChain()
                   if chain and chain:IsA("Model") then
@@ -1676,7 +1263,6 @@ local Toggle = Tab:CreateToggle({
             end
          end)
       else
-         -- Clean up
          if chainHighlight then
             pcall(function() chainHighlight:Destroy() end)
             chainHighlight = nil
@@ -1690,7 +1276,9 @@ local Toggle = Tab:CreateToggle({
             chainStatusBillboard = nil
          end
          for _, conn in ipairs(chainStatusLabels) do
-            if conn then pcall(function() conn:Disconnect() end)
+            if conn then 
+               pcall(function() conn:Disconnect() end)
+            end
          end
          chainStatusLabels = {}
       end
