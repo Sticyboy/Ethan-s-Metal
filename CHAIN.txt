@@ -1023,7 +1023,7 @@ end
 
 -- Function to format numbers
 local function formatNum(num, format)
-    local formatted = string.format(`%.{format}f`, num)
+    local formatted = string.format("%." .. format .. "f", num)
     return formatted
 end
 
@@ -1408,7 +1408,9 @@ local function setupLocationESP()
             local conn = location.AncestryChanged:Connect(function()
                 if not location or not location.Parent then
                     pcall(function() billboard:Destroy() end)
-                    if conn then pcall(function() conn:Disconnect() end)
+                    if conn then
+                        pcall(function() conn:Disconnect() end)
+                    end
                 end
             end)
             
@@ -1473,7 +1475,7 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
--- ===== CHAIN ESP (WITH QTE IMMUNITY & CLASHING CHECKS) =====
+-- ===== CHAIN ESP (FIXED USING EXAMPLE SCRIPT METHOD) =====
 local chainESPEnabled = false
 local chainHighlight = nil
 local chainConnection = nil
@@ -1481,56 +1483,19 @@ local chainCheckConnection = nil
 local chainStatusBillboards = {}
 local chainStatusConnections = {}
 
--- Status offsets (stacked vertically)
-local STATUS_OFFSETS = {
+-- Status offsets (stacked vertically - same as example script)
+local CHAIN_STATUS_OFFSETS = {
     Clashing = 3,
     QTEImmunity = 5
 }
 
--- Function to update a specific status display
+-- Function to update a specific status display (USING EXAMPLE SCRIPT METHOD)
 local function updateChainStatus(chain, statusName, attributeName, displayText, color, offset)
     if not chain then return end
     
-    -- Check if the attribute is true
-    local isActive = chain:GetAttribute(attributeName) == true
-    
-    -- Check if billboard already exists
-    local existing = chainStatusBillboards[statusName]
-    
-    if isActive then
-        -- If active and no billboard, create one
-        if not existing then
-            local hrp = chain:FindFirstChild("HumanoidRootPart") or chain:FindFirstChild("Head") or chain:FindFirstChildOfClass("BasePart")
-            if hrp then
-                local billboard = Instance.new("BillboardGui")
-                billboard.Name = "ChainStatus_" .. statusName
-                billboard.Size = UDim2.new(0, 150, 0, 30)
-                billboard.StudsOffset = Vector3.new(0, offset, 0)
-                billboard.AlwaysOnTop = true
-                billboard.Parent = hrp
-                
-                local textLabel = Instance.new("TextLabel")
-                textLabel.Size = UDim2.new(1, 0, 1, 0)
-                textLabel.BackgroundTransparency = 1
-                textLabel.Text = displayText
-                textLabel.TextColor3 = color
-                textLabel.TextStrokeTransparency = 0
-                textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                textLabel.TextScaled = true
-                textLabel.Font = Enum.Font.GothamBold
-                textLabel.Parent = billboard
-                
-                chainStatusBillboards[statusName] = billboard
-                
-                -- Watch for attribute changes
-                local attrConn = chain:GetAttributeChangedSignal(attributeName):Connect(function()
-                    updateChainStatus(chain, statusName, attributeName, displayText, color, offset)
-                end)
-                chainStatusConnections[statusName] = attrConn
-            end
-        end
-    else
-        -- If not active, remove billboard
+    -- Remove existing timer first (same as example script)
+    if chainStatusBillboards[statusName] then
+        local existing = chainStatusBillboards[statusName]
         if existing then
             pcall(function() existing:Destroy() end)
             chainStatusBillboards[statusName] = nil
@@ -1540,17 +1505,68 @@ local function updateChainStatus(chain, statusName, attributeName, displayText, 
             chainStatusConnections[statusName] = nil
         end
     end
+    
+    -- Check if the attribute is true
+    local isActive = chain:GetAttribute(attributeName) == true
+    
+    if not isActive then return end
+    
+    -- Get the HumanoidRootPart (or fallback to Head/Torso) - SAME AS EXAMPLE
+    local hrp = chain:FindFirstChild("HumanoidRootPart") or chain:FindFirstChild("Head") or chain:FindFirstChild("Torso")
+    if not hrp then return end
+    
+    -- CREATE THE BILLBOARD WITH THE OFFSET (SAME AS EXAMPLE)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ChainStatus_" .. statusName
+    billboard.Size = UDim2.new(0, 200, 0, 30)  -- Slightly wider for longer text
+    billboard.StudsOffset = Vector3.new(0, offset, 0)  -- <-- THIS IS THE POSITIONING CODE FROM EXAMPLE
+    billboard.AlwaysOnTop = true
+    billboard.Parent = hrp
+    
+    -- Create the text label (SAME AS EXAMPLE)
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = displayText
+    textLabel.TextColor3 = color
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = billboard
+    
+    -- Store the billboard
+    chainStatusBillboards[statusName] = billboard
+    
+    -- Watch for attribute changes (so it updates in real-time)
+    local attrConn = chain:GetAttributeChangedSignal(attributeName):Connect(function()
+        -- Re-run update when attribute changes
+        updateChainStatus(chain, statusName, attributeName, displayText, color, offset)
+    end)
+    chainStatusConnections[statusName] = attrConn
 end
 
 -- Function to update all chain statuses
 local function updateAllChainStatuses(chain)
     if not chain then return end
     
-    -- Update Clashing status
-    updateChainStatus(chain, "Clashing", "Clashing", "⚔️ Clashing ⚔️", Color3.fromRGB(255, 100, 100), STATUS_OFFSETS.Clashing)
+    -- Update Clashing status (offset 3)
+    updateChainStatus(chain, "Clashing", "Clashing", "⚔️ Clashing ⚔️", Color3.fromRGB(255, 100, 100), CHAIN_STATUS_OFFSETS.Clashing)
     
-    -- Update QTEImmunity status
-    updateChainStatus(chain, "QTEImmunity", "QTEImmunity", "⚡ Clash Immune ⚡", Color3.fromRGB(255, 255, 0), STATUS_OFFSETS.QTEImmunity)
+    -- Update QTEImmunity status (offset 5)
+    updateChainStatus(chain, "QTEImmunity", "QTEImmunity", "⚡ Clash Immune ⚡", Color3.fromRGB(255, 255, 0), CHAIN_STATUS_OFFSETS.QTEImmunity)
+end
+
+-- Function to find CHAIN
+local function findChain()
+    local chain = workspace:FindFirstChild("Misc")
+    if chain then
+        chain = chain:FindFirstChild("AI")
+        if chain then
+            chain = chain:FindFirstChild("CHAIN")
+        end
+    end
+    return chain
 end
 
 -- Function to update Chain ESP
@@ -1579,13 +1595,7 @@ local function updateChainESP()
     if not chainESPEnabled then return end
     
     -- Find CHAIN
-    local chain = workspace:FindFirstChild("Misc")
-    if chain then
-        chain = chain:FindFirstChild("AI")
-        if chain then
-            chain = chain:FindFirstChild("CHAIN")
-        end
-    end
+    local chain = findChain()
     
     if chain and chain:IsA("Model") then
         -- Create highlight
@@ -1646,14 +1656,7 @@ local Toggle = Tab:CreateToggle({
             if chainESPEnabled then
                -- If highlight doesn't exist but CHAIN does, re-add it
                if not chainHighlight then
-                  local chain = workspace:FindFirstChild("Misc")
-                  if chain then
-                     chain = chain:FindFirstChild("AI")
-                     if chain then
-                        chain = chain:FindFirstChild("CHAIN")
-                     end
-                  end
-                  
+                  local chain = findChain()
                   if chain and chain:IsA("Model") then
                      updateChainESP()
                   end
@@ -1687,3 +1690,99 @@ local Toggle = Tab:CreateToggle({
       end
    end,
 })
+
+-- ===== INITIALIZATION =====
+local function initCharacterListeners()
+    if SurvivorsFolder then
+        SurvivorsFolder.ChildAdded:Connect(function(newSurvivor)
+            local root = newSurvivor:WaitForChild("HumanoidRootPart", 5)
+            if root then updatePositionHistory(newSurvivor, root.Position) end
+        end)
+    end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(newKiller)
+            local root = newKiller:WaitForChild("HumanoidRootPart", 5)
+            if root then updatePositionHistory(newKiller, root.Position) end
+        end)
+    end
+    local function watchCharacterRemoval(folder)
+        if folder then
+            folder.ChildRemoved:Connect(function(character)
+                if positionHistory[character] then positionHistory[character] = nil end
+                if aimbotCurrentTarget == character then stopAimbot() end
+                if currentDusekkarTarget == character then stopDusekkar() end
+                if activeCooldownTimers[character] then
+                    if activeCooldownTimers[character].billboard then pcall(function() activeCooldownTimers[character].billboard:Destroy() end) end
+                    if activeCooldownTimers[character].connection then activeCooldownTimers[character].connection:Disconnect() end
+                    activeCooldownTimers[character] = nil
+                end
+                if slasherActiveCooldownTimers[character] then
+                    for _, data in pairs(slasherActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    slasherActiveCooldownTimers[character] = nil
+                end
+                if onexActiveCooldownTimers[character] then
+                    for _, data in pairs(onexActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    onexActiveCooldownTimers[character] = nil
+                end
+                if sixerActiveCooldownTimers[character] then
+                    for _, data in pairs(sixerActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    sixerActiveCooldownTimers[character] = nil
+                end
+                if noliActiveCooldownTimers[character] then
+                    for _, data in pairs(noliActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    noliActiveCooldownTimers[character] = nil
+                end
+                if c00lkiddActiveCooldownTimers[character] then
+                    for _, data in pairs(c00lkiddActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    c00lkiddActiveCooldownTimers[character] = nil
+                end
+                if johnDoeActiveCooldownTimers[character] then
+                    for _, data in pairs(johnDoeActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    johnDoeActiveCooldownTimers[character] = nil
+                end
+                if nosferatuActiveCooldownTimers[character] then
+                    for _, data in pairs(nosferatuActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    nosferatuActiveCooldownTimers[character] = nil
+                end
+                if noobActiveCooldownTimers[character] then
+                    for _, data in pairs(noobActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    noobActiveCooldownTimers[character] = nil
+                end
+            end)
+        end
+    end
+    watchCharacterRemoval(KillersFolder)
+    watchCharacterRemoval(SurvivorsFolder)
+end
+
+initCharacterListeners()
+task.spawn(setupInputHook)
+setupSilentAim()
+refreshUIRefs()
+Rayfield:LoadConfiguration()
+
+print("loaded, also matthew sucks")
