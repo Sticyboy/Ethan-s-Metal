@@ -137,6 +137,462 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
+-- ===== SERVICES =====
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- ===== AIMBOT VARIABLES =====
+local AimbotEnabled = false
+local AimbotFOV = 180
+local AimbotSmoothness = 0.1
+local FOVCircle = nil
+local AimbotKey = Enum.UserInputType.MouseButton2
+local AutoRetarget = true
+local currentAimTarget = nil
+local isAiming = false
+local WaitingForRelease = false
+local prevKeyPressed = false
+local ListeningForKey = false
+local KeybindButton = nil
+local aimbotConnection = nil
+local AimbotTab = nil
+
+-- Key binding functions
+local function getKeyName(inputType)
+    if inputType == Enum.UserInputType.MouseButton1 then
+        return "Left Click"
+    elseif inputType == Enum.UserInputType.MouseButton2 then
+        return "Right Click"
+    elseif inputType == Enum.UserInputType.MouseButton3 then
+        return "Middle Click"
+    elseif inputType.Name:match("Keyboard") then
+        return inputType.Name:gsub("Keyboard", "")
+    else
+        return tostring(inputType.Name)
+    end
+end
+
+-- Function to start listening for key input
+local function startKeyListen()
+    ListeningForKey = true
+    if KeybindButton then
+        KeybindButton:Set("Press any key...")
+    end
+    Rayfield:Notify({
+        Title = "Keybind",
+        Content = "Press any key to set as aimbot key...",
+        Duration = 3,
+        Image = 4483362458
+    })
+end
+
+-- Key input connection
+local keyConnection
+local function setupKeyListener()
+    if keyConnection then
+        keyConnection:Disconnect()
+    end
+    
+    keyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if ListeningForKey then
+            ListeningForKey = false
+            AimbotKey = input.UserInputType
+            
+            if KeybindButton then
+                KeybindButton:Set("Aimbot Key: " .. getKeyName(AimbotKey))
+            end
+            
+            Rayfield:Notify({
+                Title = "Keybind Set",
+                Content = "Aimbot key set to: " .. getKeyName(AimbotKey),
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end)
+end
+
+-- FOV Circle Visual
+local function createFOVCircle()
+    if FOVCircle then
+        FOVCircle:Remove()
+    end
+    
+    local circle = Drawing.new("Circle")
+    circle.Visible = true
+    circle.Thickness = 2
+    circle.Color = Color3.new(1, 1, 1)
+    circle.Transparency = 1
+    circle.Filled = false
+    circle.Radius = AimbotFOV
+    circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    circle.NumSides = 100
+    
+    FOVCircle = circle
+    return circle
+end
+
+local function updateFOVCircle()
+    if FOVCircle then
+        FOVCircle.Radius = AimbotFOV
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    end
+end
+
+local function isAlive(character)
+    if not character then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid.Health > 0
+    end
+    return true
+end
+
+local function isMouseInFOV()
+    local mouseLocation = UserInputService:GetMouseLocation()
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local distanceFromCenter = (mouseLocation - screenCenter).Magnitude
+    return distanceFromCenter <= AimbotFOV
+end
+
+local function isTargetInFOV(targetPart)
+    if not targetPart then
+        return false
+    end
+    
+    if AimbotFOV >= 180 then
+        return true
+    end
+    
+    local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+    
+    if not onScreen then
+        return false
+    end
+    
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - screenCenter).Magnitude
+    
+    return distance <= AimbotFOV
+end
+
+-- Get CHAIN target
+local function getChainTargetPart()
+    local chain = workspace:FindFirstChild("Misc")
+    if chain then
+        chain = chain:FindFirstChild("AI")
+        if chain then
+            chain = chain:FindFirstChild("CHAIN")
+        end
+    end
+    
+    if not chain then
+        return nil
+    end
+    
+    if not isAlive(chain) then
+        return nil
+    end
+    
+    local head = chain:FindFirstChild("Head")
+    if head then
+        return head
+    end
+    
+    local humanoidRootPart = chain:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        return humanoidRootPart
+    end
+    
+    local torso = chain:FindFirstChild("Torso") or chain:FindFirstChild("UpperTorso")
+    return torso
+end
+
+local function getChainTarget()
+    local targetPart = getChainTargetPart()
+    if targetPart then
+        if isTargetInFOV(targetPart) then
+            return targetPart
+        end
+    end
+    return nil
+end
+
+-- AIM AT TARGET WITH SMOOTHNESS
+local function aimAtTarget(targetPart)
+    if not targetPart then return end
+    
+    local targetPosition = targetPart.Position
+    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPosition)
+    
+    Camera.CFrame = Camera.CFrame:Lerp(lookAt, AimbotSmoothness)
+end
+
+-- Check if chain exists and is valid
+local function isChainValid()
+    local chain = workspace:FindFirstChild("Misc")
+    if chain then
+        chain = chain:FindFirstChild("AI")
+        if chain then
+            chain = chain:FindFirstChild("CHAIN")
+        end
+    end
+    return chain ~= nil and isAlive(chain)
+end
+
+local function startAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+    end
+    
+    aimbotConnection = RunService.RenderStepped:Connect(function()
+        if AimbotEnabled and UserInputService:GetFocusedTextBox() == nil then
+            local isAimbotKeyPressed = false
+            
+            if AimbotKey == Enum.UserInputType.MouseButton1 or AimbotKey == Enum.UserInputType.MouseButton2 or AimbotKey == Enum.UserInputType.MouseButton3 then
+                isAimbotKeyPressed = UserInputService:IsMouseButtonPressed(AimbotKey)
+            else
+                isAimbotKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
+            end
+            
+            local shouldAim = isMouseInFOV()
+            
+            if isAimbotKeyPressed and not prevKeyPressed then
+                WaitingForRelease = false
+            end
+            
+            if not isAimbotKeyPressed then
+                WaitingForRelease = false
+                if isAiming then
+                    currentAimTarget = nil
+                    isAiming = false
+                end
+            end
+            
+            prevKeyPressed = isAimbotKeyPressed
+            
+            if isAimbotKeyPressed and shouldAim then
+                local chainTarget = getChainTarget()
+                
+                if not isAiming and not WaitingForRelease then
+                    if chainTarget then
+                        currentAimTarget = chainTarget
+                        isAiming = true
+                    end
+                end
+                
+                if currentAimTarget and (not currentAimTarget.Parent or not isAlive(currentAimTarget.Parent)) then
+                    if AutoRetarget then
+                        if chainTarget then
+                            currentAimTarget = chainTarget
+                            isAiming = true
+                        else
+                            currentAimTarget = nil
+                            isAiming = false
+                        end
+                    else
+                        currentAimTarget = nil
+                        isAiming = false
+                        WaitingForRelease = true
+                    end
+                end
+                
+                if currentAimTarget and currentAimTarget.Parent and isAlive(currentAimTarget.Parent) then
+                    if isTargetInFOV(currentAimTarget) then
+                        aimAtTarget(currentAimTarget)
+                    else
+                        if AutoRetarget then
+                            if chainTarget then
+                                currentAimTarget = chainTarget
+                                isAiming = true
+                            else
+                                currentAimTarget = nil
+                                isAiming = false
+                            end
+                        else
+                            if currentAimTarget then
+                                currentAimTarget = nil
+                                isAiming = false
+                                WaitingForRelease = true
+                            end
+                        end
+                    end
+                else
+                    if AutoRetarget then
+                        if chainTarget then
+                            currentAimTarget = chainTarget
+                            isAiming = true
+                        else
+                            currentAimTarget = nil
+                            isAiming = false
+                        end
+                    else
+                        if currentAimTarget then
+                            currentAimTarget = nil
+                            isAiming = false
+                            WaitingForRelease = true
+                        end
+                    end
+                end
+            else
+                if isAiming then
+                    currentAimTarget = nil
+                    isAiming = false
+                end
+            end
+        else
+            currentAimTarget = nil
+            isAiming = false
+            WaitingForRelease = false
+            prevKeyPressed = false
+        end
+    end)
+end
+
+local function stopAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+    currentAimTarget = nil
+    isAiming = false
+    WaitingForRelease = false
+    prevKeyPressed = false
+end
+
+-- ===== CREATE AIMBOT TAB =====
+AimbotTab = Window:CreateTab("Aimbot", "target")
+
+AimbotTab:CreateSection("CHAIN Aimbot")
+
+local AimbotToggle = AimbotTab:CreateToggle({
+    Name = "Enable CHAIN Aimbot",
+    CurrentValue = false,
+    Flag = "AimbotToggle",
+    Callback = function(Value)
+        AimbotEnabled = Value
+        if Value then
+            startAimbot()
+            createFOVCircle()
+            if FOVCircle then
+                FOVCircle.Visible = true
+            end
+            local modeText = AimbotFOV >= 180 and "360° (aims anywhere)" or "FOV (aims within circle)"
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "CHAIN Aimbot enabled - " .. modeText .. " | Hold " .. getKeyName(AimbotKey) .. " to aim at CHAIN",
+                Duration = 4,
+                Image = 4483362458
+            })
+        else
+            stopAimbot()
+            if FOVCircle then
+                FOVCircle.Visible = false
+            end
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "CHAIN Aimbot disabled",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
+local AutoRetargetToggle = AimbotTab:CreateToggle({
+    Name = "Auto Retarget",
+    CurrentValue = true,
+    Flag = "AutoRetargetToggle",
+    Callback = function(Value)
+        AutoRetarget = Value
+        local msg = Value and "Auto Retarget ON - will re-acquire CHAIN if lost" or "Auto Retarget OFF - will not re-acquire CHAIN until you release and re-press the aim key"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = msg,
+            Duration = 4,
+            Image = 4483362458
+        })
+    end,
+})
+
+KeybindButton = AimbotTab:CreateButton({
+    Name = "Aimbot Key: " .. getKeyName(AimbotKey),
+    Callback = function()
+        startKeyListen()
+    end,
+})
+
+local AimbotFOVSlider = AimbotTab:CreateSlider({
+    Name = "Aimbot FOV (0-180 = 360° coverage)",
+    Range = {0, 180},
+    Increment = 1,
+    Suffix = "",
+    CurrentValue = 180,
+    Flag = "AimbotFOV",
+    Callback = function(Value)
+        AimbotFOV = Value
+        updateFOVCircle()
+        local modeText = Value >= 180 and "360° coverage (aims anywhere)" or Value .. "° FOV"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = "FOV set to: " .. modeText,
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
+    Name = "Aimbot Smoothness",
+    Range = {0.01, 0.5},
+    Increment = 0.01,
+    Suffix = "",
+    CurrentValue = 0.1,
+    Flag = "AimbotSmoothness",
+    Callback = function(Value)
+        AimbotSmoothness = Value
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = "Aimbot smoothness set to " .. Value,
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+local FOVCircleToggle = AimbotTab:CreateToggle({
+    Name = "Show FOV Circle",
+    CurrentValue = true,
+    Flag = "FOVCircleToggle",
+    Callback = function(Value)
+        if FOVCircle then
+            FOVCircle.Visible = Value and AimbotEnabled
+        end
+        local message = Value and "FOV circle shown" or "FOV circle hidden"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = message,
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Setup key listener
+setupKeyListener()
+
+-- Create FOV circle on startup
+createFOVCircle()
+if FOVCircle then
+    FOVCircle.Visible = false
+end
+
 -- ===== BLUEPRINTS TAB =====
 local BlueprintsTab = Window:CreateTab("Blueprints", "printer")
 local Section = BlueprintsTab:CreateSection("These only unlock blueprints btw")
@@ -1286,97 +1742,6 @@ local Toggle = Tab:CreateToggle({
 })
 
 -- ===== INITIALIZATION =====
-local function initCharacterListeners()
-    if SurvivorsFolder then
-        SurvivorsFolder.ChildAdded:Connect(function(newSurvivor)
-            local root = newSurvivor:WaitForChild("HumanoidRootPart", 5)
-            if root then updatePositionHistory(newSurvivor, root.Position) end
-        end)
-    end
-    if KillersFolder then
-        KillersFolder.ChildAdded:Connect(function(newKiller)
-            local root = newKiller:WaitForChild("HumanoidRootPart", 5)
-            if root then updatePositionHistory(newKiller, root.Position) end
-        end)
-    end
-    local function watchCharacterRemoval(folder)
-        if folder then
-            folder.ChildRemoved:Connect(function(character)
-                if positionHistory[character] then positionHistory[character] = nil end
-                if aimbotCurrentTarget == character then stopAimbot() end
-                if currentDusekkarTarget == character then stopDusekkar() end
-                if activeCooldownTimers[character] then
-                    if activeCooldownTimers[character].billboard then pcall(function() activeCooldownTimers[character].billboard:Destroy() end) end
-                    if activeCooldownTimers[character].connection then activeCooldownTimers[character].connection:Disconnect() end
-                    activeCooldownTimers[character] = nil
-                end
-                if slasherActiveCooldownTimers[character] then
-                    for _, data in pairs(slasherActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    slasherActiveCooldownTimers[character] = nil
-                end
-                if onexActiveCooldownTimers[character] then
-                    for _, data in pairs(onexActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    onexActiveCooldownTimers[character] = nil
-                end
-                if sixerActiveCooldownTimers[character] then
-                    for _, data in pairs(sixerActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    sixerActiveCooldownTimers[character] = nil
-                end
-                if noliActiveCooldownTimers[character] then
-                    for _, data in pairs(noliActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    noliActiveCooldownTimers[character] = nil
-                end
-                if c00lkiddActiveCooldownTimers[character] then
-                    for _, data in pairs(c00lkiddActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    c00lkiddActiveCooldownTimers[character] = nil
-                end
-                if johnDoeActiveCooldownTimers[character] then
-                    for _, data in pairs(johnDoeActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    johnDoeActiveCooldownTimers[character] = nil
-                end
-                if nosferatuActiveCooldownTimers[character] then
-                    for _, data in pairs(nosferatuActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    nosferatuActiveCooldownTimers[character] = nil
-                end
-                if noobActiveCooldownTimers[character] then
-                    for _, data in pairs(noobActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    noobActiveCooldownTimers[character] = nil
-                end
-            end)
-        end
-    end
-    watchCharacterRemoval(KillersFolder)
-    watchCharacterRemoval(SurvivorsFolder)
-end
-
-initCharacterListeners()
-task.spawn(setupInputHook)
-setupSilentAim()
-refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("loaded, also matthew sucks")
+print("XCHain loaded! Aimbot targets CHAIN with 360° mode and auto-reacquire after death.")
