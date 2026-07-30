@@ -147,10 +147,12 @@ local LocalPlayer = Players.LocalPlayer
 
 -- ===== AIMBOT VARIABLES =====
 local AimbotEnabled = false
+local WallCheckEnabled = true
 local AimbotFOV = 180
-local AimbotSmoothness = 0.1
+local AimbotSmoothness = 0.1  -- Default from your script
 local FOVCircle = nil
 local AimbotKey = Enum.UserInputType.MouseButton2
+local RequireHoldingTool = true
 local AutoRetarget = true
 local currentAimTarget = nil
 local isAiming = false
@@ -245,6 +247,23 @@ local function updateFOVCircle()
     end
 end
 
+local function isHoldingItem()
+    if not RequireHoldingTool then
+        return true
+    end
+    
+    if not LocalPlayer.Character then
+        return false
+    end
+    
+    local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if tool then
+        return true
+    end
+    
+    return false
+end
+
 local function isAlive(character)
     if not character then return false end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -252,6 +271,28 @@ local function isAlive(character)
         return humanoid.Health > 0
     end
     return true
+end
+
+local function wallCheck(targetPosition)
+    if not WallCheckEnabled then
+        return false
+    end
+    
+    local origin = Camera.CFrame.Position
+    local direction = (targetPosition - origin).Unit
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    
+    local raycastResult = Workspace:Raycast(origin, direction * 1000, raycastParams)
+    
+    if raycastResult then
+        local distanceToTarget = (targetPosition - origin).Magnitude
+        local distanceToHit = (raycastResult.Position - origin).Magnitude
+        return distanceToHit < distanceToTarget - 1
+    end
+    
+    return false
 end
 
 local function isMouseInFOV()
@@ -318,19 +359,22 @@ local function getChainTarget()
     local targetPart = getChainTargetPart()
     if targetPart then
         if isTargetInFOV(targetPart) then
-            return targetPart
+            if not wallCheck(targetPart.Position) then
+                return targetPart
+            end
         end
     end
     return nil
 end
 
--- AIM AT TARGET WITH SMOOTHNESS
+-- AIM AT TARGET WITH SMOOTHNESS (from your script)
 local function aimAtTarget(targetPart)
     if not targetPart then return end
     
     local targetPosition = targetPart.Position
     local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPosition)
     
+    -- Using the smoothness from your script
     Camera.CFrame = Camera.CFrame:Lerp(lookAt, AimbotSmoothness)
 end
 
@@ -361,7 +405,12 @@ local function startAimbot()
                 isAimbotKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
             end
             
-            local shouldAim = isMouseInFOV()
+            local shouldAim = false
+            if RequireHoldingTool then
+                shouldAim = isHoldingItem() and isMouseInFOV()
+            else
+                shouldAim = isMouseInFOV()
+            end
             
             if isAimbotKeyPressed and not prevKeyPressed then
                 WaitingForRelease = false
@@ -387,7 +436,7 @@ local function startAimbot()
                     end
                 end
                 
-                if currentAimTarget and (not currentAimTarget.Parent or not isAlive(currentAimTarget.Parent)) then
+                if currentAimTarget and (not currentAimTarget.Parent or not isAlive(currentAimTarget.Parent) or wallCheck(currentAimTarget.Position)) then
                     if AutoRetarget then
                         if chainTarget then
                             currentAimTarget = chainTarget
@@ -404,7 +453,7 @@ local function startAimbot()
                 end
                 
                 if currentAimTarget and currentAimTarget.Parent and isAlive(currentAimTarget.Parent) then
-                    if isTargetInFOV(currentAimTarget) then
+                    if isTargetInFOV(currentAimTarget) and not wallCheck(currentAimTarget.Position) then
                         aimAtTarget(currentAimTarget)
                     else
                         if AutoRetarget then
@@ -486,7 +535,7 @@ local AimbotToggle = AimbotTab:CreateToggle({
             local modeText = AimbotFOV >= 180 and "360° (aims anywhere)" or "FOV (aims within circle)"
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "CHAIN Aimbot enabled - " .. modeText .. " | Hold " .. getKeyName(AimbotKey) .. " to aim at CHAIN",
+                Content = "CHAIN Aimbot enabled - " .. modeText .. " | Hold " .. getKeyName(AimbotKey) .. (RequireHoldingTool and " while holding a tool" or ""),
                 Duration = 4,
                 Image = 4483362458
             })
@@ -521,6 +570,32 @@ local AutoRetargetToggle = AimbotTab:CreateToggle({
     end,
 })
 
+local ToolRequirementToggle = AimbotTab:CreateToggle({
+    Name = "Require Holding Tool",
+    CurrentValue = true,
+    Flag = "ToolRequirementToggle",
+    Callback = function(Value)
+        RequireHoldingTool = Value
+        local message = Value and "Aimbot now requires holding a tool" or "Aimbot works without holding a tool"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = message,
+            Duration = 3,
+            Image = 4483362458
+        })
+        
+        if AimbotEnabled then
+            local modeText = AimbotFOV >= 180 and "360° (aims anywhere)" or "FOV (aims within circle)"
+            Rayfield:Notify({
+                Title = "Aimbot",
+                Content = "Aimbot updated - " .. modeText .. " | Hold " .. getKeyName(AimbotKey) .. (RequireHoldingTool and " while holding a tool" or ""),
+                Duration = 4,
+                Image = 4483362458
+            })
+        end
+    end,
+})
+
 KeybindButton = AimbotTab:CreateButton({
     Name = "Aimbot Key: " .. getKeyName(AimbotKey),
     Callback = function()
@@ -548,6 +623,7 @@ local AimbotFOVSlider = AimbotTab:CreateSlider({
     end,
 })
 
+-- ===== SMOOTHNESS SLIDER FROM YOUR SCRIPT =====
 local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
     Name = "Aimbot Smoothness",
     Range = {0.01, 0.5},
@@ -560,6 +636,22 @@ local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
         Rayfield:Notify({
             Title = "Aimbot Settings",
             Content = "Aimbot smoothness set to " .. Value,
+            Duration = 2,
+            Image = 4483362458
+        })
+    end,
+})
+
+local WallCheckToggle = AimbotTab:CreateToggle({
+    Name = "Wall Check (Recommended)",
+    CurrentValue = true,
+    Flag = "WallCheckToggle",
+    Callback = function(Value)
+        WallCheckEnabled = Value
+        local message = Value and "Wall check enabled" or "Wall check disabled"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = message,
             Duration = 2,
             Image = 4483362458
         })
