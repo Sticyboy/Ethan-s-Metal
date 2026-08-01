@@ -1,12 +1,11 @@
 --// Stamina System GUI (Skateboard transparency + Trick audio detection)
--- USING Shift + Sprint Value + isMoving combined detection
--- FIXED: Handles round resets properly
--- FIXED: Detects ability usage for ALL survivors to stop sprinting
+-- FIXED: Adds stamina IMMEDIATELY when trick sound is added (not when it plays)
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- ScreenGui Setup
 local ScreenGui = Instance.new("ScreenGui")
@@ -51,14 +50,22 @@ local drainRate = 10
 local regenRate = 20
 local SKATING_DRAIN_MULTIPLIER = 1.35
 
+-- Exhausted effect variables
+local isExhausted = false
+local exhaustedLevel = 0
+local EXHAUSTED_DRAIN_MULTIPLIER = 1.1
+local EXHAUSTED_REGEN_MULTIPLIER = 0.9
+
 -- Skating state
 local isSkating = false
+local wasSkating = false
 local skateboardPart = nil
 local veeronicaChar = nil
+local skatingDelay = 0
 
 -- Trick audio ID
 local TRICK_AUDIO_ID = "rbxassetid://91937289286100"
-local trickSound = nil
+local TRICK_STAMINA_GAIN = 4
 
 -- Module variables
 local timeUntilStaminaRecovers = 0
@@ -73,11 +80,10 @@ local localPlayer = Players.LocalPlayer
 local localCharacter = nil
 local humanoid = nil
 local humanoidRootPart = nil
-
 local isMoving = false
 local VELOCITY_THRESHOLD = 0.4
 
--- Killer range (85 studs)
+-- Killer range
 local KILLER_CHECK_RANGE = 85
 local isInKillerRange = false
 
@@ -85,34 +91,146 @@ local isInKillerRange = false
 local speedMultipliers = nil
 local sprintingValue = nil
 
--- Ability blocking detection (ALL survivors)
-local ABILITY_BLOCKERS = {
-    -- Noob abilities
-    "DrinkingCola",
-    "DrinkingSlateskin",
-    "EatingGhostburger",
-    -- Shedletsky abilities
-    "StunningKiller",
-    -- Guest1337 abilities
-    "PunchAbility",
-    -- TwoTime abilities
-    "TwoTimeStab",
-    -- JaneDoe abilities
-    "jdaw",
-    -- Chance abilities
-    "ShootingGun",
-}
+-- Exhausted effect detection
+local exhaustedEffectConnection = nil
+
+-- Ability blocking detection
 local isAbilityBlocking = false
 local abilityBlockerConnections = {}
 
--- Function to reset all references for new round
+-- ROMAN NUMERAL CONVERSION
+local romanToNumber = {
+    ["I"] = 1, ["II"] = 2, ["III"] = 3, ["IV"] = 4, ["V"] = 5,
+    ["VI"] = 6, ["VII"] = 7, ["VIII"] = 8, ["IX"] = 9, ["X"] = 10,
+}
+
+-- Exhausted helpers
+local function getExhaustedLevel()
+    local playerGui = localPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return 0 end
+    local mainUI = playerGui:FindFirstChild("MainUI")
+    if not mainUI then return 0 end
+    local statusContainer = mainUI:FindFirstChild("StatusContainer")
+    if not statusContainer then return 0 end
+    local exhausted = statusContainer:FindFirstChild("Exhausted")
+    if not exhausted then return 0 end
+    local title = exhausted:FindFirstChild("Title")
+    if not title then return 1 end
+    local text = title.Text
+    if not text or text == "" then return 1 end
+    local levelText = text:match("Exhausted%s+(.+)$")
+    if not levelText then return 1 end
+    if romanToNumber[levelText] then return romanToNumber[levelText] end
+    local number = tonumber(levelText)
+    if number then return number end
+    return 1
+end
+
+local function isExhaustedActive()
+    local playerGui = localPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return false end
+    local mainUI = playerGui:FindFirstChild("MainUI")
+    if not mainUI then return false end
+    local statusContainer = mainUI:FindFirstChild("StatusContainer")
+    if not statusContainer then return false end
+    return statusContainer:FindFirstChild("Exhausted") ~= nil
+end
+
+local function setupExhaustedUIListener()
+    if exhaustedEffectConnection then
+        exhaustedEffectConnection:Disconnect()
+        exhaustedEffectConnection = nil
+    end
+    local function checkPlayerGui()
+        local playerGui = localPlayer:FindFirstChild("PlayerGui")
+        if not playerGui then return end
+        local mainUI = playerGui:FindFirstChild("MainUI")
+        if not mainUI then return end
+        local statusContainer = mainUI:FindFirstChild("StatusContainer")
+        if not statusContainer then return end
+        if statusContainer:FindFirstChild("Exhausted") then
+            isExhausted = true
+            exhaustedLevel = getExhaustedLevel()
+        end
+        local addedConnection = statusContainer.ChildAdded:Connect(function(child)
+            if child.Name == "Exhausted" then
+                isExhausted = true
+                exhaustedLevel = getExhaustedLevel()
+            end
+        end)
+        table.insert(abilityBlockerConnections, addedConnection)
+        local removedConnection = statusContainer.ChildRemoved:Connect(function(child)
+            if child.Name == "Exhausted" then
+                isExhausted = false
+                exhaustedLevel = 0
+            end
+        end)
+        table.insert(abilityBlockerConnections, removedConnection)
+    end
+    checkPlayerGui()
+    local playerGui = localPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        local mainUI = playerGui:FindFirstChild("MainUI")
+        if not mainUI then
+            local mainUIConnection = playerGui.ChildAdded:Connect(function(child)
+                if child.Name == "MainUI" then
+                    checkPlayerGui()
+                    mainUIConnection:Disconnect()
+                end
+            end)
+            table.insert(abilityBlockerConnections, mainUIConnection)
+        end
+    end
+end
+
+-- Ability detection
+local function isUsingAbility()
+    if not localCharacter then return false end
+    local abilityIndicators = {
+        "DrinkingCola", "DrinkingSlateskin", "EatingGhostburger",
+        "StunningKiller", "PunchAbility", "TwoTimeStab", "jdaw",
+        "ShootingGun", "UsingAbility", "AbilityActive",
+    }
+    for _, indicator in ipairs(abilityIndicators) do
+        if localCharacter:FindFirstChild(indicator) then
+            return true
+        end
+    end
+    if speedMultipliers then
+        for _, child in ipairs(speedMultipliers:GetChildren()) do
+            if child.Name:match("Ability") or child.Name:match("Cola") or
+               child.Name:match("Burger") or child.Name:match("Stun") or
+               child.Name:match("Punch") or child.Name:match("Stab") or
+               child.Name:match("Shooting") then
+                return true
+            end
+        end
+    end
+    local characterTools = localCharacter:FindFirstChild("Tools")
+    if characterTools then
+        for _, tool in ipairs(characterTools:GetChildren()) do
+            if tool:IsA("Tool") and tool:FindFirstChild("Handle") then
+                if tool.Name:match("Ability") or tool.Name:match("Cola") or
+                   tool.Name:match("Burger") or tool.Name:match("Stun") or
+                   tool.Name:match("Punch") or tool.Name:match("Stab") or
+                   tool.Name:match("Gun") or tool.Name:match("Shoot") then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Reset
 local function resetReferences()
     speedMultipliers = nil
     sprintingValue = nil
     skateboardPart = nil
     veeronicaChar = nil
-    trickSound = nil
     isSkating = false
+    wasSkating = false
+    skatingDelay = 0
     isSprinting = false
     wasSprinting = false
     stamina = maxStamina
@@ -121,196 +239,170 @@ local function resetReferences()
     isMoving = false
     isInKillerRange = false
     isAbilityBlocking = false
-    
-    -- Clean up ability blocker connections
+    isExhausted = false
+    exhaustedLevel = 0
     for _, connection in pairs(abilityBlockerConnections) do
         if connection then
             connection:Disconnect()
         end
     end
     abilityBlockerConnections = {}
-end
-
--- Function to check if any ability blocker exists
-local function checkAbilityBlockers()
-    if not speedMultipliers then return false end
-    
-    for _, blockerName in ipairs(ABILITY_BLOCKERS) do
-        if speedMultipliers:FindFirstChild(blockerName) then
-            return true
-        end
+    if exhaustedEffectConnection then
+        exhaustedEffectConnection:Disconnect()
+        exhaustedEffectConnection = nil
     end
-    return false
 end
 
--- Function to setup ability blocker listeners
+-- Ability blocker listeners
 local function setupAbilityBlockerListeners()
-    if not speedMultipliers then return end
-    
-    -- Check existing blockers
-    isAbilityBlocking = checkAbilityBlockers()
-    
-    -- Listen for new blockers being added
-    local addedConnection = speedMultipliers.ChildAdded:Connect(function(child)
-        for _, blockerName in ipairs(ABILITY_BLOCKERS) do
-            if child.Name == blockerName then
-                isAbilityBlocking = true
-                isSprinting = false  -- Force stop sprinting immediately
-                break
-            end
+    if not localCharacter then return end
+    local addedConnection = localCharacter.ChildAdded:Connect(function(child)
+        if child.Name:match("Ability") or child.Name:match("Cola") or
+           child.Name:match("Burger") or child.Name:match("Stun") or
+           child.Name:match("Punch") or child.Name:match("Stab") or
+           child.Name:match("Shooting") or child.Name:match("jdaw") or
+           child.Name:match("Using") or child.Name:match("Active") then
+            isAbilityBlocking = true
+            isSprinting = false
         end
     end)
     table.insert(abilityBlockerConnections, addedConnection)
-    
-    -- Listen for blockers being removed
-    local removedConnection = speedMultipliers.ChildRemoved:Connect(function(child)
-        for _, blockerName in ipairs(ABILITY_BLOCKERS) do
-            if child.Name == blockerName then
-                isAbilityBlocking = checkAbilityBlockers()  -- Check if any blockers remain
-                break
-            end
+    local removedConnection = localCharacter.ChildRemoved:Connect(function(child)
+        if child.Name:match("Ability") or child.Name:match("Cola") or
+           child.Name:match("Burger") or child.Name:match("Stun") or
+           child.Name:match("Punch") or child.Name:match("Stab") or
+           child.Name:match("Shooting") or child.Name:match("jdaw") or
+           child.Name:match("Using") or child.Name:match("Active") then
+            isAbilityBlocking = isUsingAbility()
         end
     end)
     table.insert(abilityBlockerConnections, removedConnection)
 end
 
--- Function to initialize SpeedMultipliers reference
+-- SpeedMultipliers init
 local function initSpeedMultipliers()
     if not localCharacter then return false end
-    
     speedMultipliers = localCharacter:FindFirstChild("SpeedMultipliers")
     if speedMultipliers then
         sprintingValue = speedMultipliers:FindFirstChild("Sprinting")
-        -- Setup ability blocker listeners
-        setupAbilityBlockerListeners()
         return true
     end
     return false
 end
 
--- Function to get the skateboard
+-- Skateboard
 local function getSkateboard()
-    local survivors = Workspace:FindFirstChild("Players") and 
-                     Workspace.Players:FindFirstChild("Survivors")
-    
+    local survivors = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Survivors")
     if not survivors then return nil end
-    
     veeronicaChar = survivors:FindFirstChild("Veeronica")
     if not veeronicaChar then return nil end
-    
     if veeronicaChar:GetAttribute("Username") == localPlayer.Name then
-        local skateboard = veeronicaChar:FindFirstChild("Skateboard")
-        return skateboard
+        return veeronicaChar:FindFirstChild("Skateboard")
     end
-    
     return nil
 end
 
--- Function to detect trick audio
+-- ===== TRICK DETECTION - ADD STAMINA IMMEDIATELY ON SOUND ADDED =====
 local function setupTrickAudioDetection()
-    local survivors = Workspace:FindFirstChild("Players") and 
-                     Workspace.Players:FindFirstChild("Survivors")
-    
-    if not survivors then return end
-    
-    veeronicaChar = survivors:FindFirstChild("Veeronica")
-    if not veeronicaChar then return end
-    
-    if veeronicaChar:GetAttribute("Username") ~= localPlayer.Name then return end
-    
-    local hrp = veeronicaChar:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    for _, child in ipairs(hrp:GetChildren()) do
-        if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
-            trickSound = child
-            break
+    task.spawn(function()
+        while true do
+            local survivors = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Survivors")
+            if not survivors then
+                task.wait(1)
+                continue
+            end
+            veeronicaChar = survivors:FindFirstChild("Veeronica")
+            if not veeronicaChar then
+                task.wait(1)
+                continue
+            end
+            if veeronicaChar:GetAttribute("Username") == localPlayer.Name then
+                print("[Stamina] Veeronica detected! Setting up trick detection...")
+                break
+            else
+                veeronicaChar:GetAttributeChangedSignal("Username"):Wait()
+            end
         end
-    end
-    
-    if not trickSound then
+
+        local hrp = veeronicaChar:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            task.wait(0.5)
+            setupTrickAudioDetection()
+            return
+        end
+
+        print("[Stamina] Watching for trick sounds...")
+
+        -- KEY FIX: Add stamina IMMEDIATELY when the sound is added, not when it plays
         hrp.ChildAdded:Connect(function(child)
             if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
-                trickSound = child
-                trickSound.Played:Connect(function()
-                    stamina = math.min(stamina + 4, maxStamina)
+                local oldStamina = stamina
+                stamina = math.min(stamina + TRICK_STAMINA_GAIN, maxStamina)
+                print(string.format("[Stamina] TRICK! Sound added! Old: %d, New: %d", oldStamina, stamina))
+                
+                -- Force UI update immediately
+                StaminaLabel.Text = string.format("Stamina: %d (TRICK!)", stamina)
+                StaminaLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                task.delay(1, function()
+                    StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 end)
             end
         end)
-        return
-    end
-    
-    trickSound.Played:Connect(function()
-        stamina = math.min(stamina + 4, maxStamina)
     end)
 end
 
--- Update character references when character respawns
+-- Character respawn
 localPlayer.CharacterAdded:Connect(function(character)
     resetReferences()
-    
-    -- Wait for character to fully load
     task.wait(0.5)
-    
     localCharacter = character
     humanoid = character:FindFirstChild("Humanoid")
     humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    
-    -- Initialize SpeedMultipliers
     initSpeedMultipliers()
+    setupAbilityBlockerListeners()
+    setupExhaustedUIListener()
+    setupTrickAudioDetection()
 end)
 
--- Input events for Shift
+-- Inputs
 UserInputService.InputBegan:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.LeftShift then
         holdingShift = true
     end
 end)
-
 UserInputService.InputEnded:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.LeftShift then
         holdingShift = false
     end
 end)
 
--- Function to check if player is moving
+-- Movement
 local function updateMovementCheck()
     if humanoidRootPart and humanoidRootPart:IsDescendantOf(workspace) then
         isMoving = humanoidRootPart.Velocity.Magnitude > VELOCITY_THRESHOLD
     end
 end
 
--- Sprint detection using Shift + Sprint Value + isMoving + ability blockers
+-- Sprint
 local function updateSprintingState()
-    if not localCharacter then 
+    if not localCharacter then
         isSprinting = false
-        return 
+        return
     end
-    
-    -- Re-initialize SpeedMultipliers if needed (for round reset)
+    isAbilityBlocking = isUsingAbility()
+    if isAbilityBlocking then
+        isSprinting = false
+        return
+    end
     if not speedMultipliers or not speedMultipliers.Parent then
         if not initSpeedMultipliers() then
             isSprinting = false
             return
         end
     end
-    
-    -- If ability is blocking sprint, force false
-    if isAbilityBlocking then
-        isSprinting = false
-        return
-    end
-    
     if sprintingValue then
         local currentValue = sprintingValue.Value
-        -- Any value above 1.05 means sprinting (works for all: Slasher 3.11, 1x1x1x1 3.375, Survivor 2.17, etc.)
-        local isSprintValueHigh = currentValue > 1.05
-        
-        -- ONLY sprinting when:
-        -- 1. Holding Shift AND
-        -- 2. Sprint value is above 1 AND
-        -- 3. You are actually moving
-        if holdingShift and isSprintValueHigh and isMoving then
+        if holdingShift and currentValue > 1.05 and isMoving then
             isSprinting = true
         else
             isSprinting = false
@@ -320,39 +412,33 @@ local function updateSprintingState()
     end
 end
 
--- Function to check if killer is near other players
+-- Killer range
 local function updateKillerRangeCheck()
-    if not localCharacter or not humanoidRootPart then 
+    if not localCharacter or not humanoidRootPart then
         isInKillerRange = false
-        return 
+        return
     end
-    
     local killerPosition = humanoidRootPart.Position
-    local foundPlayer = false
-    
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
-            local targetCharacter = player.Character
-            local targetRootPart = targetCharacter:FindFirstChild("HumanoidRootPart")
-            
+            local targetRootPart = player.Character:FindFirstChild("HumanoidRootPart")
             if targetRootPart then
                 local distance = (killerPosition - targetRootPart.Position).Magnitude
                 if distance <= KILLER_CHECK_RANGE then
-                    foundPlayer = true
-                    break
+                    isInKillerRange = true
+                    return
                 end
             end
         end
     end
-    
-    isInKillerRange = foundPlayer
+    isInKillerRange = false
 end
 
 local function canRegenStamina()
-    return timeUntilStaminaRecovers <= 0 and not staminaPenaltyActive
+    return timeUntilStaminaRecovers <= 0 and skatingDelay <= 0 and not staminaPenaltyActive
 end
 
--- Switch Modes
+-- Mode switch
 local function setMode(mode)
     if mode == "Survivor" then
         maxStamina = 100
@@ -372,54 +458,82 @@ local function setMode(mode)
     currentMode = mode
     isInKillerRange = false
     timeUntilStaminaRecovers = 0
+    skatingDelay = 0
     staminaPenaltyActive = false
     isSprinting = false
     wasSprinting = false
     isSkating = false
+    wasSkating = false
     isAbilityBlocking = false
+    isExhausted = false
+    exhaustedLevel = 0
 end
 
 SurvivorButton.MouseButton1Click:Connect(function()
     setMode("Survivor")
 end)
-
 KillerButton.MouseButton1Click:Connect(function()
     setMode("Killer")
 end)
 
--- Monitor skateboard transparency
+-- Skateboard update
 local function updateSkateboardState()
     if not skateboardPart or not skateboardPart:IsDescendantOf(Workspace) then
         skateboardPart = getSkateboard()
     end
-    
     if skateboardPart then
         isSkating = (skateboardPart.Transparency == 0)
     end
 end
 
 -- Initial setup
-updateSkateboardState()
+setupExhaustedUIListener()
 setupTrickAudioDetection()
 
--- Heartbeat loop
+-- Main loop
 RunService.Heartbeat:Connect(function(dt)
-    -- Skip if no character
     if not localCharacter or not localCharacter.Parent then
         return
     end
-    
+
+    isExhausted = isExhaustedActive()
+    if isExhausted then
+        exhaustedLevel = getExhaustedLevel()
+    else
+        exhaustedLevel = 0
+    end
+
     updateMovementCheck()
     updateSkateboardState()
-    updateSprintingState()  -- Check sprint state (includes ability blocker check)
-    
-    if currentMode == "Killer" then
-        updateKillerRangeCheck()
+    updateSprintingState()
+
+    local currentDrainRate = drainRate
+    local currentRegenRate = regenRate
+
+    if isExhausted and exhaustedLevel > 0 then
+        local drainMultiplier = EXHAUSTED_DRAIN_MULTIPLIER ^ exhaustedLevel
+        local regenMultiplier = EXHAUSTED_REGEN_MULTIPLIER ^ exhaustedLevel
+        currentDrainRate = currentDrainRate * drainMultiplier
+        currentRegenRate = currentRegenRate * regenMultiplier
     end
-    
-    -- Determine if we should be draining stamina
+
+    -- Sprint delay
+    if isSprinting then
+        timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + dt * 0.05, 0.2, 3)
+    end
+    if not isSprinting and timeUntilStaminaRecovers > 0 then
+        timeUntilStaminaRecovers = math.max(timeUntilStaminaRecovers - dt, 0)
+    end
+
+    -- Skating delay
+    if isSkating then
+        skatingDelay = math.clamp(skatingDelay + dt * 0.05, 0.2, 3)
+    end
+    if not isSkating and skatingDelay > 0 then
+        skatingDelay = math.max(skatingDelay - dt, 0)
+    end
+
     local shouldDrain = false
-    
     if isSkating then
         shouldDrain = isMoving
     elseif currentMode == "Survivor" then
@@ -427,127 +541,105 @@ RunService.Heartbeat:Connect(function(dt)
     elseif currentMode == "Killer" then
         shouldDrain = isSprinting and isInKillerRange and stamina > 0
     end
-    
+
     wasSprinting = isSprinting
-    
-    if wasSprinting and not isSprinting then
-        if timeUntilStaminaRecovers > 0.1 then
-            timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + 0.1, 0, 3)
-        else
-            timeUntilStaminaRecovers = 0.1
-        end
-    end
-    
+    wasSkating = isSkating
+
     if shouldDrain and stamina > 0 then
-        local currentDrainRate = drainRate
+        local finalDrainRate = currentDrainRate
         if isSkating then
-            currentDrainRate = drainRate * SKATING_DRAIN_MULTIPLIER
+            finalDrainRate = finalDrainRate * SKATING_DRAIN_MULTIPLIER
         end
-        stamina = stamina - currentDrainRate * dt
+        stamina = stamina - finalDrainRate * dt
         stamina = math.max(stamina, 0)
-        
-        timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + dt * 0.05, 0.2, 3)
-        
+
         if stamina <= 0 then
             stamina = 0
             timeUntilStaminaRecovers = 2
+            skatingDelay = 2
             staminaPenaltyActive = true
             if localCharacter then
                 localCharacter:SetAttribute("StaminaPenaltyActive", true)
             end
         end
     else
-        if timeUntilStaminaRecovers > 0 then
-            timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers - dt, 0, 3)
-        end
-        
-        if timeUntilStaminaRecovers <= 0 and staminaPenaltyActive then
+        if timeUntilStaminaRecovers <= 0 and skatingDelay <= 0 and staminaPenaltyActive then
             staminaPenaltyActive = false
             if localCharacter then
                 localCharacter:SetAttribute("StaminaPenaltyActive", nil)
             end
         end
-        
-        if not isSkating and canRegenStamina() and stamina < maxStamina then
-            stamina = stamina + regenRate * dt
-            stamina = math.min(stamina, maxStamina)
-        end
-    end
-    
-    -- Update label
-    local statusText = ""
-    
-    if isSkating then
-        statusText = statusText .. " (SKATING)"
-    end
-    
-    if currentMode == "Killer" then
-        if isInKillerRange then
-            statusText = statusText .. " (IN RANGE)"
-        else
-            statusText = statusText .. " (OUT OF RANGE)"
-        end
-    end
-    
-    if not isMoving then
-        statusText = statusText .. " (STATIONARY)"
-    end
-    
-    if isAbilityBlocking then
-        statusText = statusText .. " (ABILITY)"
-    end
-    
-    if shouldDrain then
-        if stamina > 0 then
-            if isSkating then
-                statusText = statusText .. " (SKATING)"
-            else
-                statusText = statusText .. " (SPRINTING)"
+
+        if timeUntilStaminaRecovers <= 0 and skatingDelay <= 0 and not staminaPenaltyActive then
+            if stamina < maxStamina then
+                stamina = stamina + currentRegenRate * dt
+                stamina = math.min(stamina, maxStamina)
             end
-        else
-            statusText = statusText .. " (EXHAUSTED)"
         end
     end
-    
-    if staminaPenaltyActive then
-        statusText = statusText .. " (PENALTY)"
+
+    -- Update labels
+    local statusText = ""
+    if isSkating then statusText = statusText .. " (SKATING)" end
+    if currentMode == "Killer" then
+        statusText = statusText .. (isInKillerRange and " (IN RANGE)" or " (OUT OF RANGE)")
     end
-    
+    if not isMoving then statusText = statusText .. " (STATIONARY)" end
+    if isAbilityBlocking then statusText = statusText .. " (ABILITY)" end
+    if isExhausted and exhaustedLevel > 0 then
+        local romanDisplay = ""
+        for roman, num in pairs(romanToNumber) do
+            if num == exhaustedLevel then
+                romanDisplay = roman
+                break
+            end
+        end
+        if romanDisplay == "" then 
+            romanDisplay = tostring(exhaustedLevel) 
+        end
+        statusText = statusText .. string.format(" [EXHAUSTED %s]", romanDisplay)
+    end
+    if shouldDrain then
+        statusText = statusText .. (stamina > 0 and " (SPRINTING)" or " (EXHAUSTED)")
+    end
+    if staminaPenaltyActive then statusText = statusText .. " (PENALTY)" end
     if stamina < maxStamina and not shouldDrain then
-        if timeUntilStaminaRecovers > 0 then
-            statusText = statusText .. string.format(" (DELAY %.1fs)", timeUntilStaminaRecovers)
-        elseif not staminaPenaltyActive and not isSkating then
+        if timeUntilStaminaRecovers > 0 or skatingDelay > 0 then
+            local totalDelay = math.max(timeUntilStaminaRecovers, skatingDelay)
+            statusText = statusText .. string.format(" (DELAY %.1fs)", totalDelay)
+        elseif not staminaPenaltyActive and not isSkating and not isSprinting then
             statusText = statusText .. " (REGENERATING)"
         end
     elseif stamina >= maxStamina then
         statusText = statusText .. " (FULL)"
     end
-    
+
     StaminaLabel.Text = string.format("Stamina: %d%s", math.floor(stamina), statusText)
-    
-    if stamina < 20 then
+
+    -- Color
+    if stamina < 20 or isExhausted then
         StaminaLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-        StaminaLabel.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+        StaminaLabel.BackgroundColor3 = isExhausted and Color3.fromRGB(50, 0, 30) or Color3.fromRGB(50, 0, 0)
     elseif stamina < 50 then
         StaminaLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
-        StaminaLabel.BackgroundColor3 = Color3.fromRGB(30, 15, 0)
+        StaminaLabel.BackgroundColor3 = isExhausted and Color3.fromRGB(30, 10, 20) or Color3.fromRGB(30, 15, 0)
     else
         StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        StaminaLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        StaminaLabel.BackgroundColor3 = isExhausted and Color3.fromRGB(20, 0, 20) or Color3.fromRGB(0, 0, 0)
     end
-    
+
     SurvivorButton.BackgroundTransparency = currentMode == "Survivor" and 0.1 or 0.3
     KillerButton.BackgroundTransparency = currentMode == "Killer" and 0.1 or 0.3
 end)
 
 -- Initial setup
 setMode("Survivor")
-
--- Initialize character references for initial spawn
 task.wait(0.5)
 localCharacter = localPlayer.Character
 if localCharacter then
     humanoid = localCharacter:FindFirstChild("Humanoid")
     humanoidRootPart = localCharacter:FindFirstChild("HumanoidRootPart")
     initSpeedMultipliers()
+    setupExhaustedUIListener()
+    setupTrickAudioDetection()
 end
