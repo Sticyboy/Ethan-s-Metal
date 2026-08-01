@@ -1,5 +1,5 @@
 --// Stamina System GUI (Skateboard transparency + Trick audio detection)
--- FIXED: Adds stamina IMMEDIATELY when trick sound is added (not when it plays)
+-- FIXED: Killer mode - out of range now triggers delay timer
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -302,7 +302,7 @@ local function getSkateboard()
     return nil
 end
 
--- ===== TRICK DETECTION - ADD STAMINA IMMEDIATELY ON SOUND ADDED =====
+-- ===== TRICK DETECTION =====
 local function setupTrickAudioDetection()
     task.spawn(function()
         while true do
@@ -333,14 +333,12 @@ local function setupTrickAudioDetection()
 
         print("[Stamina] Watching for trick sounds...")
 
-        -- KEY FIX: Add stamina IMMEDIATELY when the sound is added, not when it plays
         hrp.ChildAdded:Connect(function(child)
             if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
                 local oldStamina = stamina
                 stamina = math.min(stamina + TRICK_STAMINA_GAIN, maxStamina)
                 print(string.format("[Stamina] TRICK! Sound added! Old: %d, New: %d", oldStamina, stamina))
                 
-                -- Force UI update immediately
                 StaminaLabel.Text = string.format("Stamina: %d (TRICK!)", stamina)
                 StaminaLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
                 task.delay(1, function()
@@ -412,26 +410,37 @@ local function updateSprintingState()
     end
 end
 
--- Killer range
+-- Killer range check
 local function updateKillerRangeCheck()
     if not localCharacter or not humanoidRootPart then
         isInKillerRange = false
         return
     end
+    
     local killerPosition = humanoidRootPart.Position
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character then
-            local targetRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-            if targetRootPart then
-                local distance = (killerPosition - targetRootPart.Position).Magnitude
-                if distance <= KILLER_CHECK_RANGE then
-                    isInKillerRange = true
-                    return
+    local foundPlayer = false
+    
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if playersFolder then
+        local survivorsFolder = playersFolder:FindFirstChild("Survivors")
+        if survivorsFolder then
+            for _, survivor in ipairs(survivorsFolder:GetChildren()) do
+                local usernameAttr = survivor:GetAttribute("Username")
+                if usernameAttr and usernameAttr ~= localPlayer.Name then
+                    local targetRootPart = survivor:FindFirstChild("HumanoidRootPart")
+                    if targetRootPart then
+                        local distance = (killerPosition - targetRootPart.Position).Magnitude
+                        if distance <= KILLER_CHECK_RANGE then
+                            foundPlayer = true
+                            break
+                        end
+                    end
                 end
             end
         end
     end
-    isInKillerRange = false
+    
+    isInKillerRange = foundPlayer
 end
 
 local function canRegenStamina()
@@ -506,6 +515,7 @@ RunService.Heartbeat:Connect(function(dt)
     updateMovementCheck()
     updateSkateboardState()
     updateSprintingState()
+    updateKillerRangeCheck()
 
     local currentDrainRate = drainRate
     local currentRegenRate = regenRate
@@ -517,11 +527,30 @@ RunService.Heartbeat:Connect(function(dt)
         currentRegenRate = currentRegenRate * regenMultiplier
     end
 
-    -- Sprint delay
-    if isSprinting then
+    -- Determine if we should drain
+    local shouldDrain = false
+    if isSkating then
+        shouldDrain = isMoving
+    elseif currentMode == "Survivor" then
+        shouldDrain = isSprinting and stamina > 0
+    elseif currentMode == "Killer" then
+        shouldDrain = isSprinting and isInKillerRange and stamina > 0
+    end
+
+    -- ===== FIX: For killer, if out of range, treat as not sprinting for delay =====
+    local effectiveSprinting = isSprinting
+    if currentMode == "Killer" and isSprinting and not isInKillerRange then
+        effectiveSprinting = false
+    end
+
+    wasSprinting = isSprinting
+    wasSkating = isSkating
+
+    -- Sprint delay (use effectiveSprinting)
+    if effectiveSprinting then
         timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + dt * 0.05, 0.2, 3)
     end
-    if not isSprinting and timeUntilStaminaRecovers > 0 then
+    if not effectiveSprinting and timeUntilStaminaRecovers > 0 then
         timeUntilStaminaRecovers = math.max(timeUntilStaminaRecovers - dt, 0)
     end
 
@@ -532,18 +561,6 @@ RunService.Heartbeat:Connect(function(dt)
     if not isSkating and skatingDelay > 0 then
         skatingDelay = math.max(skatingDelay - dt, 0)
     end
-
-    local shouldDrain = false
-    if isSkating then
-        shouldDrain = isMoving
-    elseif currentMode == "Survivor" then
-        shouldDrain = isSprinting and stamina > 0
-    elseif currentMode == "Killer" then
-        shouldDrain = isSprinting and isInKillerRange and stamina > 0
-    end
-
-    wasSprinting = isSprinting
-    wasSkating = isSkating
 
     if shouldDrain and stamina > 0 then
         local finalDrainRate = currentDrainRate
@@ -607,7 +624,7 @@ RunService.Heartbeat:Connect(function(dt)
         if timeUntilStaminaRecovers > 0 or skatingDelay > 0 then
             local totalDelay = math.max(timeUntilStaminaRecovers, skatingDelay)
             statusText = statusText .. string.format(" (DELAY %.1fs)", totalDelay)
-        elseif not staminaPenaltyActive and not isSkating and not isSprinting then
+        elseif not staminaPenaltyActive and not isSkating and not effectiveSprinting then
             statusText = statusText .. " (REGENERATING)"
         end
     elseif stamina >= maxStamina then
