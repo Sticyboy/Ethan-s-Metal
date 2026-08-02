@@ -1,6 +1,8 @@
 --// Stamina System GUI (Skateboard transparency + Trick audio detection)
 -- FIXED: Killer mode - out of range now triggers delay timer
 -- ADDED: 0.15 second anti-spam on trick stamina gain
+-- CHANGED: Skating drain multiplier from 1.35x to 1.1x
+-- FIXED: Skating always has 0.2 second delay (sprinting uses normal scaling delay)
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -49,7 +51,7 @@ local maxStamina = 100
 local stamina = 100
 local drainRate = 10
 local regenRate = 20
-local SKATING_DRAIN_MULTIPLIER = 1.35
+local SKATING_DRAIN_MULTIPLIER = 1.1  -- Changed from 1.35 to 1.1
 
 -- Exhausted effect variables
 local isExhausted = false
@@ -67,7 +69,7 @@ local skatingDelay = 0
 -- Trick audio ID
 local TRICK_AUDIO_ID = "rbxassetid://91937289286100"
 local TRICK_STAMINA_GAIN = 4
-local TRICK_ANTI_SPAM = 0.15  -- 0.15 second cooldown between trick stamina gains
+local TRICK_ANTI_SPAM = 0.15
 local lastTrickTime = 0
 
 -- Module variables
@@ -340,22 +342,18 @@ local function setupTrickAudioDetection()
         hrp.ChildAdded:Connect(function(child)
             if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
                 local now = tick()
-                -- Check anti-spam
                 if now - lastTrickTime >= TRICK_ANTI_SPAM then
                     lastTrickTime = now
                     local oldStamina = stamina
                     stamina = math.min(stamina + TRICK_STAMINA_GAIN, maxStamina)
-                    print(string.format("[Stamina] TRICK! +%d stamina (%.2fs since last). Old: %d, New: %d", 
-                        TRICK_STAMINA_GAIN, now - lastTrickTime, oldStamina, stamina))
+                    print(string.format("[Stamina] TRICK! +%d stamina. Old: %d, New: %d", 
+                        TRICK_STAMINA_GAIN, oldStamina, stamina))
                     
                     StaminaLabel.Text = string.format("Stamina: %d (TRICK!)", stamina)
                     StaminaLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
                     task.delay(1, function()
                         StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                     end)
-                else
-                    print(string.format("[Stamina] Trick ignored (anti-spam %.2fs remaining)", 
-                        TRICK_ANTI_SPAM - (now - lastTrickTime)))
                 end
             end
         end)
@@ -559,7 +557,8 @@ RunService.Heartbeat:Connect(function(dt)
     wasSprinting = isSprinting
     wasSkating = isSkating
 
-    -- Sprint delay (use effectiveSprinting)
+    -- ===== DELAY LOGIC =====
+    -- Sprint delay (normal scaling: 0.2 to 3 seconds)
     if effectiveSprinting then
         timeUntilStaminaRecovers = math.clamp(timeUntilStaminaRecovers + dt * 0.05, 0.2, 3)
     end
@@ -567,12 +566,18 @@ RunService.Heartbeat:Connect(function(dt)
         timeUntilStaminaRecovers = math.max(timeUntilStaminaRecovers - dt, 0)
     end
 
-    -- Skating delay
+    -- SKATING DELAY (ALWAYS 0.2 seconds when skating stops)
     if isSkating then
-        skatingDelay = math.clamp(skatingDelay + dt * 0.05, 0.2, 3)
+        -- While skating, accumulate delay (0.2 minimum)
+        skatingDelay = math.max(skatingDelay + dt * 0.05, 0.2)
     end
     if not isSkating and skatingDelay > 0 then
-        skatingDelay = math.max(skatingDelay - dt, 0)
+        -- When skating stops, set delay to exactly 0.2 and count down
+        if skatingDelay > 0.2 then
+            skatingDelay = 0.2
+        else
+            skatingDelay = math.max(skatingDelay - dt, 0)
+        end
     end
 
     if shouldDrain and stamina > 0 then
