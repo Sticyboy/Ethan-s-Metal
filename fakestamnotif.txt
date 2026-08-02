@@ -1,8 +1,8 @@
 --// Stamina System GUI (Skateboard transparency + Trick audio detection)
 -- FIXED: Killer mode - out of range now triggers delay timer
--- ADDED: 0.15 second anti-spam on trick stamina gain
 -- CHANGED: Skating drain multiplier from 1.35x to 1.1x
 -- FIXED: Skating always has 0.2 second delay (sprinting uses normal scaling delay)
+-- REMOVED: Anti-spam on trick stamina gain
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -51,7 +51,7 @@ local maxStamina = 100
 local stamina = 100
 local drainRate = 10
 local regenRate = 20
-local SKATING_DRAIN_MULTIPLIER = 1.1  -- Changed from 1.35 to 1.1
+local SKATING_DRAIN_MULTIPLIER = 1.1
 
 -- Exhausted effect variables
 local isExhausted = false
@@ -69,8 +69,6 @@ local skatingDelay = 0
 -- Trick audio ID
 local TRICK_AUDIO_ID = "rbxassetid://91937289286100"
 local TRICK_STAMINA_GAIN = 4
-local TRICK_ANTI_SPAM = 0.15
-local lastTrickTime = 0
 
 -- Module variables
 local timeUntilStaminaRecovers = 0
@@ -246,7 +244,6 @@ local function resetReferences()
     isAbilityBlocking = false
     isExhausted = false
     exhaustedLevel = 0
-    lastTrickTime = 0
     for _, connection in pairs(abilityBlockerConnections) do
         if connection then
             connection:Disconnect()
@@ -308,7 +305,7 @@ local function getSkateboard()
     return nil
 end
 
--- ===== TRICK DETECTION WITH ANTI-SPAM =====
+-- ===== TRICK DETECTION (NO ANTI-SPAM) =====
 local function setupTrickAudioDetection()
     task.spawn(function()
         while true do
@@ -341,20 +338,16 @@ local function setupTrickAudioDetection()
 
         hrp.ChildAdded:Connect(function(child)
             if child:IsA("Sound") and child.SoundId == TRICK_AUDIO_ID then
-                local now = tick()
-                if now - lastTrickTime >= TRICK_ANTI_SPAM then
-                    lastTrickTime = now
-                    local oldStamina = stamina
-                    stamina = math.min(stamina + TRICK_STAMINA_GAIN, maxStamina)
-                    print(string.format("[Stamina] TRICK! +%d stamina. Old: %d, New: %d", 
-                        TRICK_STAMINA_GAIN, oldStamina, stamina))
-                    
-                    StaminaLabel.Text = string.format("Stamina: %d (TRICK!)", stamina)
-                    StaminaLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-                    task.delay(1, function()
-                        StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    end)
-                end
+                local oldStamina = stamina
+                stamina = math.min(stamina + TRICK_STAMINA_GAIN, maxStamina)
+                print(string.format("[Stamina] TRICK! +%d stamina. Old: %d, New: %d", 
+                    TRICK_STAMINA_GAIN, oldStamina, stamina))
+                
+                StaminaLabel.Text = string.format("Stamina: %d (TRICK!)", stamina)
+                StaminaLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                task.delay(1, function()
+                    StaminaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                end)
             end
         end)
     end)
