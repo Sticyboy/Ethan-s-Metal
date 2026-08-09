@@ -725,6 +725,13 @@ local function isLocalPlayer(character)
     return usernameAttr and usernameAttr == lp.Name
 end
 
+-- ===== OMEGAGUEST666 DETECTION =====
+local function isOmegaGuestSixer(sixer)
+    if not sixer then return false end
+    local skinName = sixer:GetAttribute("SkinName")
+    return skinName == "OmegaGuest666"
+end
+
 local function amIGuest1337()
     if SurvivorsFolder then
         for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
@@ -2454,7 +2461,7 @@ local function updateWarnerLineParts(parts, startPos, direction, length, color, 
         ringPart.Position = Vector3.new(startPos.X, yPos, startPos.Z)
         ringPart.CFrame = CFrame.lookAt(
             Vector3.new(startPos.X, yPos, startPos.Z),
-            Vector3.new(startPos.X + direction.X, yPos, startPos.Z + direction.Z)
+            Vector3.new(startPos.X + direction.X, yPos, endPos.Z + direction.Z)
         )
     end
     
@@ -2862,7 +2869,7 @@ function stopAbilityWarner()
            obj.Name == "AbilityWarningArrow" or 
            obj.Name == "AbilityWarningRing" or
            obj.Name == "AbilityWarningMarker" then
-            pcall(function() obj:Destroy() end)
+        pcall(function() obj:Destroy() end)
         end
     end
     
@@ -4434,7 +4441,10 @@ local function getAllSixers()
         if killersFolder then
             for _, killer in ipairs(killersFolder:GetChildren()) do
                 if killer.Name == "Sixer" then
-                    table.insert(sixers, killer)
+                    -- Skip OmegaGuest666 skin
+                    if not isOmegaGuestSixer(killer) then
+                        table.insert(sixers, killer)
+                    end
                 end
             end
         end
@@ -4573,12 +4583,60 @@ local function reduceSixerCooldownByBloodOrb(sixer)
     end
 end
 
--- Finds ALL Animators in the model
+-- ===== LISTEN FOR SIXER ABILITIES (FIXED FOR OMEGAGUEST666) =====
 local function listenForSixerAbilities(sixer)
     if not sixer then return end
     if sixer:GetAttribute("SixerListener") then return end
     sixer:SetAttribute("SixerListener", true)
     
+    -- Skip if OmegaGuest666 skin - we'll handle it separately
+    if isOmegaGuestSixer(sixer) then
+        -- For OmegaGuest666, only use the Humanoid's Animator
+        local humanoid = sixer:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            local animator = humanoid:FindFirstChildOfClass("Animator")
+            if animator then
+                -- Check already playing animations
+                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                    local animId = extractNumericAnimationId(track.Animation.AnimationId)
+                    
+                    if animId == INFERNAL_CRY_ANIMATION then
+                        onAbilityDetected(INFERNAL_CRY_COOLDOWN, "Infernal Cry")
+                    elseif animId == DEMONIC_PURSUIT_ANIMATION then
+                        onAbilityDetected(DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
+                    elseif animId == BLOOD_HUNT_ACTIVATION_ANIMATION then
+                        setSixerBloodHuntActive(sixer, true)
+                        clearAllSixerCooldowns(sixer, "activation")
+                    elseif animId == KILL_ANIMATION_NORMAL or animId == KILL_ANIMATION_NOOB then
+                        if isSixerBloodHuntActive(sixer) then
+                            clearAllSixerCooldowns(sixer, "kill")
+                        end
+                    end
+                end
+                
+                -- Listen for new animations
+                animator.AnimationPlayed:Connect(function(animationTrack)
+                    local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+                    
+                    if animId == INFERNAL_CRY_ANIMATION then
+                        onAbilityDetected(INFERNAL_CRY_COOLDOWN, "Infernal Cry")
+                    elseif animId == DEMONIC_PURSUIT_ANIMATION then
+                        onAbilityDetected(DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
+                    elseif animId == BLOOD_HUNT_ACTIVATION_ANIMATION then
+                        setSixerBloodHuntActive(sixer, true)
+                        clearAllSixerCooldowns(sixer, "activation")
+                    elseif animId == KILL_ANIMATION_NORMAL or animId == KILL_ANIMATION_NOOB then
+                        if isSixerBloodHuntActive(sixer) then
+                            clearAllSixerCooldowns(sixer, "kill")
+                        end
+                    end
+                end)
+            end
+        end
+        return
+    end
+    
+    -- For normal Sixer skins, find all animators
     local function onAbilityDetected(cooldown, abilityName)
         local cooldownEndTime = tick() + cooldown
         createSixerCooldownDisplay(sixer, cooldownEndTime, abilityName)
@@ -4674,7 +4732,7 @@ end
 local function scanForAllSixers()
     local sixers = getAllSixers()
     for _, sixer in ipairs(sixers) do
-        if not isLocalPlayer(sixer) then
+        if not isLocalPlayer(sixer) and not isOmegaGuestSixer(sixer) then
             listenForSixerAbilities(sixer)
         end
     end
@@ -4688,7 +4746,7 @@ local function watchForNewSixers()
     killersFolder.ChildAdded:Connect(function(child)
         if child.Name == "Sixer" then
             task.wait(0.5)
-            if not isLocalPlayer(child) then
+            if not isLocalPlayer(child) and not isOmegaGuestSixer(child) then
                 listenForSixerAbilities(child)
             end
         end
@@ -6135,7 +6193,7 @@ local function initCharacterListeners()
         KillersFolder.ChildAdded:Connect(function(newKiller)
             local root = newKiller:WaitForChild("HumanoidRootPart", 5)
             if root then updatePositionHistory(newKiller, root.Position) end
-        end)
+        end
     end
     local function watchCharacterRemoval(folder)
         if folder then
