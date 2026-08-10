@@ -21,6 +21,8 @@ local function startC00lkiddTracking() end
 local function stopC00lkiddTracking() end
 local function startJohnDoeTracking() end
 local function stopJohnDoeTracking() end
+local function startAzureTracking() end
+local function stopAzureTracking() end
 local function setupSilentAim() end
 local function restoreSilentAim() end
 local function stopDusekkar() end
@@ -269,6 +271,21 @@ PIZZA_DELIVERY_COOLDOWN = 50
 CORRUPT_ENERGY_COOLDOWN = 18
 CORRUPT_ENERGY_STUNNED_COOLDOWN = 9
 
+-- Azure Animation IDs
+SEEKER_BULB_ANIMATION = "129442283793163"
+STIGMATIZE_ANIMATION = "132652818910880"
+ENSTRANGLE_ANIMATION_1 = "97515610375937"
+ENSTRANGLE_ANIMATION_2 = "79706339461226"
+BLOOMING_ANIMATION = "112214222301930"
+UNEARTHING_ANIMATION = "93070990592009"
+
+-- Azure Cooldown values
+SEEKER_BULB_COOLDOWN = 12
+STIGMATIZE_COOLDOWN = 15
+ENSTRANGLE_COOLDOWN = 25
+BLOOMING_COOLDOWN = 7
+UNEARTHING_COOLDOWN = 16
+
 -- Noob Cooldown values
 NOOB_BLOXYCOLA_COOLDOWN = 50
 NOOB_SLATESKIN_COOLDOWN = 55
@@ -466,6 +483,13 @@ nosferatuHunterFeastActive = {}
 nosferatuHunterFeastTracked = {}
 nosferatuUpdateConnection = nil
 
+-- Azure Tracker
+azureTrackerEnabled = false
+azureActiveCooldownTimers = {}
+azureUpdateConnection = nil
+azureNormalAbilities = {"Seeker Bulb", "Stigmatize", "Enstrangle"}
+azureBeastAbilities = {"Blooming", "Unearthing"}
+
 -- Noob Tracker
 noobActiveCooldownTimers = {}
 noobSlateskinActive = false
@@ -519,6 +543,12 @@ abilityWarnerKillerLineMap = {}
 abilityWarnerPendingKillers = {}
 abilityWarnerUpdateConnection = nil
 
+-- Auto Azure Puzzle Variables
+autoPuzzleEnabled = false
+qteConnection = nil
+lineConnection = nil
+clickedZones = {}
+
 -- UI References
 GuestToggle = nil
 SevenNToggle = nil
@@ -562,7 +592,6 @@ local function loadSmoothShiftLock()
         end)
     end
     if not success then
-        -- Fallback: try different path
         success, module = pcall(function()
             return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("SmoothShiftLock"))
         end)
@@ -571,7 +600,6 @@ local function loadSmoothShiftLock()
         SmoothShiftLock = module
         shiftlockLoaded = true
     else
-        -- If module not found, disable shiftlock features
         shiftlockLoaded = false
         warn("[SmoothShiftLock] Module not found, shiftlock features disabled")
     end
@@ -2190,6 +2218,113 @@ function stopNoobTracking()
     noobSlateskinActive = false
     noobSlateskinWasActive = false
     noobSlateskinTimerRunning = false
+end
+
+-- ===== AUTO AZURE PUZZLE FUNCTIONS =====
+local function doClick()
+    pcall(function()
+        mouse1click()
+    end)
+end
+
+local function getQTE()
+    local temporaryUI = lp.PlayerGui:FindFirstChild("TemporaryUI")
+    if not temporaryUI then return nil end
+    return temporaryUI:FindFirstChild("QTE")
+end
+
+local function getVisibleZones(qte)
+    if not qte then return {} end
+    local visibleZones = {}
+    for i = 1, 3 do
+        local zone = qte:FindFirstChild("Zone" .. i)
+        if zone and zone.Visible == true then
+            table.insert(visibleZones, zone)
+        end
+    end
+    return visibleZones
+end
+
+local function isLineOverZone(line, zone)
+    if not line or not zone then return false end
+    
+    local linePos = line.AbsolutePosition
+    local lineSize = line.AbsoluteSize
+    local zonePos = zone.AbsolutePosition
+    local zoneSize = zone.AbsoluteSize
+    
+    if not linePos or not lineSize or not zonePos or not zoneSize then
+        return false
+    end
+    
+    local lineCenterX = linePos.X + lineSize.X / 2
+    local lineCenterY = linePos.Y + lineSize.Y / 2
+    
+    local isOver = (lineCenterX >= zonePos.X and lineCenterX <= zonePos.X + zoneSize.X) and
+                   (lineCenterY >= zonePos.Y and lineCenterY <= zonePos.Y + zoneSize.Y)
+    
+    return isOver
+end
+
+local function startAutoPuzzle()
+    if qteConnection then
+        qteConnection:Disconnect()
+        qteConnection = nil
+    end
+    if lineConnection then
+        lineConnection:Disconnect()
+        lineConnection = nil
+    end
+    
+    clickedZones = {}
+    
+    qteConnection = RunService.Heartbeat:Connect(function()
+        if not autoPuzzleEnabled then
+            if qteConnection then qteConnection:Disconnect(); qteConnection = nil end
+            return
+        end
+        
+        local qte = getQTE()
+        if not qte then return end
+        
+        local line = qte:FindFirstChild("Line")
+        if not line then return end
+        
+        local visibleZones = getVisibleZones(qte)
+        if #visibleZones == 0 then
+            clickedZones = {}
+            return
+        end
+        
+        for _, zone in ipairs(visibleZones) do
+            if zone.Visible == true then
+                if isLineOverZone(line, zone) then
+                    doClick()
+                    task.wait(0.1)
+                    
+                    if zone.Visible == false then
+                        clickedZones[zone] = true
+                    end
+                    
+                    task.wait(0.05)
+                    break
+                end
+            end
+        end
+    end)
+end
+
+local function stopAutoPuzzle()
+    autoPuzzleEnabled = false
+    if qteConnection then
+        qteConnection:Disconnect()
+        qteConnection = nil
+    end
+    if lineConnection then
+        lineConnection:Disconnect()
+        lineConnection = nil
+    end
+    clickedZones = {}
 end
 
 -- ===== ABILITY WARNER FUNCTIONS =====
@@ -3860,8 +3995,7 @@ local function setupSlasherEnrageTracking(slasher)
     local function updateEnrageState()
         slasherIsEnraged[slasher] = isSlasherEnraged(slasher)
     end
-    if head then
-        local ragingPaceAttachment = head:FindFirstChild("RagingPaceAttachment")
+    if head then        local ragingPaceAttachment = head:FindFirstChild("RagingPaceAttachment")
         if ragingPaceAttachment then
             local ragingPace = ragingPaceAttachment:FindFirstChild("RagingPace")
             if ragingPace and ragingPace:IsA("ParticleEmitter") then
@@ -5301,6 +5435,280 @@ function stopJohnDoeTracking()
     johnDoeIsAnnihilationSkin = {}
 end
 
+-- ===== AZURE TRACKER FUNCTIONS =====
+local function checkAzureBeastMode(azure)
+    if not azure then return false end
+    
+    local speedMultipliers = azure:FindFirstChild("SpeedMultipliers")
+    if speedMultipliers then
+        local golemDefaultWalkspeed = speedMultipliers:FindFirstChild("GolemDefaultWalkspeed")
+        if golemDefaultWalkspeed then
+            return true
+        end
+    end
+    return false
+end
+
+local function formatAzureCooldownTime(remainingSeconds)
+    if remainingSeconds <= 0 then return "0.0"
+    elseif remainingSeconds < 10 then return string.format("%.1f", remainingSeconds)
+    else return tostring(math.floor(remainingSeconds)) end
+end
+
+local function createAzureCooldownDisplay(azure, cooldownEndTime, abilityName)
+    if azureActiveCooldownTimers[azure] and azureActiveCooldownTimers[azure][abilityName] then
+        local existing = azureActiveCooldownTimers[azure][abilityName]
+        if existing.billboard then pcall(function() existing.billboard:Destroy() end) end
+        if existing.connection then existing.connection:Disconnect() end
+        azureActiveCooldownTimers[azure][abilityName] = nil
+    end
+    
+    local hrp = azure:FindFirstChild("HumanoidRootPart") or azure:FindFirstChild("Head") or azure:FindFirstChild("Torso")
+    if not hrp then return end
+    
+    -- Check if we should show this cooldown based on form
+    local isBeast = checkAzureBeastMode(azure)
+    local isNormalAbility = false
+    local isBeastAbility = false
+    
+    for _, name in ipairs(azureNormalAbilities) do
+        if abilityName == name then
+            isNormalAbility = true
+            break
+        end
+    end
+    
+    for _, name in ipairs(azureBeastAbilities) do
+        if abilityName == name then
+            isBeastAbility = true
+            break
+        end
+    end
+    
+    -- Determine if this cooldown should be visible
+    local shouldShow = false
+    if not isBeast and isNormalAbility then
+        shouldShow = true
+    elseif isBeast and isBeastAbility then
+        shouldShow = true
+    end
+    
+    local offsetY = 3
+    if abilityName == "Seeker Bulb" then offsetY = 3
+    elseif abilityName == "Stigmatize" then offsetY = 5
+    elseif abilityName == "Enstrangle" then offsetY = 7
+    elseif abilityName == "Blooming" then offsetY = 9
+    elseif abilityName == "Unearthing" then offsetY = 11
+    end
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "AzureCooldown_" .. abilityName
+    billboard.Size = UDim2.new(0, 140, 0, 25)
+    billboard.StudsOffset = Vector3.new(0, offsetY, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Enabled = shouldShow
+    billboard.Parent = hrp
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = abilityName .. ": " .. formatAzureCooldownTime(cooldownEndTime - tick())
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = billboard
+    
+    if not azureActiveCooldownTimers[azure] then azureActiveCooldownTimers[azure] = {} end
+    
+    local timerData = {
+        endTime = cooldownEndTime,
+        billboard = billboard,
+        textLabel = textLabel,
+        abilityName = abilityName,
+        isBeast = isBeast,
+        isNormalAbility = isNormalAbility,
+        isBeastAbility = isBeastAbility,
+        connection = nil
+    }
+    
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not azure or not azure.Parent then
+            if connection then connection:Disconnect() end
+            if billboard then pcall(function() billboard:Destroy() end) end
+            if azureActiveCooldownTimers[azure] then azureActiveCooldownTimers[azure][abilityName] = nil end
+            return
+        end
+        
+        local currentIsBeast = checkAzureBeastMode(azure)
+        if currentIsBeast ~= timerData.isBeast then
+            timerData.isBeast = currentIsBeast
+            
+            if billboard then
+                if not currentIsBeast and timerData.isNormalAbility then
+                    billboard.Enabled = true
+                elseif currentIsBeast and timerData.isBeastAbility then
+                    billboard.Enabled = true
+                else
+                    billboard.Enabled = false
+                end
+            end
+        end
+        
+        local currentTime = tick()
+        local remaining = timerData.endTime - currentTime
+        
+        if remaining <= 0.1 then
+            if connection then connection:Disconnect() end
+            if billboard then pcall(function() billboard:Destroy() end) end
+            if azureActiveCooldownTimers[azure] then azureActiveCooldownTimers[azure][abilityName] = nil end
+        else
+            local formattedTime = formatAzureCooldownTime(remaining)
+            textLabel.Text = abilityName .. ": " .. formattedTime
+            
+            if remaining < 5 then
+                textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            elseif remaining < 10 then
+                textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+            else
+                textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end
+    end)
+    
+    timerData.connection = connection
+    azureActiveCooldownTimers[azure][abilityName] = timerData
+end
+
+local function listenForAzureAbilities(azure)
+    if not azure then return end
+    if isLocalPlayer(azure) then return end
+    if azure:GetAttribute("AzureListener") then return end
+    azure:SetAttribute("AzureListener", true)
+    
+    local function onAbilityDetected(cooldown, abilityName)
+        local cooldownEndTime = tick() + cooldown
+        createAzureCooldownDisplay(azure, cooldownEndTime, abilityName)
+    end
+    
+    local humanoid = azure:FindFirstChild("Humanoid")
+    if humanoid then
+        local function setupAnimator(animator)
+            if not animator then return end
+            
+            animator.AnimationPlayed:Connect(function(animationTrack)
+                if not azureTrackerEnabled then return end
+                
+                local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+                if not animId then return end
+                
+                -- Normal mode abilities
+                if animId == SEEKER_BULB_ANIMATION then
+                    onAbilityDetected(SEEKER_BULB_COOLDOWN, "Seeker Bulb")
+                    SendNotif("Azure", "Seeker Bulb detected!", 1)
+                elseif animId == STIGMATIZE_ANIMATION then
+                    onAbilityDetected(STIGMATIZE_COOLDOWN, "Stigmatize")
+                    SendNotif("Azure", "Stigmatize detected!", 1)
+                elseif animId == ENSTRANGLE_ANIMATION_1 or animId == ENSTRANGLE_ANIMATION_2 then
+                    onAbilityDetected(ENSTRANGLE_COOLDOWN, "Enstrangle")
+                    SendNotif("Azure", "Enstrangle detected!", 1)
+                -- Beast/Golem mode abilities
+                elseif animId == BLOOMING_ANIMATION then
+                    onAbilityDetected(BLOOMING_COOLDOWN, "Blooming")
+                    SendNotif("Azure", "Blooming (AOE) detected!", 1)
+                elseif animId == UNEARTHING_ANIMATION then
+                    onAbilityDetected(UNEARTHING_COOLDOWN, "Unearthing")
+                    SendNotif("Azure", "Unearthing (Trail) detected!", 1)
+                end
+            end)
+        end
+        
+        local animator = humanoid:FindFirstChild("Animator")
+        if animator then
+            setupAnimator(animator)
+        end
+        
+        humanoid.ChildAdded:Connect(function(child)
+            if child:IsA("Animator") then
+                setupAnimator(child)
+            end
+        end)
+    end
+end
+
+local function getAllAzures()
+    local azures = {}
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if playersFolder then
+        local killersFolder = playersFolder:FindFirstChild("Killers")
+        if killersFolder then
+            for _, killer in ipairs(killersFolder:GetChildren()) do
+                if killer.Name == "Azure" or killer.Name == "@Azure" then
+                    table.insert(azures, killer)
+                end
+            end
+        end
+    end
+    return azures
+end
+
+local function scanForAllAzures()
+    local azures = getAllAzures()
+    for _, azure in ipairs(azures) do
+        if not isLocalPlayer(azure) then
+            listenForAzureAbilities(azure)
+        end
+    end
+end
+
+local function watchForNewAzures()
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return end
+    local killersFolder = playersFolder:FindFirstChild("Killers")
+    if not killersFolder then return end
+    
+    killersFolder.ChildAdded:Connect(function(child)
+        if child.Name == "Azure" or child.Name == "@Azure" then
+            task.wait(0.5)
+            if not isLocalPlayer(child) then
+                listenForAzureAbilities(child)
+            end
+        end
+    end)
+end
+
+function startAzureTracking()
+    if azureUpdateConnection then return end
+    
+    scanForAllAzures()
+    watchForNewAzures()
+    
+    azureUpdateConnection = RunService.Heartbeat:Connect(function()
+        if azureTrackerEnabled then
+            scanForAllAzures()
+        end
+    end)
+end
+
+function stopAzureTracking()
+    if azureUpdateConnection then
+        azureUpdateConnection:Disconnect()
+        azureUpdateConnection = nil
+    end
+    
+    for azure, abilities in pairs(azureActiveCooldownTimers) do
+        for _, data in pairs(abilities) do
+            if data.billboard then pcall(function() data.billboard:Destroy() end) end
+            if data.connection then data.connection:Disconnect() end
+        end
+        if azure then
+            azure:SetAttribute("AzureListener", nil)
+        end
+    end
+    azureActiveCooldownTimers = {}
+end
+
 -- ===== DUSEKKAR SILENT AIM FUNCTIONS =====
 local function isPlasmaBeamOnCooldown()
     local success, cooldownText = pcall(function()
@@ -5547,7 +5955,60 @@ AutoBlockTab:CreateToggle({ Name = "Range Visual", CurrentValue = false, Flag = 
 
 -- ===== TECH TAB =====
 TechTab = Window:CreateTab("Tech", 4483362458)
-TechTab:CreateToggle({ Name = "Auto Blood Orb (Sixer)", CurrentValue = false, Flag = "AutoBloodOrbToggle", Callback = function(Value) autoBloodOrb = Value; if Value then startBloodOrbLoop(); SendNotif("Auto Blood Orb", "Enabled - Automatically collects blood orbs", 2) else if bloodOrbConnection then bloodOrbConnection:Disconnect(); bloodOrbConnection = nil end; SendNotif("Auto Blood Orb", "Disabled", 1) end end })
+
+TechTab:CreateToggle({
+    Name = "Auto Blood Orb (Sixer)",
+    CurrentValue = false,
+    Flag = "AutoBloodOrbToggle",
+    Callback = function(Value)
+        autoBloodOrb = Value;
+        if Value then
+            startBloodOrbLoop();
+            SendNotif("Auto Blood Orb", "Enabled - Automatically collects blood orbs", 2)
+        else
+            if bloodOrbConnection then
+                bloodOrbConnection:Disconnect();
+                bloodOrbConnection = nil
+            end;
+            SendNotif("Auto Blood Orb", "Disabled", 1)
+        end
+    end
+})
+
+local PuzzleToggle = TechTab:CreateToggle({
+    Name = "Auto Azure Puzzle (QTE Solver)",
+    CurrentValue = false,
+    Flag = "AutoPuzzleToggle",
+    Callback = function(Value)
+        autoPuzzleEnabled = Value
+        if Value then
+            startAutoPuzzle()
+            SendNotif("Auto Puzzle", "Enabled - Will solve Azure QTEs automatically", 2)
+        else
+            stopAutoPuzzle()
+            SendNotif("Auto Puzzle", "Disabled", 1)
+        end
+    end
+})
+
+TechTab:CreateKeybind({
+    Name = "Toggle Auto Puzzle",
+    CurrentKeybind = "None",
+    HoldToInteract = false,
+    Flag = "AutoPuzzleKeybind",
+    Callback = function()
+        local newValue = not autoPuzzleEnabled
+        PuzzleToggle:Set(newValue)
+        autoPuzzleEnabled = newValue
+        if newValue then
+            startAutoPuzzle()
+            SendNotif("Auto Puzzle", "Enabled - Will solve Azure QTEs automatically", 2)
+        else
+            stopAutoPuzzle()
+            SendNotif("Auto Puzzle", "Disabled", 1)
+        end
+    end
+})
 
 -- ===== AIMBOT TAB =====
 AimbotTab = Window:CreateTab("Aimbot", 4483362458)
@@ -5644,7 +6105,9 @@ KillerCooldownToggle = VisualsTab:CreateToggle({
         if Value then startJohnDoeTracking() else stopJohnDoeTracking() end
         nosferatuTrackerEnabled = Value
         if Value then startNosferatuTracking() else stopNosferatuTracking() end
-        SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer, Noli, c00lkidd, John Doe & Nosferatu abilities" or "Disabled", 2)
+        azureTrackerEnabled = Value
+        if Value then startAzureTracking() else stopAzureTracking() end
+        SendNotif("Killer Cooldown Tracker", Value and "Enabled - Tracking Slasher, 1x1x1x1, Sixer, Noli, c00lkidd, John Doe, Nosferatu & Azure abilities" or "Disabled", 2)
     end
 })
 
@@ -5826,6 +6289,13 @@ local function initCharacterListeners()
                         if data.connection then data.connection:Disconnect() end
                     end
                     nosferatuActiveCooldownTimers[character] = nil
+                end
+                if azureActiveCooldownTimers[character] then
+                    for _, data in pairs(azureActiveCooldownTimers[character]) do
+                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
+                        if data.connection then data.connection:Disconnect() end
+                    end
+                    azureActiveCooldownTimers[character] = nil
                 end
                 if noobActiveCooldownTimers[character] then
                     for _, data in pairs(noobActiveCooldownTimers[character]) do
