@@ -1,6 +1,6 @@
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- ===== FREQUENTLY ACCESSED LOCALS =====
+-- LOCAL variables for frequently accessed services (performance)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -14,7 +14,21 @@ local PlayerGui = lp and lp:WaitForChild("PlayerGui") or nil
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Lighting = game:GetService("Lighting")
 
--- ===== GLOBAL VARIABLES (ONE-TIME USE) =====
+-- Dummy function declarations to prevent hoisting errors
+local function startNoliTracking() end
+local function stopNoliTracking() end
+local function startC00lkiddTracking() end
+local function stopC00lkiddTracking() end
+local function startJohnDoeTracking() end
+local function stopJohnDoeTracking() end
+local function startAzureTracking() end
+local function stopAzureTracking() end
+local function setupSilentAim() end
+local function restoreSilentAim() end
+local function stopDusekkar() end
+local function useSilentAim() end
+
+-- Remotes with error handling
 testRemote = nil
 success, result = pcall(function()
     return ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"):WaitForChild("RemoteEvent")
@@ -32,7 +46,7 @@ else
     end
 end
 
--- ===== GLOBAL VARIABLES FOR FOLDERS =====
+-- GLOBAL variables for folders (accessed everywhere)
 KillersFolder = nil
 SurvivorsFolder = nil
 
@@ -672,9 +686,9 @@ local function initCharacterListeners()
 end
 
 -- Smooth ShiftLock Module
-local SmoothShiftLock = nil
-local shiftlockLoaded = false
-local shiftlockWasEnabled = false
+SmoothShiftLock = nil
+shiftlockLoaded = false
+shiftlockWasEnabled = false
 
 local function loadSmoothShiftLock()
     local success, module = pcall(function()
@@ -6054,46 +6068,27 @@ TechTab:CreateToggle({
     CurrentValue = false,
     Flag = "AutoBloodOrbToggle",
     Callback = function(Value)
-        autoBloodOrb = Value;
+        autoBloodOrb = Value
         if Value then
-            startBloodOrbLoop();
+            startBloodOrbLoop()
             SendNotif("Auto Blood Orb", "Enabled - Automatically collects blood orbs", 2)
         else
             if bloodOrbConnection then
-                bloodOrbConnection:Disconnect();
+                bloodOrbConnection:Disconnect()
                 bloodOrbConnection = nil
-            end;
+            end
             SendNotif("Auto Blood Orb", "Disabled", 1)
         end
     end
 })
 
-local PuzzleToggle = TechTab:CreateToggle({
+TechTab:CreateToggle({
     Name = "Auto Azure Puzzle (QTE Solver)",
     CurrentValue = false,
     Flag = "AutoPuzzleToggle",
     Callback = function(Value)
         autoPuzzleEnabled = Value
         if Value then
-            startAutoPuzzle()
-            SendNotif("Auto Puzzle", "Enabled - Will solve Azure QTEs automatically", 2)
-        else
-            stopAutoPuzzle()
-            SendNotif("Auto Puzzle", "Disabled", 1)
-        end
-    end
-})
-
-TechTab:CreateKeybind({
-    Name = "Toggle Auto Puzzle",
-    CurrentKeybind = "None",
-    HoldToInteract = false,
-    Flag = "AutoPuzzleKeybind",
-    Callback = function()
-        local newValue = not autoPuzzleEnabled
-        PuzzleToggle:Set(newValue)
-        autoPuzzleEnabled = newValue
-        if newValue then
             startAutoPuzzle()
             SendNotif("Auto Puzzle", "Enabled - Will solve Azure QTEs automatically", 2)
         else
@@ -6309,19 +6304,6 @@ DusekkarTab:CreateDropdown({ Name = "Target Mode", Options = {"Survivors","Kille
 DusekkarTab:CreateSlider({ Name = "Prediction Multiplier", Range = {1,3}, Increment = 0.1, Suffix = "x", CurrentValue = 1.0, Flag = "DusekkarPrediction", Callback = function(Value) dusekkarPredictionMultiplier = Value; SendNotif("Dusekkar", "Prediction set to " .. Value .. "x", 1) end })
 DusekkarTab:CreateKeybind({ Name = "Switch Target Mode", CurrentKeybind = "G", HoldToInteract = false, Flag = "DusekkarSwitchKey", Callback = function() if not amIDusekkar() then return end; if dusekkarTargetMode == "Survivors" then dusekkarTargetMode = "Killers" else dusekkarTargetMode = "Survivors" end; SendNotif("Dusekkar", "Now targeting: " .. dusekkarTargetMode, 2) end })
 DusekkarTab:CreateKeybind({ Name = "Fire Plasma Beam (Silent)", CurrentKeybind = "F", HoldToInteract = false, Flag = "DusekkarFireKey", Callback = function() if not dusekkarEnabled then return end; if not amIDusekkar() then return end; useSilentAim() end })
-
-local function initCharacterListeners()
-    if SurvivorsFolder then
-        SurvivorsFolder.ChildAdded:Connect(setupSurvivorListener)
-    end
-    
-    if KillersFolder then
-        KillersFolder.ChildAdded:Connect(setupKillerListener)
-    end
-    
-    watchCharacterRemoval(KillersFolder)
-    watchCharacterRemoval(SurvivorsFolder)
-end
 
 initCharacterListeners()
 task.spawn(setupInputHook)
