@@ -115,7 +115,7 @@ local Window = Rayfield:CreateWindow({
 
    ConfigurationSaving = {
       Enabled = true,
-      FolderName = XCHain,
+      FolderName = "XCHain",
       FileName = "Chain script - Made by Neonicf, an ios user"
    },
 
@@ -149,69 +149,103 @@ local LocalPlayer = Players.LocalPlayer
 local AimbotEnabled = false
 local WallCheckEnabled = true
 local AimbotSmoothness = 0.1
-local AimbotKey = Enum.UserInputType.MouseButton2
 local RequireHoldingTool = true
-local ListeningForKey = false
-local KeybindButton = nil
 local aimbotConnection = nil
 local AimbotTab = nil
 local AimbotToggle = nil
 
--- Key binding functions
-local function getKeyName(inputType)
-    if inputType == Enum.UserInputType.MouseButton1 then
-        return "Left Click"
-    elseif inputType == Enum.UserInputType.MouseButton2 then
-        return "Right Click"
-    elseif inputType == Enum.UserInputType.MouseButton3 then
-        return "Middle Click"
-    elseif inputType.Name:match("Keyboard") then
-        return inputType.Name:gsub("Keyboard", "")
-    else
-        return tostring(inputType.Name)
-    end
-end
+-- Right click tracking
+local isRightHeld = false
+local rightClickConnections = {}
 
--- Function to start listening for key input
-local function startKeyListen()
-    ListeningForKey = true
-    if KeybindButton then
-        KeybindButton:Set("Press any key...")
-    end
-    Rayfield:Notify({
-        Title = "Keybind",
-        Content = "Press any key to set as aimbot key...",
-        Duration = 3,
-        Image = 4483362458
-    })
-end
+-- CHAIN tracking
+local chainObject = nil
 
--- Key input connection
-local keyConnection
-local function setupKeyListener()
-    if keyConnection then
-        keyConnection:Disconnect()
+-- Function to setup right click detection
+local function setupRightClickDetection()
+    -- Clean up old connections
+    for _, conn in ipairs(rightClickConnections) do
+        pcall(function() conn:Disconnect() end)
     end
+    rightClickConnections = {}
     
-    keyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Reset state
+    isRightHeld = false
+    
+    -- Use UserInputService for reliable detection
+    local beganConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
-        
-        if ListeningForKey then
-            ListeningForKey = false
-            AimbotKey = input.UserInputType
-            
-            if KeybindButton then
-                KeybindButton:Set("Aimbot Key: " .. getKeyName(AimbotKey))
-            end
-            
-            Rayfield:Notify({
-                Title = "Keybind Set",
-                Content = "Aimbot key set to: " .. getKeyName(AimbotKey),
-                Duration = 3,
-                Image = 4483362458
-            })
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            isRightHeld = true
         end
     end)
+    table.insert(rightClickConnections, beganConn)
+    
+    local endedConn = UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            isRightHeld = false
+        end
+    end)
+    table.insert(rightClickConnections, endedConn)
+    
+    -- Also try mouse method as backup
+    local mouse = LocalPlayer:GetMouse()
+    if mouse then
+        local downConn = mouse.Button2Down:Connect(function()
+            isRightHeld = true
+        end)
+        table.insert(rightClickConnections, downConn)
+        
+        local upConn = mouse.Button2Up:Connect(function()
+            isRightHeld = false
+        end)
+        table.insert(rightClickConnections, upConn)
+    end
+end
+
+-- Function to find CHAIN
+local function findChain()
+    local misc = Workspace:FindFirstChild("Misc")
+    if misc then
+        local ai = misc:FindFirstChild("AI")
+        if ai then
+            local chain = ai:FindFirstChild("CHAIN")
+            return chain
+        end
+    end
+    return nil
+end
+
+-- Function to check if CHAIN is alive
+local function isChainAlive(chain)
+    if not chain then return false end
+    local humanoid = chain:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid.Health > 0
+    end
+    return true
+end
+
+-- Get CHAIN target part
+local function getChainTarget()
+    local chain = findChain()
+    if not chain then return nil end
+    if not isChainAlive(chain) then return nil end
+    
+    -- Try to get head first
+    local head = chain:FindFirstChild("Head")
+    if head then return head end
+    
+    -- Then try HumanoidRootPart
+    local hrp = chain:FindFirstChild("HumanoidRootPart")
+    if hrp then return hrp end
+    
+    -- Then try Torso/UpperTorso
+    local torso = chain:FindFirstChild("Torso") or chain:FindFirstChild("UpperTorso")
+    if torso then return torso end
+    
+    return nil
 end
 
 local function isHoldingItem()
@@ -245,7 +279,6 @@ local function wallCheck(targetPosition)
         return false
     end
     
-    -- Make sure we have a valid character for the raycast
     if not LocalPlayer.Character then return true end
     
     local origin = Camera.CFrame.Position
@@ -265,46 +298,10 @@ local function wallCheck(targetPosition)
     return false
 end
 
--- SIMPLE: Find CHAIN's head or torso
-local function findChainTarget()
-    local chain = workspace:FindFirstChild("Misc")
-    if chain then
-        chain = chain:FindFirstChild("AI")
-        if chain then
-            chain = chain:FindFirstChild("CHAIN")
-        end
-    end
-    
-    if not chain then return nil end
-    if not isAlive(chain) then return nil end
-    
-    -- Try to find head first, then HumanoidRootPart, then Torso
-    local head = chain:FindFirstChild("Head")
-    if head then return head end
-    
-    local hrp = chain:FindFirstChild("HumanoidRootPart")
-    if hrp then return hrp end
-    
-    local torso = chain:FindFirstChild("Torso") or chain:FindFirstChild("UpperTorso")
-    if torso then return torso end
-    
-    return nil
-end
-
-local function disableAimbot()
-    AimbotEnabled = false
-    if aimbotConnection then
-        aimbotConnection:Disconnect()
-        aimbotConnection = nil
-    end
-    if AimbotToggle then
-        AimbotToggle:Set(false)
-    end
-end
-
 local function startAimbot()
     if aimbotConnection then
         aimbotConnection:Disconnect()
+        aimbotConnection = nil
     end
     
     aimbotConnection = RunService.RenderStepped:Connect(function()
@@ -314,30 +311,27 @@ local function startAimbot()
         -- Check if player has a character and is alive
         local character = LocalPlayer.Character
         if not character or not isAlive(character) then
-            return -- Don't disable, just skip aiming. Will work when respawned.
+            return
         end
         
-        -- Check if aim key is pressed
-        local isKeyPressed = false
-        if AimbotKey == Enum.UserInputType.MouseButton1 or AimbotKey == Enum.UserInputType.MouseButton2 or AimbotKey == Enum.UserInputType.MouseButton3 then
-            isKeyPressed = UserInputService:IsMouseButtonPressed(AimbotKey)
-        else
-            isKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
+        -- Check if right click is held
+        if not isRightHeld then
+            return
         end
         
-        -- If key is pressed, find CHAIN and aim at it
-        if isKeyPressed then
-            -- Check if we need to hold a tool
-            if RequireHoldingTool and not isHoldingItem() then return end
-            
-            local target = findChainTarget()
-            if target then
-                -- Wall check
-                if not wallCheck(target.Position) then
-                    local targetPosition = target.Position
-                    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPosition)
-                    Camera.CFrame = Camera.CFrame:Lerp(lookAt, AimbotSmoothness)
-                end
+        -- Check if we need to hold a tool
+        if RequireHoldingTool and not isHoldingItem() then
+            return
+        end
+        
+        -- DIRECTLY find chain target
+        local target = getChainTarget()
+        if target then
+            -- Wall check
+            if not wallCheck(target.Position) then
+                local targetPosition = target.Position
+                local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPosition)
+                Camera.CFrame = Camera.CFrame:Lerp(lookAt, AimbotSmoothness)
             end
         end
     end)
@@ -350,10 +344,40 @@ local function stopAimbot()
     end
 end
 
+-- Refresh on respawn - RESET EVERYTHING
+local function refreshOnRespawn()
+    -- CRITICAL: Reset right click state to false
+    isRightHeld = false
+    
+    -- Reset chain state
+    chainObject = nil
+    
+    -- Re-setup right click detection (cleans old connections)
+    setupRightClickDetection()
+    
+    -- If aimbot was enabled, restart it
+    if AimbotEnabled then
+        stopAimbot()
+        wait(0.3)
+        startAimbot()
+    end
+    
+    print("🔄 Systems refreshed on respawn - Right click reset")
+end
+
+-- Handle respawn
+LocalPlayer.CharacterAdded:Connect(function(character)
+    -- Wait for character to load
+    wait(0.5)
+    
+    -- Refresh everything
+    refreshOnRespawn()
+end)
+
 -- ===== CREATE AIMBOT TAB =====
 AimbotTab = Window:CreateTab("Aimbot", "target")
 
-AimbotTab:CreateSection("CHAIN Aimbot")
+AimbotTab:CreateSection("CHAIN Aimbot (Hold Right Click)")
 
 AimbotToggle = AimbotTab:CreateToggle({
     Name = "Enable CHAIN Aimbot",
@@ -365,12 +389,13 @@ AimbotToggle = AimbotTab:CreateToggle({
             startAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "CHAIN Aimbot enabled | Hold " .. getKeyName(AimbotKey) .. (RequireHoldingTool and " while holding a tool" or ""),
+                Content = "CHAIN Aimbot enabled | Hold RIGHT CLICK when CHAIN is in game" .. (RequireHoldingTool and " while holding a tool" or ""),
                 Duration = 4,
                 Image = 4483362458
             })
         else
             stopAimbot()
+            isRightHeld = false -- Reset on disable too
             Rayfield:Notify({
                 Title = "Aimbot",
                 Content = "CHAIN Aimbot disabled",
@@ -394,13 +419,6 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
             Duration = 3,
             Image = 4483362458
         })
-    end,
-})
-
-KeybindButton = AimbotTab:CreateButton({
-    Name = "Aimbot Key: " .. getKeyName(AimbotKey),
-    Callback = function()
-        startKeyListen()
     end,
 })
 
@@ -438,8 +456,7 @@ local WallCheckToggle = AimbotTab:CreateToggle({
     end,
 })
 
--- Setup key listener
-setupKeyListener()
+local Label = AimbotTab:CreateLabel("Aimbot activates when holding RIGHT CLICK while CHAIN is in game", "mouse-pointer")
 
 -- ===== BLUEPRINTS TAB =====
 local BlueprintsTab = Window:CreateTab("Blueprints", "printer")
@@ -701,7 +718,7 @@ local function pressKey(key)
     end
     if keyCode then
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-        task.wait(0.05)
+        wait(0.05)
         VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
         print("Pressed key: " .. key)
     else
@@ -733,19 +750,19 @@ local function monitorQTE(qtePath, qteName)
         local currentText = qteText.Text
         if currentText ~= "Hi" and currentText ~= "" then
             pressKey(currentText)
-            task.wait(0.1)
+            wait(0.1)
             qteText.Text = "Hi"
         end
     end)
     table.insert(qteConnections, connection)
-    local thread = task.spawn(function()
+    local thread = spawn(function()
         while autoQTEEnabled do
-            task.wait(0.1)
+            wait(0.1)
             if not autoQTEEnabled then break end
             local currentText = qteText.Text
             if currentText ~= "Hi" and currentText ~= "" then
                 pressKey(currentText)
-                task.wait(0.1)
+                wait(0.1)
                 qteText.Text = "Hi"
             end
         end
@@ -759,14 +776,14 @@ local function toggleQTE(Value)
     if Value then
         for _, conn in ipairs(qteConnections) do conn:Disconnect() end
         qteConnections = {}
-        for _, thread in ipairs(qtePollingThreads) do task.cancel(thread) end
+        for _, thread in ipairs(qtePollingThreads) do pcall(function() task.cancel(thread) end) end
         qtePollingThreads = {}
         monitorQTE("QTEToma", "QTEToma")
         monitorQTE("QTE", "QTE")
     else
         for _, conn in ipairs(qteConnections) do conn:Disconnect() end
         qteConnections = {}
-        for _, thread in ipairs(qtePollingThreads) do task.cancel(thread) end
+        for _, thread in ipairs(qtePollingThreads) do pcall(function() task.cancel(thread) end) end
         qtePollingThreads = {}
     end
 end
@@ -792,7 +809,7 @@ local function isNearChain()
     if not character then return false end
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    local chain = workspace:FindFirstChild("Misc")
+    local chain = Workspace:FindFirstChild("Misc")
     if chain then chain = chain:FindFirstChild("AI") end
     if chain then chain = chain:FindFirstChild("CHAIN") end
     if not chain then return false end
@@ -803,9 +820,9 @@ local function isNearChain()
 end
 
 local function pressQKeyWithDelay()
-    task.wait(DODGE_DELAY)
+    wait(DODGE_DELAY)
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-    task.wait(0.05)
+    wait(0.05)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
 end
 
@@ -819,7 +836,7 @@ local function hookSound(sound)
             if (now - dodgeChokeCooldown) >= DODGE_COOLDOWN then
                 if isNearChain() then
                     dodgeChokeCooldown = now
-                    task.spawn(pressQKeyWithDelay)
+                    spawn(pressQKeyWithDelay)
                     print("Auto Dodge Choke triggered! (0.3s delay)")
                 else
                     print("CHAIN too far - not dodging")
@@ -926,7 +943,8 @@ local Button = Tab:CreateButton({
 		end
 		Lighting.DescendantAdded:Connect(function(v)
 			if v:IsA("Atmosphere") then
-				v.Density = 0				v:GetPropertyChangedSignal("Density"):Connect(function() v.Density = 0 end)
+				v.Density = 0
+				v:GetPropertyChangedSignal("Density"):Connect(function() v.Density = 0 end)
 			end
 		end)
    end,
@@ -1104,7 +1122,7 @@ function LootableComponent.new(scrap, pivot)
 end
 
 function LootableComponent:render()
-    local camera = workspace.CurrentCamera
+    local camera = Workspace.CurrentCamera
     local player = game.Players.LocalPlayer
     local character = player.Character
     if not camera or not character then
@@ -1150,7 +1168,7 @@ local function setupScrapESP()
     scrapScreenGui.Parent = game:GetService("CoreGui")
     scrapScreenGui.Name = "ScrapESP"
     scrapBin = createBin()
-    local scrapFolder = workspace:FindFirstChild("Misc")
+    local scrapFolder = Workspace:FindFirstChild("Misc")
     if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Zones") end
     if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("LootingItems") end
     if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Scrap") end
@@ -1184,7 +1202,7 @@ local function setupDeathHandling()
     local player = game.Players.LocalPlayer
     local deathConn = player.CharacterAdded:Connect(function(character)
         clearScrapESP()
-        task.wait(0.5)
+        wait(0.5)
         if scrapESPEnabled then setupScrapESP() end
     end)
     scrapDeathConnection = deathConn
@@ -1201,7 +1219,7 @@ local function toggleScrapESP(Value)
         setupDeathHandling()
         scrapScanConnection = game:GetService("RunService").Heartbeat:Connect(function()
             if scrapESPEnabled then
-                local scrapFolder = workspace:FindFirstChild("Misc")
+                local scrapFolder = Workspace:FindFirstChild("Misc")
                 if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Zones") end
                 if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("LootingItems") end
                 if scrapFolder then scrapFolder = scrapFolder:FindFirstChild("Scrap") end
@@ -1255,7 +1273,7 @@ local LOCATIONS = {
 }
 
 local function findLocation(path)
-    local current = workspace
+    local current = Workspace
     for _, part in ipairs(path) do
         current = current:FindFirstChild(part)
         if not current then return nil end
@@ -1466,13 +1484,6 @@ local function updateChainStatusDisplay(chain)
     chainStatusBillboard = billboard
 end
 
-local function findChain()
-    local chain = workspace:FindFirstChild("Misc")
-    if chain then chain = chain:FindFirstChild("AI") end
-    if chain then chain = chain:FindFirstChild("CHAIN") end
-    return chain
-end
-
 local function updateChainESP()
     if chainHighlight then
         pcall(function() chainHighlight:Destroy() end)
@@ -1589,6 +1600,9 @@ local Toggle = Tab:CreateToggle({
 })
 
 -- ===== INITIALIZATION =====
+-- Setup everything initially
+setupRightClickDetection()
 Rayfield:LoadConfiguration()
 
-print("XCHain loaded! Aimbot will keep working after death - just hold " .. getKeyName(AimbotKey))
+print("XCHain loaded! Aimbot tracks CHAIN and activates when holding RIGHT CLICK")
+print("🔄 Systems will auto-refresh on respawn - Right click will be reset")
