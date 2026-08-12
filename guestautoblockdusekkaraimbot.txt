@@ -1,6 +1,6 @@
 Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- LOCAL variables for frequently accessed services (performance)
+-- ===== FREQUENTLY ACCESSED LOCALS =====
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -14,23 +14,9 @@ local PlayerGui = lp and lp:WaitForChild("PlayerGui") or nil
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Lighting = game:GetService("Lighting")
 
--- Dummy function declarations to prevent hoisting errors
-local function startNoliTracking() end
-local function stopNoliTracking() end
-local function startC00lkiddTracking() end
-local function stopC00lkiddTracking() end
-local function startJohnDoeTracking() end
-local function stopJohnDoeTracking() end
-local function startAzureTracking() end
-local function stopAzureTracking() end
-local function setupSilentAim() end
-local function restoreSilentAim() end
-local function stopDusekkar() end
-local function useSilentAim() end
-
--- Remotes with error handling
-local testRemote = nil
-local success, result = pcall(function()
+-- ===== GLOBAL VARIABLES (ONE-TIME USE) =====
+testRemote = nil
+success, result = pcall(function()
     return ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("Network"):WaitForChild("RemoteEvent")
 end)
 if success then
@@ -46,11 +32,11 @@ else
     end
 end
 
--- GLOBAL variables for folders (accessed everywhere)
+-- ===== GLOBAL VARIABLES FOR FOLDERS =====
 KillersFolder = nil
 SurvivorsFolder = nil
 
-local playersFolder = Workspace:FindFirstChild("Players")
+playersFolder = Workspace:FindFirstChild("Players")
 if playersFolder then
     KillersFolder = playersFolder:FindFirstChild("Killers") or Instance.new("Folder")
     KillersFolder.Name = "Killers"
@@ -576,6 +562,114 @@ BLOCK_CHECK_INTERVAL = 0.2
 
 lastVisualUpdate = 0
 VISUAL_UPDATE_COOLDOWN = 0.5
+
+-- ===== CHARACTER LISTENER FUNCTIONS (BROKEN UP TO AVOID LOCAL LIMIT) =====
+
+local function setupSurvivorListener(newSurvivor)
+    local root = newSurvivor:WaitForChild("HumanoidRootPart", 5)
+    if root then
+        updatePositionHistory(newSurvivor, root.Position)
+    end
+end
+
+local function setupKillerListener(newKiller)
+    local root = newKiller:WaitForChild("HumanoidRootPart", 5)
+    if root then
+        updatePositionHistory(newKiller, root.Position)
+    end
+end
+
+local function cleanupCharacterTimers(character)
+    if positionHistory[character] then
+        positionHistory[character] = nil
+    end
+    
+    if aimbotCurrentTarget == character then
+        stopAimbot()
+    end
+    
+    if currentDusekkarTarget == character then
+        stopDusekkar()
+    end
+    
+    -- Cleanup activeCooldownTimers
+    if activeCooldownTimers[character] then
+        if activeCooldownTimers[character].billboard then
+            pcall(function() activeCooldownTimers[character].billboard:Destroy() end)
+        end
+        if activeCooldownTimers[character].connection then
+            activeCooldownTimers[character].connection:Disconnect()
+        end
+        activeCooldownTimers[character] = nil
+    end
+    
+    -- Cleanup slasherActiveCooldownTimers
+    cleanupAbilityTimers(slasherActiveCooldownTimers, character)
+    
+    -- Cleanup onexActiveCooldownTimers
+    cleanupAbilityTimers(onexActiveCooldownTimers, character)
+    
+    -- Cleanup sixerActiveCooldownTimers
+    cleanupAbilityTimers(sixerActiveCooldownTimers, character)
+    
+    -- Cleanup noliActiveCooldownTimers
+    cleanupAbilityTimers(noliActiveCooldownTimers, character)
+    
+    -- Cleanup c00lkiddActiveCooldownTimers
+    cleanupAbilityTimers(c00lkiddActiveCooldownTimers, character)
+    
+    -- Cleanup johnDoeActiveCooldownTimers
+    cleanupAbilityTimers(johnDoeActiveCooldownTimers, character)
+    
+    -- Cleanup nosferatuActiveCooldownTimers
+    cleanupAbilityTimers(nosferatuActiveCooldownTimers, character)
+    
+    -- Cleanup azureActiveCooldownTimers
+    cleanupAbilityTimers(azureActiveCooldownTimers, character)
+    
+    -- Cleanup noobActiveCooldownTimers
+    if noobActiveCooldownTimers[character] then
+        for _, data in pairs(noobActiveCooldownTimers[character]) do
+            destroyNoobTimer(data)
+        end
+        noobActiveCooldownTimers[character] = nil
+    end
+end
+
+local function cleanupAbilityTimers(timerTable, character)
+    if timerTable[character] then
+        for _, data in pairs(timerTable[character]) do
+            if data.billboard then
+                pcall(function() data.billboard:Destroy() end)
+            end
+            if data.connection then
+                data.connection:Disconnect()
+            end
+        end
+        timerTable[character] = nil
+    end
+end
+
+local function watchCharacterRemoval(folder)
+    if not folder then return end
+    
+    folder.ChildRemoved:Connect(function(character)
+        cleanupCharacterTimers(character)
+    end)
+end
+
+local function initCharacterListeners()
+    if SurvivorsFolder then
+        SurvivorsFolder.ChildAdded:Connect(setupSurvivorListener)
+    end
+    
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(setupKillerListener)
+    end
+    
+    watchCharacterRemoval(KillersFolder)
+    watchCharacterRemoval(SurvivorsFolder)
+end
 
 -- Smooth ShiftLock Module
 local SmoothShiftLock = nil
@@ -3193,8 +3287,7 @@ local function checkSpecialKillerActions()
                             if animator then
                                 for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
                                     local id = extractNumericAnimationId(track.Animation.AnimationId)
-                                    if id and guest1337AllAnims[id] then
-                                        if blockdelay > 0 then task.wait(blockdelay) end
+                                    if id and guest1337AllAnims[id] then                                        if blockdelay > 0 then task.wait(blockdelay) end
                                         pressKey(Enum.KeyCode.Q)
                                         lastSpecialAbilityTime = now
                                         SendNotif("1x1x1x1", "Mass Infection used on Guest1337", 1)
@@ -6219,94 +6312,13 @@ DusekkarTab:CreateKeybind({ Name = "Fire Plasma Beam (Silent)", CurrentKeybind =
 
 local function initCharacterListeners()
     if SurvivorsFolder then
-        SurvivorsFolder.ChildAdded:Connect(function(newSurvivor)
-            local root = newSurvivor:WaitForChild("HumanoidRootPart", 5)
-            if root then updatePositionHistory(newSurvivor, root.Position) end
-        end)
+        SurvivorsFolder.ChildAdded:Connect(setupSurvivorListener)
     end
+    
     if KillersFolder then
-        KillersFolder.ChildAdded:Connect(function(newKiller)
-            local root = newKiller:WaitForChild("HumanoidRootPart", 5)
-            if root then updatePositionHistory(newKiller, root.Position) end
-        end)
+        KillersFolder.ChildAdded:Connect(setupKillerListener)
     end
-    local function watchCharacterRemoval(folder)
-        if folder then
-            folder.ChildRemoved:Connect(function(character)
-                if positionHistory[character] then positionHistory[character] = nil end
-                if aimbotCurrentTarget == character then stopAimbot() end
-                if currentDusekkarTarget == character then stopDusekkar() end
-                if activeCooldownTimers[character] then
-                    if activeCooldownTimers[character].billboard then pcall(function() activeCooldownTimers[character].billboard:Destroy() end) end
-                    if activeCooldownTimers[character].connection then activeCooldownTimers[character].connection:Disconnect() end
-                    activeCooldownTimers[character] = nil
-                end
-                if slasherActiveCooldownTimers[character] then
-                    for _, data in pairs(slasherActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    slasherActiveCooldownTimers[character] = nil
-                end
-                if onexActiveCooldownTimers[character] then
-                    for _, data in pairs(onexActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    onexActiveCooldownTimers[character] = nil
-                end
-                if sixerActiveCooldownTimers[character] then
-                    for _, data in pairs(sixerActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    sixerActiveCooldownTimers[character] = nil
-                end
-                if noliActiveCooldownTimers[character] then
-                    for _, data in pairs(noliActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    noliActiveCooldownTimers[character] = nil
-                end
-                if c00lkiddActiveCooldownTimers[character] then
-                    for _, data in pairs(c00lkiddActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    c00lkiddActiveCooldownTimers[character] = nil
-                end
-                if johnDoeActiveCooldownTimers[character] then
-                    for _, data in pairs(johnDoeActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    johnDoeActiveCooldownTimers[character] = nil
-                end
-                if nosferatuActiveCooldownTimers[character] then
-                    for _, data in pairs(nosferatuActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    nosferatuActiveCooldownTimers[character] = nil
-                end
-                if azureActiveCooldownTimers[character] then
-                    for _, data in pairs(azureActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    azureActiveCooldownTimers[character] = nil
-                end
-                if noobActiveCooldownTimers[character] then
-                    for _, data in pairs(noobActiveCooldownTimers[character]) do
-                        if data.billboard then pcall(function() data.billboard:Destroy() end) end
-                        if data.connection then data.connection:Disconnect() end
-                    end
-                    noobActiveCooldownTimers[character] = nil
-                end
-            end)
-        end
-    end
+    
     watchCharacterRemoval(KillersFolder)
     watchCharacterRemoval(SurvivorsFolder)
 end
