@@ -148,20 +148,14 @@ local LocalPlayer = Players.LocalPlayer
 -- ===== AIMBOT VARIABLES =====
 local AimbotEnabled = false
 local WallCheckEnabled = true
-local AimbotFOV = 180
-local AimbotSmoothness = 0.1  -- Default from your script
-local FOVCircle = nil
+local AimbotSmoothness = 0.1
 local AimbotKey = Enum.UserInputType.MouseButton2
 local RequireHoldingTool = true
-local AutoRetarget = true
-local currentAimTarget = nil
-local isAiming = false
-local WaitingForRelease = false
-local prevKeyPressed = false
 local ListeningForKey = false
 local KeybindButton = nil
 local aimbotConnection = nil
 local AimbotTab = nil
+local AimbotToggle = nil
 
 -- Key binding functions
 local function getKeyName(inputType)
@@ -220,33 +214,6 @@ local function setupKeyListener()
     end)
 end
 
--- FOV Circle Visual
-local function createFOVCircle()
-    if FOVCircle then
-        FOVCircle:Remove()
-    end
-    
-    local circle = Drawing.new("Circle")
-    circle.Visible = true
-    circle.Thickness = 2
-    circle.Color = Color3.new(1, 1, 1)
-    circle.Transparency = 1
-    circle.Filled = false
-    circle.Radius = AimbotFOV
-    circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    circle.NumSides = 100
-    
-    FOVCircle = circle
-    return circle
-end
-
-local function updateFOVCircle()
-    if FOVCircle then
-        FOVCircle.Radius = AimbotFOV
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    end
-end
-
 local function isHoldingItem()
     if not RequireHoldingTool then
         return true
@@ -278,6 +245,9 @@ local function wallCheck(targetPosition)
         return false
     end
     
+    -- Make sure we have a valid character for the raycast
+    if not LocalPlayer.Character then return true end
+    
     local origin = Camera.CFrame.Position
     local direction = (targetPosition - origin).Unit
     local raycastParams = RaycastParams.new()
@@ -295,36 +265,8 @@ local function wallCheck(targetPosition)
     return false
 end
 
-local function isMouseInFOV()
-    local mouseLocation = UserInputService:GetMouseLocation()
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    local distanceFromCenter = (mouseLocation - screenCenter).Magnitude
-    return distanceFromCenter <= AimbotFOV
-end
-
-local function isTargetInFOV(targetPart)
-    if not targetPart then
-        return false
-    end
-    
-    if AimbotFOV >= 180 then
-        return true
-    end
-    
-    local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-    
-    if not onScreen then
-        return false
-    end
-    
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    local distance = (Vector2.new(targetPosition.X, targetPosition.Y) - screenCenter).Magnitude
-    
-    return distance <= AimbotFOV
-end
-
--- Get CHAIN target
-local function getChainTargetPart()
+-- SIMPLE: Find CHAIN's head or torso
+local function findChainTarget()
     local chain = workspace:FindFirstChild("Misc")
     if chain then
         chain = chain:FindFirstChild("AI")
@@ -333,61 +275,31 @@ local function getChainTargetPart()
         end
     end
     
-    if not chain then
-        return nil
-    end
+    if not chain then return nil end
+    if not isAlive(chain) then return nil end
     
-    if not isAlive(chain) then
-        return nil
-    end
-    
+    -- Try to find head first, then HumanoidRootPart, then Torso
     local head = chain:FindFirstChild("Head")
-    if head then
-        return head
-    end
+    if head then return head end
     
-    local humanoidRootPart = chain:FindFirstChild("HumanoidRootPart")
-    if humanoidRootPart then
-        return humanoidRootPart
-    end
+    local hrp = chain:FindFirstChild("HumanoidRootPart")
+    if hrp then return hrp end
     
     local torso = chain:FindFirstChild("Torso") or chain:FindFirstChild("UpperTorso")
-    return torso
-end
-
-local function getChainTarget()
-    local targetPart = getChainTargetPart()
-    if targetPart then
-        if isTargetInFOV(targetPart) then
-            if not wallCheck(targetPart.Position) then
-                return targetPart
-            end
-        end
-    end
+    if torso then return torso end
+    
     return nil
 end
 
--- AIM AT TARGET WITH SMOOTHNESS (from your script)
-local function aimAtTarget(targetPart)
-    if not targetPart then return end
-    
-    local targetPosition = targetPart.Position
-    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPosition)
-    
-    -- Using the smoothness from your script
-    Camera.CFrame = Camera.CFrame:Lerp(lookAt, AimbotSmoothness)
-end
-
--- Check if chain exists and is valid
-local function isChainValid()
-    local chain = workspace:FindFirstChild("Misc")
-    if chain then
-        chain = chain:FindFirstChild("AI")
-        if chain then
-            chain = chain:FindFirstChild("CHAIN")
-        end
+local function disableAimbot()
+    AimbotEnabled = false
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
     end
-    return chain ~= nil and isAlive(chain)
+    if AimbotToggle then
+        AimbotToggle:Set(false)
+    end
 end
 
 local function startAimbot()
@@ -396,110 +308,37 @@ local function startAimbot()
     end
     
     aimbotConnection = RunService.RenderStepped:Connect(function()
-        if AimbotEnabled and UserInputService:GetFocusedTextBox() == nil then
-            local isAimbotKeyPressed = false
-            
-            if AimbotKey == Enum.UserInputType.MouseButton1 or AimbotKey == Enum.UserInputType.MouseButton2 or AimbotKey == Enum.UserInputType.MouseButton3 then
-                isAimbotKeyPressed = UserInputService:IsMouseButtonPressed(AimbotKey)
-            else
-                isAimbotKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
-            end
-            
-            local shouldAim = false
-            if RequireHoldingTool then
-                shouldAim = isHoldingItem() and isMouseInFOV()
-            else
-                shouldAim = isMouseInFOV()
-            end
-            
-            if isAimbotKeyPressed and not prevKeyPressed then
-                WaitingForRelease = false
-            end
-            
-            if not isAimbotKeyPressed then
-                WaitingForRelease = false
-                if isAiming then
-                    currentAimTarget = nil
-                    isAiming = false
-                end
-            end
-            
-            prevKeyPressed = isAimbotKeyPressed
-            
-            if isAimbotKeyPressed and shouldAim then
-                local chainTarget = getChainTarget()
-                
-                if not isAiming and not WaitingForRelease then
-                    if chainTarget then
-                        currentAimTarget = chainTarget
-                        isAiming = true
-                    end
-                end
-                
-                if currentAimTarget and (not currentAimTarget.Parent or not isAlive(currentAimTarget.Parent) or wallCheck(currentAimTarget.Position)) then
-                    if AutoRetarget then
-                        if chainTarget then
-                            currentAimTarget = chainTarget
-                            isAiming = true
-                        else
-                            currentAimTarget = nil
-                            isAiming = false
-                        end
-                    else
-                        currentAimTarget = nil
-                        isAiming = false
-                        WaitingForRelease = true
-                    end
-                end
-                
-                if currentAimTarget and currentAimTarget.Parent and isAlive(currentAimTarget.Parent) then
-                    if isTargetInFOV(currentAimTarget) and not wallCheck(currentAimTarget.Position) then
-                        aimAtTarget(currentAimTarget)
-                    else
-                        if AutoRetarget then
-                            if chainTarget then
-                                currentAimTarget = chainTarget
-                                isAiming = true
-                            else
-                                currentAimTarget = nil
-                                isAiming = false
-                            end
-                        else
-                            if currentAimTarget then
-                                currentAimTarget = nil
-                                isAiming = false
-                                WaitingForRelease = true
-                            end
-                        end
-                    end
-                else
-                    if AutoRetarget then
-                        if chainTarget then
-                            currentAimTarget = chainTarget
-                            isAiming = true
-                        else
-                            currentAimTarget = nil
-                            isAiming = false
-                        end
-                    else
-                        if currentAimTarget then
-                            currentAimTarget = nil
-                            isAiming = false
-                            WaitingForRelease = true
-                        end
-                    end
-                end
-            else
-                if isAiming then
-                    currentAimTarget = nil
-                    isAiming = false
-                end
-            end
+        if not AimbotEnabled then return end
+        if UserInputService:GetFocusedTextBox() ~= nil then return end
+        
+        -- Check if player has a character and is alive
+        local character = LocalPlayer.Character
+        if not character or not isAlive(character) then
+            return -- Don't disable, just skip aiming. Will work when respawned.
+        end
+        
+        -- Check if aim key is pressed
+        local isKeyPressed = false
+        if AimbotKey == Enum.UserInputType.MouseButton1 or AimbotKey == Enum.UserInputType.MouseButton2 or AimbotKey == Enum.UserInputType.MouseButton3 then
+            isKeyPressed = UserInputService:IsMouseButtonPressed(AimbotKey)
         else
-            currentAimTarget = nil
-            isAiming = false
-            WaitingForRelease = false
-            prevKeyPressed = false
+            isKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
+        end
+        
+        -- If key is pressed, find CHAIN and aim at it
+        if isKeyPressed then
+            -- Check if we need to hold a tool
+            if RequireHoldingTool and not isHoldingItem() then return end
+            
+            local target = findChainTarget()
+            if target then
+                -- Wall check
+                if not wallCheck(target.Position) then
+                    local targetPosition = target.Position
+                    local lookAt = CFrame.lookAt(Camera.CFrame.Position, targetPosition)
+                    Camera.CFrame = Camera.CFrame:Lerp(lookAt, AimbotSmoothness)
+                end
+            end
         end
     end)
 end
@@ -509,10 +348,6 @@ local function stopAimbot()
         aimbotConnection:Disconnect()
         aimbotConnection = nil
     end
-    currentAimTarget = nil
-    isAiming = false
-    WaitingForRelease = false
-    prevKeyPressed = false
 end
 
 -- ===== CREATE AIMBOT TAB =====
@@ -520,7 +355,7 @@ AimbotTab = Window:CreateTab("Aimbot", "target")
 
 AimbotTab:CreateSection("CHAIN Aimbot")
 
-local AimbotToggle = AimbotTab:CreateToggle({
+AimbotToggle = AimbotTab:CreateToggle({
     Name = "Enable CHAIN Aimbot",
     CurrentValue = false,
     Flag = "AimbotToggle",
@@ -528,22 +363,14 @@ local AimbotToggle = AimbotTab:CreateToggle({
         AimbotEnabled = Value
         if Value then
             startAimbot()
-            createFOVCircle()
-            if FOVCircle then
-                FOVCircle.Visible = true
-            end
-            local modeText = AimbotFOV >= 180 and "360° (aims anywhere)" or "FOV (aims within circle)"
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "CHAIN Aimbot enabled - " .. modeText .. " | Hold " .. getKeyName(AimbotKey) .. (RequireHoldingTool and " while holding a tool" or ""),
+                Content = "CHAIN Aimbot enabled | Hold " .. getKeyName(AimbotKey) .. (RequireHoldingTool and " while holding a tool" or ""),
                 Duration = 4,
                 Image = 4483362458
             })
         else
             stopAimbot()
-            if FOVCircle then
-                FOVCircle.Visible = false
-            end
             Rayfield:Notify({
                 Title = "Aimbot",
                 Content = "CHAIN Aimbot disabled",
@@ -551,22 +378,6 @@ local AimbotToggle = AimbotTab:CreateToggle({
                 Image = 4483362458
             })
         end
-    end,
-})
-
-local AutoRetargetToggle = AimbotTab:CreateToggle({
-    Name = "Auto Retarget",
-    CurrentValue = true,
-    Flag = "AutoRetargetToggle",
-    Callback = function(Value)
-        AutoRetarget = Value
-        local msg = Value and "Auto Retarget ON - will re-acquire CHAIN if lost" or "Auto Retarget OFF - will not re-acquire CHAIN until you release and re-press the aim key"
-        Rayfield:Notify({
-            Title = "Aimbot Settings",
-            Content = msg,
-            Duration = 4,
-            Image = 4483362458
-        })
     end,
 })
 
@@ -583,16 +394,6 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
             Duration = 3,
             Image = 4483362458
         })
-        
-        if AimbotEnabled then
-            local modeText = AimbotFOV >= 180 and "360° (aims anywhere)" or "FOV (aims within circle)"
-            Rayfield:Notify({
-                Title = "Aimbot",
-                Content = "Aimbot updated - " .. modeText .. " | Hold " .. getKeyName(AimbotKey) .. (RequireHoldingTool and " while holding a tool" or ""),
-                Duration = 4,
-                Image = 4483362458
-            })
-        end
     end,
 })
 
@@ -603,27 +404,6 @@ KeybindButton = AimbotTab:CreateButton({
     end,
 })
 
-local AimbotFOVSlider = AimbotTab:CreateSlider({
-    Name = "Aimbot FOV (0-180 = 360° coverage)",
-    Range = {0, 180},
-    Increment = 1,
-    Suffix = "",
-    CurrentValue = 180,
-    Flag = "AimbotFOV",
-    Callback = function(Value)
-        AimbotFOV = Value
-        updateFOVCircle()
-        local modeText = Value >= 180 and "360° coverage (aims anywhere)" or Value .. "° FOV"
-        Rayfield:Notify({
-            Title = "Aimbot Settings",
-            Content = "FOV set to: " .. modeText,
-            Duration = 2,
-            Image = 4483362458
-        })
-    end,
-})
-
--- ===== SMOOTHNESS SLIDER FROM YOUR SCRIPT =====
 local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
     Name = "Aimbot Smoothness",
     Range = {0.01, 0.5},
@@ -658,32 +438,8 @@ local WallCheckToggle = AimbotTab:CreateToggle({
     end,
 })
 
-local FOVCircleToggle = AimbotTab:CreateToggle({
-    Name = "Show FOV Circle",
-    CurrentValue = true,
-    Flag = "FOVCircleToggle",
-    Callback = function(Value)
-        if FOVCircle then
-            FOVCircle.Visible = Value and AimbotEnabled
-        end
-        local message = Value and "FOV circle shown" or "FOV circle hidden"
-        Rayfield:Notify({
-            Title = "Aimbot Settings",
-            Content = message,
-            Duration = 2,
-            Image = 4483362458
-        })
-    end,
-})
-
 -- Setup key listener
 setupKeyListener()
-
--- Create FOV circle on startup
-createFOVCircle()
-if FOVCircle then
-    FOVCircle.Visible = false
-end
 
 -- ===== BLUEPRINTS TAB =====
 local BlueprintsTab = Window:CreateTab("Blueprints", "printer")
@@ -1170,8 +926,7 @@ local Button = Tab:CreateButton({
 		end
 		Lighting.DescendantAdded:Connect(function(v)
 			if v:IsA("Atmosphere") then
-				v.Density = 0
-				v:GetPropertyChangedSignal("Density"):Connect(function() v.Density = 0 end)
+				v.Density = 0				v:GetPropertyChangedSignal("Density"):Connect(function() v.Density = 0 end)
 			end
 		end)
    end,
@@ -1836,4 +1591,4 @@ local Toggle = Tab:CreateToggle({
 -- ===== INITIALIZATION =====
 Rayfield:LoadConfiguration()
 
-print("XCHain loaded! Aimbot targets CHAIN with 360° mode and auto-reacquire after death.")
+print("XCHain loaded! Aimbot will keep working after death - just hold " .. getKeyName(AimbotKey))
