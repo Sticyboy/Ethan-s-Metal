@@ -156,7 +156,6 @@ local aimbotConnection = nil
 local AimbotTab = nil
 local AimbotToggle = nil
 local chainExists = false
-local debugMode = true -- DEBUG MODE ON
 
 -- Key binding functions
 local function getKeyName(inputType)
@@ -248,7 +247,7 @@ local function wallCheck(targetPosition)
     
     if not LocalPlayer.Character then return true end
     
-    local currentCamera = Workspace.CurrentCamera
+    local currentCamera = workspace.CurrentCamera
     if not currentCamera then return true end
     
     local origin = currentCamera.CFrame.Position
@@ -315,38 +314,16 @@ local function startAimbot()
         aimbotConnection:Disconnect()
     end
     
-    local lastDebugTime = 0
-    
     aimbotConnection = RunService.RenderStepped:Connect(function()
         if not AimbotEnabled then return end
         if UserInputService:GetFocusedTextBox() ~= nil then return end
         
-        -- Debug print every 2 seconds
-        local currentTime = os.clock()
-        local shouldDebug = debugMode and (currentTime - lastDebugTime) > 2
-        
         -- Track if CHAIN exists
         chainExists = checkChainExists()
-        
-        if shouldDebug then
-            print("=== AIMBOT DEBUG ===")
-            print("AimbotEnabled:", AimbotEnabled)
-            print("Chain exists:", chainExists)
-            print("Player character exists:", LocalPlayer.Character ~= nil)
-            if LocalPlayer.Character then
-                print("Player alive:", isAlive(LocalPlayer.Character))
-            end
-            local currentCam = Workspace.CurrentCamera
-            print("Current camera exists:", currentCam ~= nil)
-            if currentCam then
-                print("Camera position:", currentCam.CFrame.Position)
-            end
-        end
         
         -- Check if player has a character and is alive
         local character = LocalPlayer.Character
         if not character or not isAlive(character) then
-            if shouldDebug then print("DEBUG: No character or dead, skipping") end
             return
         end
         
@@ -358,71 +335,23 @@ local function startAimbot()
             isKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
         end
         
-        if shouldDebug then
-            print("Key pressed:", isKeyPressed)
-            print("Key:", getKeyName(AimbotKey))
-        end
-        
         -- If key is pressed AND chain exists, aim at chain
         if isKeyPressed and chainExists then
             -- Check if we need to hold a tool
-            if RequireHoldingTool and not isHoldingItem() then
-                if shouldDebug then print("DEBUG: Not holding tool, skipping") end
-                return
-            end
+            if RequireHoldingTool and not isHoldingItem() then return end
             
             local target = findChainTarget()
-            
-            if shouldDebug then
-                print("Target found:", target ~= nil)
-                if target then
-                    print("Target position:", target.Position)
-                    print("Target parent:", target.Parent and target.Parent.Name or "nil")
-                end
-            end
-            
             if target then
                 -- Wall check
-                local isBlocked = wallCheck(target.Position)
-                
-                if shouldDebug then
-                    print("Wall blocked:", isBlocked)
-                    print("Wall check enabled:", WallCheckEnabled)
-                end
-                
-                if not isBlocked then
-                    -- ALWAYS get the current camera fresh
-                    local currentCamera = Workspace.CurrentCamera
+                if not wallCheck(target.Position) then
+                    local currentCamera = workspace.CurrentCamera
                     if currentCamera then
                         local targetPosition = target.Position
                         local lookAt = CFrame.lookAt(currentCamera.CFrame.Position, targetPosition)
                         currentCamera.CFrame = currentCamera.CFrame:Lerp(lookAt, AimbotSmoothness)
-                        
-                        if shouldDebug then
-                            print("AIMING AT TARGET!")
-                            print("New camera position:", currentCamera.CFrame.Position)
-                        end
-                    else
-                        if shouldDebug then
-                            print("DEBUG: No current camera!")
-                        end
                     end
                 end
             end
-        else
-            if shouldDebug then
-                if not isKeyPressed then
-                    print("DEBUG: Key not pressed")
-                end
-                if not chainExists then
-                    print("DEBUG: Chain doesn't exist")
-                end
-            end
-        end
-        
-        if shouldDebug then
-            lastDebugTime = currentTime
-            print("===================")
         end
     end)
 end
@@ -754,7 +683,6 @@ local qteConnections = {}
 local qtePollingThreads = {}
 
 local function pressKey(key)
-    print("Attempting to press key: " .. key)
     local keyMap = {
         ["Space"] = Enum.KeyCode.Space,
         ["Enter"] = Enum.KeyCode.Return,
@@ -788,9 +716,6 @@ local function pressKey(key)
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
         task.wait(0.05)
         VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-        print("Pressed key: " .. key)
-    else
-        print("Could not find key: " .. key)
     end
 end
 
@@ -809,10 +734,8 @@ local function monitorQTE(qtePath, qteName)
         end
     end
     if not qteText then
-        warn("QTE UI not found: " .. qteName)
         return false
     end
-    print("QTE monitor started for: " .. qteName)
     local connection = qteText:GetPropertyChangedSignal("Text"):Connect(function()
         if not autoQTEEnabled then return end
         local currentText = qteText.Text
@@ -905,9 +828,6 @@ local function hookSound(sound)
                 if isNearChain() then
                     dodgeChokeCooldown = now
                     task.spawn(pressQKeyWithDelay)
-                    print("Auto Dodge Choke triggered! (0.3s delay)")
-                else
-                    print("CHAIN too far - not dodging")
                 end
             end
         end
@@ -932,9 +852,6 @@ local function toggleDodgeChoke(Value)
     autoDodgeChokeEnabled = Value
     if Value then
         setupDodgeChoke()
-        print("Auto Dodge Choke Enabled! (0.3s delay)")
-    else
-        print("Auto Dodge Choke Disabled!")
     end
 end
 
@@ -1677,5 +1594,4 @@ local Toggle = Tab:CreateToggle({
 -- ===== INITIALIZATION =====
 Rayfield:LoadConfiguration()
 
-print("XCHain loaded! Debug mode ON - check console (F9) for aimbot info")
-print("StreamingEnabled:", workspace.StreamingEnabled)
+print("XCHain loaded! Aimbot works after death - hold " .. getKeyName(AimbotKey) .. " to aim")
