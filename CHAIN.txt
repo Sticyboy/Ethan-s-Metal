@@ -148,16 +148,17 @@ local LocalPlayer = Players.LocalPlayer
 local AimbotEnabled = false
 local WallCheckEnabled = true
 local AimbotSmoothness = 0.1
-local AimbotKey = Enum.UserInputType.MouseButton2
 local RequireHoldingTool = true
-local ListeningForKey = false
-local KeybindButton = nil
 local aimbotConnection = nil
 local AimbotTab = nil
 local AimbotToggle = nil
 local chainExists = false
 
--- Key binding functions
+-- ===== TOGGLE VARIABLES =====
+local aimbotActive = false  -- Toggle state
+local TOGGLE_KEY = Enum.KeyCode.X  -- Changed from Y to X
+
+-- ===== KEYBIND FUNCTIONS =====
 local function getKeyName(inputType)
     if inputType == Enum.UserInputType.MouseButton1 then
         return "Left Click"
@@ -170,48 +171,6 @@ local function getKeyName(inputType)
     else
         return tostring(inputType.Name)
     end
-end
-
--- Function to start listening for key input
-local function startKeyListen()
-    ListeningForKey = true
-    if KeybindButton then
-        KeybindButton:Set("Press any key...")
-    end
-    Rayfield:Notify({
-        Title = "Keybind",
-        Content = "Press any key to set as aimbot key...",
-        Duration = 3,
-        Image = 4483362458
-    })
-end
-
--- Key input connection
-local keyConnection
-local function setupKeyListener()
-    if keyConnection then
-        keyConnection:Disconnect()
-    end
-    
-    keyConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if ListeningForKey then
-            ListeningForKey = false
-            AimbotKey = input.UserInputType
-            
-            if KeybindButton then
-                KeybindButton:Set("Aimbot Key: " .. getKeyName(AimbotKey))
-            end
-            
-            Rayfield:Notify({
-                Title = "Keybind Set",
-                Content = "Aimbot key set to: " .. getKeyName(AimbotKey),
-                Duration = 3,
-                Image = 4483362458
-            })
-        end
-    end)
 end
 
 local function isHoldingItem()
@@ -318,6 +277,9 @@ local function startAimbot()
         if not AimbotEnabled then return end
         if UserInputService:GetFocusedTextBox() ~= nil then return end
         
+        -- Check if aimbot is toggled on
+        if not aimbotActive then return end
+        
         -- Track if CHAIN exists
         chainExists = checkChainExists()
         
@@ -327,16 +289,8 @@ local function startAimbot()
             return
         end
         
-        -- Check if aim key is pressed
-        local isKeyPressed = false
-        if AimbotKey == Enum.UserInputType.MouseButton1 or AimbotKey == Enum.UserInputType.MouseButton2 or AimbotKey == Enum.UserInputType.MouseButton3 then
-            isKeyPressed = UserInputService:IsMouseButtonPressed(AimbotKey)
-        else
-            isKeyPressed = UserInputService:IsKeyDown(Enum.KeyCode[AimbotKey.Name])
-        end
-        
-        -- If key is pressed AND chain exists, aim at chain
-        if isKeyPressed and chainExists then
+        -- If chain exists, aim at chain
+        if chainExists then
             -- Check if we need to hold a tool
             if RequireHoldingTool and not isHoldingItem() then return end
             
@@ -364,6 +318,35 @@ local function stopAimbot()
     chainExists = false
 end
 
+-- ===== KEYBOARD TOGGLE SETUP =====
+local function setupToggleListener()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if UserInputService:GetFocusedTextBox() ~= nil then return end
+        
+        -- Check if X key was pressed
+        if input.KeyCode == TOGGLE_KEY then
+            aimbotActive = not aimbotActive
+            
+            if aimbotActive then
+                Rayfield:Notify({
+                    Title = "Aimbot",
+                    Content = "🔴 CHAIN Aimbot TOGGLED ON",
+                    Duration = 2,
+                    Image = 4483362458
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Aimbot",
+                    Content = "⚪ CHAIN Aimbot TOGGLED OFF",
+                    Duration = 2,
+                    Image = 4483362458
+                })
+            end
+        end
+    end)
+end
+
 -- ===== CREATE AIMBOT TAB =====
 AimbotTab = Window:CreateTab("Aimbot", "target")
 
@@ -379,11 +362,12 @@ AimbotToggle = AimbotTab:CreateToggle({
             startAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "CHAIN Aimbot enabled | Hold " .. getKeyName(AimbotKey) .. (RequireHoldingTool and " while holding a tool" or ""),
+                Content = "CHAIN Aimbot enabled | Press X to toggle on/off" .. (RequireHoldingTool and " | Requires holding a tool" or " | No tool required"),
                 Duration = 4,
                 Image = 4483362458
             })
         else
+            aimbotActive = false
             stopAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
@@ -411,12 +395,8 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
     end,
 })
 
-KeybindButton = AimbotTab:CreateButton({
-    Name = "Aimbot Key: " .. getKeyName(AimbotKey),
-    Callback = function()
-        startKeyListen()
-    end,
-})
+-- Display the toggle key
+AimbotTab:CreateLabel("Toggle Key: X (press to toggle on/off)", "key")
 
 local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
     Name = "Aimbot Smoothness",
@@ -452,8 +432,8 @@ local WallCheckToggle = AimbotTab:CreateToggle({
     end,
 })
 
--- Setup key listener
-setupKeyListener()
+-- Setup toggle listener
+setupToggleListener()
 
 -- ===== BLUEPRINTS TAB =====
 local BlueprintsTab = Window:CreateTab("Blueprints", "printer")
@@ -948,8 +928,7 @@ local Button = Tab:CreateButton({
 				Ambient = game:GetService("Lighting").Ambient
 			}
 			game:GetService("Lighting"):GetPropertyChangedSignal("Brightness"):Connect(function()
-				if game:GetService("Lighting").Brightness ~= 1 and game:GetService("Lighting").Brightness ~= _G.NormalLightingSettings.Brightness then
-					_G.NormalLightingSettings.Brightness = game:GetService("Lighting").Brightness
+				if game:GetService("Lighting").Brightness ~= 1 and game:GetService("Lighting").Brightness ~= _G.NormalLightingSettings.Brightness then					_G.NormalLightingSettings.Brightness = game:GetService("Lighting").Brightness
 					if not _G.FullBrightEnabled then
 						repeat wait() until _G.FullBrightEnabled
 					end
@@ -1594,4 +1573,4 @@ local Toggle = Tab:CreateToggle({
 -- ===== INITIALIZATION =====
 Rayfield:LoadConfiguration()
 
-print("XCHain loaded! Aimbot works after death - hold " .. getKeyName(AimbotKey) .. " to aim")
+print("XCHain loaded! Press X to toggle aimbot on/off")
