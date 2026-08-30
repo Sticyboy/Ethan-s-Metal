@@ -5,7 +5,7 @@
 --  - Names above characters
 --  - Health bars using Humanoid.Attributes.Health
 --  - Aimbot (hold right click to aim at closest NPC ONLY)
---  - Wall check
+--  - Wall check (transparent objects ignored)
 -- ============================================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -41,6 +41,7 @@ local highlightData = {}  -- [character] = {highlight, billboard, healthBar, hea
 local scanConnection = nil
 local cleanupConnection = nil
 local aimbotConnection = nil
+local retryQueue = {}  -- Characters that need billboard retry
 
 -- Aimbot Settings
 local aimbotFOV = 200
@@ -112,14 +113,14 @@ local function getHealthValues(character)
     return currentHealth, maxHealth
 end
 
--- ===== WALL CHECK =====
+-- ===== WALL CHECK - IGNORES TRANSPARENT OBJECTS =====
 local function wallCheck(targetPosition, targetCharacter)
     if not wallCheckEnabled then return false end
     
     local origin = Camera.CFrame.Position
     local direction = (targetPosition - origin).Unit
+    local maxDistance = (targetPosition - origin).Magnitude + 5
     
-    local raycastParams = RaycastParams.new()
     local blacklist = {lp.Character, Camera}
     
     if targetCharacter then
@@ -131,15 +132,38 @@ local function wallCheck(targetPosition, targetCharacter)
         end
     end
     
+    local function raycastIgnoreTransparent(origin, direction, maxDistance, params)
+        local result = Workspace:Raycast(origin, direction * maxDistance, params)
+        
+        if result then
+            local hitPart = result.Instance
+            
+            if hitPart:IsA("BasePart") and hitPart.Transparency >= 1 then
+                local newBlacklist = {}
+                for _, obj in ipairs(params.FilterDescendantsInstances or {}) do
+                    table.insert(newBlacklist, obj)
+                end
+                table.insert(newBlacklist, hitPart)
+                
+                local newParams = RaycastParams.new()
+                newParams.FilterType = Enum.RaycastFilterType.Blacklist
+                newParams.FilterDescendantsInstances = newBlacklist
+                
+                return raycastIgnoreTransparent(origin, direction, maxDistance, newParams)
+            end
+        end
+        
+        return result
+    end
+    
+    local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     raycastParams.FilterDescendantsInstances = blacklist
     
-    local raycastResult = Workspace:Raycast(origin, direction * 1000, raycastParams)
+    local raycastResult = raycastIgnoreTransparent(origin, direction, maxDistance, raycastParams)
     
     if raycastResult then
-        local distanceToTarget = (targetPosition - origin).Magnitude
-        local distanceToHit = (raycastResult.Position - origin).Magnitude
-        return distanceToHit < distanceToTarget - 1
+        return true
     end
     
     return false
@@ -168,16 +192,48 @@ local function removeHighlight(character)
         end
         highlightData[character] = nil
     end
+    
+    -- Remove from retry queue if present
+    retryQueue[character] = nil
+end
+
+-- ===== GET BEST ATTACHMENT POINT =====
+local function getBestAttachment(character)
+    -- Try multiple possible attachment points
+    local possibleAttachments = {
+        character:FindFirstChild("Head"),
+        character:FindFirstChild("HumanoidRootPart"),
+        character:FindFirstChild("UpperTorso"),
+        character:FindFirstChild("Torso"),
+        character.PrimaryPart
+    }
+    
+    for _, attachment in ipairs(possibleAttachments) do
+        if attachment then
+            return attachment
+        end
+    end
+    
+    -- Fallback: try to find any BasePart
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("BasePart") then
+            return child
+        end
+    end
+    
+    return nil
 end
 
 -- ===== CREATE NAME BILLBOARD WITH HEALTH =====
 local function createNameBillboard(character, name, color)
-    local attachment = character:FindFirstChild("Head") or 
-                       character:FindFirstChild("HumanoidRootPart") or 
-                       character:FindFirstChild("Torso") or
-                       character.PrimaryPart
+    local attachment = getBestAttachment(character)
     
     if not attachment then return nil, nil, nil, nil end
+    
+    -- Ensure attachment is still valid
+    if not attachment.Parent or not attachment.Parent.Parent then
+        return nil, nil, nil, nil
+    end
     
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "NameBillboard"
@@ -228,6 +284,104 @@ local function createNameBillboard(character, name, color)
     healthText.Parent = healthContainer
     
     return billboard, healthBar, healthText, healthContainer
+end
+
+-- ===== VERIFY BILLBOARD EXISTS =====
+local function verifyBillboard(character)
+    local data = highlightData[character]
+    if not data then return false end
+    
+    -- Check if billboard exists and is parented
+    if not data.billboard or not data.billboard.Parent then
+        return false
+    end
+    
+    -- Check if health bar exists
+    if not data.healthBar or not data.healthBar.Parent then
+        return false
+    end
+    
+    return true
+end
+
+-- ===== REBUILD BILLBOARD =====
+local function rebuildBillboard(character)
+    local data = highlightData[character]
+    if not data then return false end
+    
+    -- Remove old billboard if exists
+    if data.billboard then
+        pcall(function() data.billboard:Destroy() end)
+        data.billboard = nil
+        data.healthBar = nil
+        data.healthText = nil
+        data.healthContainer = nil
+    end
+    
+    -- Check if character still exists and is alive
+    if not character or not character.Parent then return false end
+    if not isCharacterAlive(character) then return false end
+    
+    -- Get name and color
+    local isPlayer = data.isPlayer
+    local nameColor = isPlayer and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 255)
+    
+    -- Create new billboard
+    local billboard, healthBar, healthText, healthContainer = createNameBillboard(character, character.Name, nameColor)
+    
+    if billboard then
+        data.billboard = billboard
+        data.healthBar = healthBar
+        data.healthText = healthText
+        data.healthContainer = healthContainer
+        updateHealthBar(character)
+        return true
+    end
+    
+    return false
+end
+
+-- ===== RETRY BILLBOARD FUNCTION =====
+local function retryBillboard(character)
+    if retryQueue[character] then return end
+    retryQueue[character] = true
+    
+    task.spawn(function()
+        -- Try multiple times with increasing delays
+        for attempt = 1, 5 do
+            task.wait(0.5 * attempt)  -- 0.5s, 1s, 1.5s, 2s, 2.5s
+            
+            if not character or not character.Parent then
+                retryQueue[character] = nil
+                return
+            end
+            
+            if not highlightingEnabled then
+                retryQueue[character] = nil
+                return
+            end
+            
+            -- Check if character still has highlight data
+            local data = highlightData[character]
+            if not data then
+                retryQueue[character] = nil
+                return
+            end
+            
+            -- Try to rebuild billboard
+            if rebuildBillboard(character) then
+                retryQueue[character] = nil
+                return
+            end
+        end
+        
+        -- If all attempts fail, try one more time with a longer delay
+        task.wait(3)
+        if character and character.Parent and highlightData[character] then
+            rebuildBillboard(character)
+        end
+        retryQueue[character] = nil
+    end)
 end
 
 -- ===== UPDATE HEALTH BAR =====
@@ -302,22 +456,25 @@ local function highlightCharacter(character)
     
     highlightData[character] = data
     
-    -- Update health bar immediately
-    updateHealthBar(character)
+    -- If billboard creation failed, retry later
+    if not billboard or not billboard.Parent then
+        retryBillboard(character)
+    else
+        -- Update health bar immediately
+        updateHealthBar(character)
+    end
     
     -- Connect to health changes
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid then
         local connections = {}
         
-        -- Attribute changed
         table.insert(connections, humanoid:GetAttributeChangedSignal("Health"):Connect(function()
             if highlightingEnabled and character and character.Parent then
                 updateHealthBar(character)
             end
         end))
         
-        -- Health property changed
         table.insert(connections, humanoid:GetPropertyChangedSignal("Health"):Connect(function()
             if highlightingEnabled and character and character.Parent then
                 updateHealthBar(character)
@@ -326,6 +483,19 @@ local function highlightCharacter(character)
         
         data.healthConnection = connections
     end
+    
+    -- Watch for part changes (in case Head or attachment point changes)
+    local partAddedConn = character.ChildAdded:Connect(function(child)
+        if child:IsA("BasePart") and highlightData[character] then
+            -- If a new part was added, check if we need to rebuild billboard
+            local data = highlightData[character]
+            if data.billboard and not data.billboard.Parent then
+                rebuildBillboard(character)
+            end
+        end
+    end)
+    
+    data.partAddedConn = partAddedConn
     
     return highlight
 end
@@ -344,6 +514,11 @@ local function scanCharacters()
             seenCharacters[child] = true
             if not highlightData[child] then
                 highlightCharacter(child)
+            else
+                -- Check if billboard exists, if not rebuild
+                if not verifyBillboard(child) then
+                    rebuildBillboard(child)
+                end
             end
         end
     end
@@ -353,6 +528,14 @@ local function scanCharacters()
             removeHighlight(character)
         end
     end
+end
+
+-- ===== FORCE REFRESH =====
+local function forceRefreshHighlights()
+    for character, _ in pairs(highlightData) do
+        rebuildBillboard(character)
+    end
+    scanCharacters()
 end
 
 -- ===== AIMBOT FUNCTIONS (NPC ONLY) =====
@@ -365,31 +548,21 @@ local function getValidTargets()
     
     for _, character in ipairs(charsFolder:GetChildren()) do
         if character:IsA("Model") then
-            -- Skip self
             if isLocalPlayerCharacter(character) then continue end
-            
-            -- Skip players (NPC ONLY)
             if isPlayerCharacter(character) then continue end
-            
-            -- Skip dead
             if not isCharacterAlive(character) then continue end
             
-            -- Get head
             local head = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
             if not head then continue end
             
-            -- Check if on screen
             local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
             if not onScreen then continue end
             
-            -- Calculate distance from cursor
             local screenPos = Vector2.new(headPos.X, headPos.Y)
             local distanceToCursor = (screenPos - mouseLocation).Magnitude
             
-            -- Check FOV
             if distanceToCursor > aimbotFOV then continue end
             
-            -- Wall check
             if wallCheck(head.Position, character) then continue end
             
             table.insert(targets, {
@@ -401,7 +574,6 @@ local function getValidTargets()
         end
     end
     
-    -- Sort by distance to cursor
     table.sort(targets, function(a, b)
         return a.distance < b.distance
     end)
@@ -415,10 +587,7 @@ local function aimAtTarget(target)
     local camera = Workspace.CurrentCamera
     local targetPos = target.position
     
-    -- Create CFrame looking at target
     local lookAt = CFrame.lookAt(camera.CFrame.Position, targetPos)
-    
-    -- Smoothly interpolate
     camera.CFrame = camera.CFrame:Lerp(lookAt, aimbotSmoothness)
 end
 
@@ -452,6 +621,7 @@ local function clearAllHighlights()
         removeHighlight(character)
     end
     highlightData = {}
+    retryQueue = {}
 end
 
 -- ===== START HIGHLIGHTING =====
@@ -593,7 +763,7 @@ local AimbotToggle = MainTab:CreateToggle({
             startAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "Enabled - Hold Right Click to aim at closest NPC (players excluded)",
+                Content = "Enabled - Hold Right Click to aim at closest NPC (players excluded) | Transparent objects ignored",
                 Duration = 3,
             })
         else
@@ -643,7 +813,7 @@ local WallCheckToggle = MainTab:CreateToggle({
 MainTab:CreateSection("Controls")
 
 MainTab:CreateButton({
-    Name = "Refresh Highlights",
+    Name = "Refresh Highlights (Fix Missing Text)",
     Callback = function()
         if not highlightingEnabled then
             Rayfield:Notify({
@@ -653,11 +823,11 @@ MainTab:CreateButton({
             })
             return
         end
-        scanCharacters()
+        forceRefreshHighlights()
         Rayfield:Notify({
             Title = "Highlighter",
-            Content = "Refreshed",
-            Duration = 1,
+            Content = "Refreshed - Billboard should be fixed",
+            Duration = 2,
         })
     end
 })
@@ -686,7 +856,9 @@ MainTab:CreateParagraph({
               "Names appear above characters\n" ..
               "Health bars use Humanoid.Attributes.Health\n" ..
               "Aimbot targets NPCs ONLY (players excluded)\n" ..
-              "Yourself is not highlighted"
+              "Yourself is not highlighted\n" ..
+              "Wall check ignores fully transparent objects\n" ..
+              "If text is missing, press 'Refresh Highlights'"
 })
 
 -- ============================================================
@@ -696,3 +868,4 @@ MainTab:CreateParagraph({
 Rayfield:LoadConfiguration()
 
 print("✅ Highlighter loaded - NPCs red, Players green, Health bars, Aimbot (NPCs only)")
+print("✅ Wall check ignores fully transparent objects")
