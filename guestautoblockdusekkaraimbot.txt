@@ -85,7 +85,7 @@ autoBlockTriggerSounds = {
     ["94317217837143"] = true, ["96594507550917"] = true, ["139996647355899"] = true, ["133709029886490"] = true,
     ["135041815780073"] = true, ["124234993291213"] = true, ["98733709078792"] = true, ["115678417928765"] = true,
     ["119664480754070"] = true, ["135319730390518"] = true, ["96117920303138"] = true, ["123923371062204"] = true,
-    ["99856718263455"] = true, ["88589682639517"] = true, ["109570290393196"] = true, ["70739368096233"] = true, 
+    ["99856718263455"] = true, ["88589682639517"] = true, ["109570290393196"] = true, ["70739368096233"] = true,
 }
 
 autoBlockTriggerAnimations = {
@@ -106,6 +106,7 @@ guest1337AllAnims = {
     ["127040663332045"] = true,
     ["123548100869928"] = true,
     ["88557287105521"] = true,
+    ["102517104852347"] = true,  -- NEW Guest Block Animation
 }
 
 guest1337PunchAnims = {
@@ -153,7 +154,7 @@ MASS_INFECTION_ANIMATIONS = {
 
 ENTANGLEMENT_ANIMATIONS = {
     "119181003138006", "116787687605496", "99030950661794", "105026134432828",
-    "91237398850193", "81935774508746", "78307725415680",
+    "91237398850193", "81935774508746", "133272604443790", "78307725415680",
 }
 
 -- Sixer Animation IDs
@@ -181,12 +182,13 @@ VOID_RUSH_CANCEL_ANIMATIONS = {
     "126654961540956",
 }
 
--- c00lkidd Animation IDs
+-- c00lkidd Animation IDs (UPDATED with new animations)
 CORRUPT_NATURE_ANIMATIONS = {
     "18885919947",
     "82818822023693",
     "124243639579224",
     "96167639214189",
+    "109198380290924",  -- NEW Corrupt Nature Animation
 }
 WALKSPEED_OVERRIDE_ANIMATIONS = {
     "98456918873918",
@@ -195,6 +197,7 @@ WALKSPEED_OVERRIDE_ANIMATIONS = {
     "98590570796574",
     "109486609489179",
     "71231909569291",
+    "76092296412044",  -- NEW Walkspeed Override Animation
 }
 PIZZA_DELIVERY_ANIMATIONS = {
     "18885915433",
@@ -204,6 +207,7 @@ PIZZA_DELIVERY_ANIMATIONS = {
     "81818688746886",
     "121892578267009",
     "112649273029679",
+    "95605903206627",  -- NEW Pizza Delivery Animation
 }
 
 -- John Doe Animation IDs
@@ -264,7 +268,7 @@ VOID_RUSH_WINDOW = 2.85
 VOID_RUSH_ANTI_SPAM = 3
 
 -- c00lkidd Cooldown values
-CORRUPT_NATURE_COOLDOWN = 16
+CORRUPT_NATURE_COOLDOWN = 13  -- CHANGED from 16 to 13
 WALKSPEED_OVERRIDE_COOLDOWN = 20
 PIZZA_DELIVERY_COOLDOWN = 50
 
@@ -352,6 +356,7 @@ shedletskySwingSounds = {
     ["111910850942168"] = true, ["115267992424648"] = true,
     ["86710781315432"] = true, ["139012439429121"] = true, ["5569523548"] = true,
     ["92445809840331"] = true, ["81714228693719"] = true, ["114486446625838"] = true,
+    ["125438766513876"] = true,  -- NEW Shedletsky Sound
 }
 
 twotimeSounds = { ["99820161736138"] = true, ["86710781315432"] = true, ["94761132179514"] = true, }
@@ -360,6 +365,7 @@ janeDoeSounds = { ["92445809840331"] = true, ["83851356262523"] = true, }
 
 elliotThrowAnimation = {
     ["114155003741146"] = true, ["126625530013840"] = true, ["104033348426533"] = true,
+    ["104727912169913"] = true,  -- NEW Elliot Animation
 }
 
 -- Auto Block State Variables
@@ -2578,7 +2584,7 @@ local function updateWarnerLineParts(parts, startPos, direction, length, color, 
         ringPart.Position = Vector3.new(startPos.X, yPos, startPos.Z)
         ringPart.CFrame = CFrame.lookAt(
             Vector3.new(startPos.X, yPos, startPos.Z),
-            Vector3.new(startPos.X + direction.X, yPos, startPos.Z + direction.Z)
+            Vector3.new(startPos.X + direction.X, yPos, endPos.Z + direction.Z)
         )
     end
     local numMarkers = math.floor(length / 10)
@@ -5732,7 +5738,7 @@ local function listenForAzureAbilities(azure)
             end)
         end
         
-        local animator = humanoid:FindFirstChild("Animator")
+        local animator = humanoid:FindFirstChildOfClass("Animator")
         if animator then
             setupAnimator(animator)
         end
