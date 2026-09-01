@@ -3,6 +3,14 @@
 -- ADDED: 0.15 second anti-spam on trick stamina gain
 -- CHANGED: Skating drain multiplier to 1.35x
 -- FIXED: Skating always has 0.2 second delay (sprinting uses normal scaling delay)
+-- FIXED: Script will destroy previous instance if executed twice
+
+-- Check for existing StaminaGui and destroy it
+local CoreGui = game:GetService("CoreGui")
+local existingGui = CoreGui:FindFirstChild("StaminaGui")
+if existingGui then
+    existingGui:Destroy()
+end
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -14,7 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "StaminaGui"
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Parent = CoreGui
 
 -- Stamina Label
 local StaminaLabel = Instance.new("TextLabel")
