@@ -1354,7 +1354,30 @@ local chainCheckConnection = nil
 local chainStatusBillboard = nil
 local chainStatusLabels = {}
 
-local MAX_ANGER = 190
+-- CHAIN's anger requirement (dynamically fetched)
+local MAX_ANGER = 190  -- Default fallback
+
+-- Function to get CHAIN's actual anger requirement
+local function getChainAngerRequirement()
+    local chain = workspace:FindFirstChild("Misc")
+    if chain then
+        chain = chain:FindFirstChild("AI")
+        if chain then
+            chain = chain:FindFirstChild("CHAIN")
+        end
+    end
+    
+    if not chain then
+        return MAX_ANGER  -- Return default if CHAIN not found
+    end
+    
+    local angerRequirement = chain:GetAttribute("RequirementForAnger")
+    if angerRequirement and angerRequirement > 0 then
+        return angerRequirement
+    end
+    
+    return MAX_ANGER  -- Fallback to default
+end
 
 local function calculateHealthFromAnger(anger)
     if anger <= 0 then
@@ -1378,6 +1401,10 @@ local function updateChainStatusDisplay(chain)
     local isClashing = chain:GetAttribute("Clashing") == true
     local isQTEImmune = chain:GetAttribute("QTEImmunity") == true
     local anger = chain:GetAttribute("Anger") or 0
+    
+    -- Update MAX_ANGER dynamically each time we update the display
+    MAX_ANGER = getChainAngerRequirement()
+    
     local health = calculateHealthFromAnger(anger)
     local healthText = string.format("Health: %.1f%%", health)
     
@@ -1474,6 +1501,10 @@ local function updateChainESP()
     
     local chain = findChain()
     if chain and chain:IsA("Model") then
+        -- Update MAX_ANGER when CHAIN is found
+        MAX_ANGER = getChainAngerRequirement()
+        print("[CHAIN] Anger Requirement: " .. MAX_ANGER)
+        
         chainHighlight = Instance.new("Highlight")
         chainHighlight.Parent = chain
         chainHighlight.FillColor = Color3.fromRGB(255, 21, 21)
@@ -1485,6 +1516,8 @@ local function updateChainESP()
         
         local function onAttributeChanged()
             if chain and chain.Parent then
+                -- Update MAX_ANGER on attribute changes
+                MAX_ANGER = getChainAngerRequirement()
                 updateChainStatusDisplay(chain)
             end
         end
