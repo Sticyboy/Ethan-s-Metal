@@ -447,6 +447,8 @@ positionHistory = {}
 HISTORY_SIZE = 5
 
 -- 7n7 Rotation
+-- There was a rotation feature with 7n7 clone, but I have decided to remove it. 
+-- There might still be some comments within the script mentioning it, but oh well. Blame John!
 rotationActive = false
 ROTATION_DURATION = 0.3
 
@@ -3089,7 +3091,7 @@ local function checkForCloneTrigger()
                                         refreshUIRefs()
                                         if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
                                             pressKey(Enum.KeyCode.Q)
-                                            rotateTowardsKiller(killer)
+                                            -- rotateTowardsKiller(killer)  -- REMOVED
                                             lastCloneTime = now
                                             return
                                         end
