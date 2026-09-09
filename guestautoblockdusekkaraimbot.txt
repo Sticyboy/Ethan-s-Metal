@@ -28,6 +28,7 @@ local function restoreSilentAim() end
 local function stopDusekkar() end
 local function useSilentAim() end
 
+
 -- Remotes with error handling
 testRemote = nil
 success, result = pcall(function()
@@ -2980,6 +2981,10 @@ function stopAbilityWarner()
     end
 end
 
+-- Add these variables with the other Auto Block State Variables
+autoBlockEnabledTime = 0
+autoCloneEnabledTime = 0
+
 -- ===== AUTO BLOCK FUNCTIONS =====
 local function checkForAttackSounds()
     if not autoBlockForGuest then return end
@@ -2991,6 +2996,7 @@ local function checkForAttackSounds()
     if not KillersFolder then return end
     local isGuest1337, guestChar = amIGuest1337()
     if not isGuest1337 then return end
+    
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
@@ -3018,11 +3024,13 @@ local function checkForAttackSounds()
                             end
                             if not shouldBlockThisAttack then
                                 for _, sound in ipairs(killer:GetDescendants()) do
-                                    if sound:IsA("Sound") and sound.IsPlaying then
+                                    if sound:IsA("Sound") then
                                         local soundId = extractNumericSoundId(sound)
                                         if soundId and autoBlockTriggerSounds[soundId] then
-                                            shouldBlockThisAttack = true
-                                            break
+                                            if sound.TimePosition > 0 and sound.TimePosition < 0.1 then
+                                                shouldBlockThisAttack = true
+                                                break
+                                            end
                                         end
                                     end
                                 end
@@ -3063,6 +3071,7 @@ local function checkForCloneTrigger()
     if not KillersFolder then return end
     local is7n7, sevenNChar = amI7n7()
     if not is7n7 then return end
+    
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
@@ -3072,16 +3081,18 @@ local function checkForCloneTrigger()
                 if distance <= detectionRange then
                     if (not facingCheckEnabled) or isFacing(myRoot, killerHrp) then
                         for _, sound in ipairs(killer:GetDescendants()) do
-                            if sound:IsA("Sound") and sound.IsPlaying then
+                            if sound:IsA("Sound") then
                                 local soundId = extractNumericSoundId(sound)
                                 if soundId and autoBlockTriggerSounds[soundId] then
-                                    if blockdelay > 0 then task.wait(blockdelay) end
-                                    refreshUIRefs()
-                                    if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
-                                        pressKey(Enum.KeyCode.Q)
-                                        rotateTowardsKiller(killer)
-                                        lastCloneTime = now
-                                        return
+                                    if sound.TimePosition > 0 and sound.TimePosition < 0.1 then
+                                        if blockdelay > 0 then task.wait(blockdelay) end
+                                        refreshUIRefs()
+                                        if cachedCloneBtn and cachedCloneBtn:FindFirstChild("CooldownTime") and cachedCloneBtn.CooldownTime.Text == "" then
+                                            pressKey(Enum.KeyCode.Q)
+                                            rotateTowardsKiller(killer)
+                                            lastCloneTime = now
+                                            return
+                                        end
                                     end
                                 end
                             end
@@ -6058,18 +6069,42 @@ Window = Rayfield:CreateWindow({
 AutoBlockTab = Window:CreateTab("Auto Block", 4483362458)
 
 GuestToggle = AutoBlockTab:CreateToggle({
-    Name = "1. Guest Auto Block (All killers) - Presses Q", CurrentValue = false, Flag = "GuestAutoBlockToggle",
-    Callback = function(Value) local isGuest1337 = amIGuest1337() if isGuest1337 then autoBlockForGuest = Value; SendNotif("Guest Auto Block", Value and "Enabled" or "Disabled", 1) end end
+    Name = "1. Guest Auto Block (All killers) - Presses Q", 
+    CurrentValue = false, 
+    Flag = "GuestAutoBlockToggle",
+    Callback = function(Value) 
+        local isGuest1337 = amIGuest1337() 
+        if isGuest1337 then 
+            autoBlockForGuest = Value
+            if Value then
+                autoBlockEnabledTime = tick()
+            end
+            SendNotif("Guest Auto Block", Value and "Enabled" or "Disabled", 1) 
+        end 
+    end
 })
+
 AutoBlockTab:CreateKeybind({
     Name = "Guest Auto Block Keybind", CurrentKeybind = "T", HoldToInteract = false, Flag = "GuestAutoBlockKey",
     Callback = function() local isGuest1337 = amIGuest1337() if isGuest1337 then local newValue = not autoBlockForGuest; GuestToggle:Set(newValue); autoBlockForGuest = newValue; SendNotif("Guest Auto Block", newValue and "Enabled" or "Disabled", 1) end end
 })
 
 SevenNToggle = AutoBlockTab:CreateToggle({
-    Name = "2. 7n7 Auto Clone", CurrentValue = false, Flag = "SevenNAutoCloneToggle",
-    Callback = function(Value) local is7n7 = amI7n7() if is7n7 then autoCloneFor7n7 = Value; SendNotif("7n7 Auto Clone", Value and "Enabled" or "Disabled", 1) end end
+    Name = "2. 7n7 Auto Clone", 
+    CurrentValue = false, 
+    Flag = "SevenNAutoCloneToggle",
+    Callback = function(Value) 
+        local is7n7 = amI7n7() 
+        if is7n7 then 
+            autoCloneFor7n7 = Value
+            if Value then
+                autoCloneEnabledTime = tick()
+            end
+            SendNotif("7n7 Auto Clone", Value and "Enabled" or "Disabled", 1) 
+        end 
+    end
 })
+
 AutoBlockTab:CreateKeybind({
     Name = "7n7 Auto Clone Keybind", CurrentKeybind = "Y", HoldToInteract = false, Flag = "SevenNAutoCloneKey",
     Callback = function() local is7n7 = amI7n7() if is7n7 then local newValue = not autoCloneFor7n7; SevenNToggle:Set(newValue); autoCloneFor7n7 = newValue; SendNotif("7n7 Auto Clone", newValue and "Enabled" or "Disabled", 1) end end
