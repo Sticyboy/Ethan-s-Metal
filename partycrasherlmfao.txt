@@ -1,0 +1,403 @@
+-- literal larp script i made for myself, dont complain if you think ts corny asf (it is lowk)
+
+-- ===== PARTY CRASHER: Full Script =====
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TextChatService = game:GetService("TextChatService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local lp = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ===== CONFIGURATION =====
+local STARE_TARGET_NAME = "eueueue"           -- Who to STARE at
+local ABORT_IF_NAME = "cminorpentscale"       -- Who to MONITOR for animation + abort if I am this
+local TARGET_ANIMATION = "121915998282208"    -- Animation to watch for
+
+CHAT_MESSAGES = {
+    ["Slasher"] = "kiki mama",
+    ["JohnDoe"] = "RAAAAAAAHHHHHHHH",
+    ["1x1x1x1"] = ".",
+    ["c00lkidd"] = "AZOOR RUN!! RUN AZOOR!!!!!",
+    ["Noli"] = "AR3 Y0U K1DD1N6 M3????",
+    ["Azure"] = "I hope you know what you've done...",
+    ["Sixer"] = "GRRRRRRR",
+}
+
+if lp.Name == ABORT_IF_NAME then
+    print("[PARTY CRASHER] Local player matches ABORT_IF_NAME (" .. ABORT_IF_NAME .. ") — aborting.")
+    return
+end
+
+-- ===== STATE =====
+local aborted = false
+local allConnections = {}
+local currentStareConn = nil
+local shiftHeld = false
+local wHeld = false
+local azureQSpamThread = nil
+local noliRemoteThread = nil
+
+local function trackConn(conn)
+    table.insert(allConnections, conn)
+    return conn
+end
+
+local function abort()
+    if aborted then return end
+    aborted = true
+    print("[PARTY CRASHER] >>> ABORTING <<<")
+
+    for _, conn in ipairs(allConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    allConnections = {}
+
+    if currentStareConn then
+        pcall(function() currentStareConn:Disconnect() end)
+        currentStareConn = nil
+    end
+    if azureQSpamThread then
+        pcall(function() task.cancel(azureQSpamThread) end)
+        azureQSpamThread = nil
+    end
+    if noliRemoteThread then
+        pcall(function() task.cancel(noliRemoteThread) end)
+        noliRemoteThread = nil
+    end
+
+    if shiftHeld then
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+        end)
+        shiftHeld = false
+    end
+    if wHeld then
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+        end)
+        wHeld = false
+    end
+
+    print("[PARTY CRASHER] Aborted.")
+end
+
+-- ===== UTILITIES =====
+local function extractNumericAnimationId(animationId)
+    if not animationId then return nil end
+    local id = tostring(animationId)
+    return id:match("rbxassetid://(%d+)") or id:match("://(%d+)") or id:match("^(%d+)$")
+end
+
+local function pressKey(keyCode)
+    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+end
+
+local function holdKey(keyCode)
+    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+end
+
+local function sendChat(message)
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local channels = TextChatService:FindFirstChild("TextChannels")
+        if channels then
+            local general = channels:FindFirstChild("RBXGeneral")
+            if general then
+                general:SendAsync(message)
+                print("[PARTY CRASHER] Sent via TextChatService:", message)
+                return
+            end
+        end
+    end
+    local chatEvent = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if chatEvent then
+        local sayRequest = chatEvent:FindFirstChild("SayMessageRequest")
+        if sayRequest then
+            sayRequest:FireServer(message, "All")
+            print("[PARTY CRASHER] Sent via legacy chat:", message)
+            return
+        end
+    end
+    warn("[PARTY CRASHER] Could not send chat")
+end
+
+local function getMyKiller()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    if CHAT_MESSAGES[myChar.Name] then return myChar.Name end
+    if CHAT_MESSAGES[lp.Name] then return lp.Name end
+    return nil
+end
+
+local function fireNoliStab()
+    local remote = ReplicatedStorage:FindFirstChild("Modules")
+    if not remote then return end
+    remote = remote:FindFirstChild("Network")
+    if not remote then return end
+    remote = remote:FindFirstChild("Network")
+    if not remote then return end
+    remote = remote:FindFirstChild("RemoteEvent")
+    if not remote then return end
+    local args = {
+        "UseActorAbility",
+        { buffer.fromstring("\003\004\000\000\000Stab") }
+    }
+    pcall(function() remote:FireServer(unpack(args)) end)
+end
+
+-- ===== STARE =====
+local function startStare(targetPlayer, myKiller)
+    if currentStareConn then
+        currentStareConn:Disconnect()
+        currentStareConn = nil
+    end
+
+    local isRunner = (myKiller == "Slasher" or myKiller == "Noli")
+    print("[PARTY CRASHER] Starting INDEFINITE stare at:", targetPlayer.Name, "| Runner mode:", isRunner)
+
+    if isRunner and not shiftHeld then
+        holdKey(Enum.KeyCode.LeftShift)
+        shiftHeld = true
+        print("[PARTY CRASHER] Holding Shift (sprint on)")
+    end
+
+    currentStareConn = RunService.Heartbeat:Connect(function()
+        if aborted then
+            if currentStareConn then currentStareConn:Disconnect() end
+            currentStareConn = nil
+            return
+        end
+
+        local myChar = lp.Character
+        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myHrp then return end
+
+        local targetChar = targetPlayer.Character
+        local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+        if not targetHrp then return end
+
+        if isRunner then
+            local cameraPos = Camera.CFrame.Position
+            local targetLook = CFrame.lookAt(cameraPos, targetHrp.Position).LookVector
+            Camera.CFrame = CFrame.new(cameraPos, cameraPos + targetLook)
+        else
+            local myPos = myHrp.Position
+            local targetPos = targetHrp.Position
+            local direction = (Vector3.new(targetPos.X, myPos.Y, targetPos.Z) - myPos).Unit
+            myHrp.CFrame = CFrame.lookAt(myPos, myPos + direction)
+        end
+    end)
+end
+
+-- ===== ABILITY SEQUENCES =====
+local function useAbilities(killer, targetPlayer)
+    if aborted then return end
+    print("[PARTY CRASHER] Using abilities for:", killer)
+
+    if killer == "JohnDoe" then
+        pressKey(Enum.KeyCode.Q)
+
+    elseif killer == "Nosferatu" then
+        pressKey(Enum.KeyCode.E)
+
+    elseif killer == "c00lkidd" then
+        pressKey(Enum.KeyCode.E)
+
+    elseif killer == "1x1x1x1" then
+        pressKey(Enum.KeyCode.Q)
+
+    elseif killer == "Sixer" then
+        pressKey(Enum.KeyCode.R)
+
+    elseif killer == "Azure" then
+        print("[PARTY CRASHER] Azure: pressing T")
+        pressKey(Enum.KeyCode.T)
+        azureQSpamThread = task.spawn(function()
+            task.wait(5)
+            if aborted then return end
+            print("[PARTY CRASHER] Azure: starting Q spam")
+            while not aborted do
+                pressKey(Enum.KeyCode.Q)
+                task.wait(0.5)
+            end
+        end)
+
+    elseif killer == "Slasher" then
+        print("[PARTY CRASHER] Slasher: start running (hold W)")
+        if not wHeld then
+            holdKey(Enum.KeyCode.W)
+            wHeld = true
+        end
+        task.spawn(function()
+            while not aborted do
+                local myChar = lp.Character
+                local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                local targetChar = targetPlayer.Character
+                local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                if myHrp and targetHrp then
+                    local distance = (myHrp.Position - targetHrp.Position).Magnitude
+                    if distance <= 5 then
+                        print("[PARTY CRASHER] Slasher: within 5 studs, pressing E")
+                        pressKey(Enum.KeyCode.E)
+                        break
+                    end
+                end
+                task.wait(0.1)
+            end
+        end)
+
+    elseif killer == "Noli" then
+        print("[PARTY CRASHER] Noli: start running (hold W) + spam remote")
+        if not wHeld then
+            holdKey(Enum.KeyCode.W)
+            wHeld = true
+        end
+        noliRemoteThread = task.spawn(function()
+            while not aborted do
+                fireNoliStab()
+                task.wait(0.2)
+            end
+        end)
+    end
+end
+
+-- ===== MAIN SEQUENCE =====
+local function runSequence(targetPlayer)
+    if aborted then return end
+    if not targetPlayer then
+        warn("[PARTY CRASHER] No target player")
+        return
+    end
+
+    local myKiller = getMyKiller()
+    if not myKiller then
+        warn("[PARTY CRASHER] Could not determine my killer — aborting sequence")
+        return
+    end
+
+    local message = CHAT_MESSAGES[myKiller]
+    print("[PARTY CRASHER] My killer:", myKiller, "| Message:", message)
+
+    print("[PARTY CRASHER] Pressing space...")
+    pressKey(Enum.KeyCode.Space)
+    if aborted then return end
+
+    task.spawn(function()
+        task.wait(9)
+        if aborted then return end
+        useAbilities(myKiller, targetPlayer)
+    end)
+
+    print("[PARTY CRASHER] Waiting 2 seconds...")
+    task.wait(2)
+    if aborted then return end
+
+    startStare(targetPlayer, myKiller)
+
+    local randomDelay = math.random(1, 3)
+    print("[PARTY CRASHER] Random delay:", randomDelay, "seconds")
+    task.wait(randomDelay)
+    if aborted then return end
+
+    sendChat(message)
+
+    print("[PARTY CRASHER] Sequence complete.")
+end
+
+-- ===== ANIMATION MONITOR (watches ABORT_IF_NAME) =====
+local triggerCooldown = 5
+local lastTrigger = 0
+
+local function hookCharacter(character)
+    if aborted then return end
+    if not character then return end
+    print("[PARTY CRASHER] Hooking character for monitor target...")
+
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = character:WaitForChild("Humanoid", 5)
+        if not hum then
+            warn("[PARTY CRASHER] No Humanoid found")
+            return
+        end
+    end
+
+    local function setupAnimator(animator)
+        if aborted then return end
+        if not animator then return end
+        print("[PARTY CRASHER] Animator hooked.")
+        local conn = animator.AnimationPlayed:Connect(function(track)
+            if aborted then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if id == TARGET_ANIMATION then
+                local now = tick()
+                if now - lastTrigger < triggerCooldown then
+                    print("[PARTY CRASHER] Animation detected, but on cooldown.")
+                    return
+                end
+                lastTrigger = now
+                print("[PARTY CRASHER] >>> TARGET ANIMATION DETECTED <<<")
+                task.spawn(function()
+                    runSequence(Players:FindFirstChild(STARE_TARGET_NAME))
+                end)
+            end
+        end)
+        trackConn(conn)
+    end
+
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if animator then setupAnimator(animator) end
+    local childConn = hum.ChildAdded:Connect(function(c)
+        if c:IsA("Animator") then setupAnimator(c) end
+    end)
+    trackConn(childConn)
+end
+
+-- Monitor ABORT_IF_NAME for the animation
+local monitoredPlayer = Players:FindFirstChild(ABORT_IF_NAME)
+if monitoredPlayer then
+    print("[PARTY CRASHER] Monitor target already in server:", ABORT_IF_NAME)
+    if monitoredPlayer.Character then
+        hookCharacter(monitoredPlayer.Character)
+    end
+    trackConn(monitoredPlayer.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        hookCharacter(char)
+    end))
+else
+    print("[PARTY CRASHER] Waiting for monitor target:", ABORT_IF_NAME)
+    trackConn(Players.PlayerAdded:Connect(function(player)
+        if player.Name == ABORT_IF_NAME then
+            print("[PARTY CRASHER] Monitor target joined:", ABORT_IF_NAME)
+            if player.Character then
+                hookCharacter(player.Character)
+            end
+            trackConn(player.CharacterAdded:Connect(function(char)
+                task.wait(1)
+                hookCharacter(char)
+            end))
+        end
+    end))
+end
+
+-- ===== P KEY ABORT =====
+trackConn(UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.P then
+        abort()
+    end
+end))
+
+print("========================================")
+print("[PARTY CRASHER] FULL SCRIPT STARTED")
+print("Monitoring:", ABORT_IF_NAME)
+print("Staring at:", STARE_TARGET_NAME)
+print("Abort if I am:", ABORT_IF_NAME)
+print("Watching animation:", TARGET_ANIMATION)
+print("Press P to ABORT")
+print("========================================")
