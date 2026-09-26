@@ -27,24 +27,10 @@ local lastVisualUpdate = 0
 local VISUAL_UPDATE_COOLDOWN = 0.5
 
 -- Dummy global declarations
-function startNoliTracking() end
-function stopNoliTracking() end
-function startC00lkiddTracking() end
-function stopC00lkiddTracking() end
-function startJohnDoeTracking() end
-function stopJohnDoeTracking() end
-function startAzureTracking() end
-function stopAzureTracking() end
 function setupSilentAim() end
 function restoreSilentAim() end
 function stopDusekkar() end
 function useSilentAim() end
-function startSlasherTracking() end
-function stopSlasherTracking() end
-function startOnexTracking() end
-function stopOnexTracking() end
-function startSixerTracking() end
-function stopSixerTracking() end
 function startNosferatuTracking() end
 function stopNosferatuTracking() end
 function startNoobTracking() end
@@ -127,7 +113,6 @@ autoBlockTriggerAnimations = {
     ["118298475669935"] = true, ["125403313786645"] = true, ["109572851772132"] = true, 
 }
 
--- Per-killer attack window durations (how long blockable after attack starts)
 KILLER_ATTACK_WINDOWS = {
     ["Slasher"] = 0.45,
     ["JohnDoe"] = 0.65,
@@ -138,10 +123,9 @@ KILLER_ATTACK_WINDOWS = {
     ["Azure"] = 0.48,
 }
 DEFAULT_ATTACK_WINDOW = 0.5
-SIXER_SOUND_WINDOW = 0.1  -- Sixer keeps the old tight check
+SIXER_SOUND_WINDOW = 0.1
 
--- Animation start time tracker (Option A1 - separate hook for M1 warning)
-animationStartTimes = {}  -- [character] = { [animId] = tick() }
+animationStartTimes = {}
 
 guest1337AllAnims = {
     ["95802026624883"] = true, ["82036084568393"] = true, ["120748030255574"] = true,
@@ -183,8 +167,8 @@ ENTANGLEMENT_ANIMATIONS = {
     "119181003138006", "116787687605496", "99030950661794", "105026134432828",
     "91237398850193", "81935774508746", "133272604443790", "78307725415680",
 }
-INFERNAL_CRY_ANIMATION = "121808371053483"
-DEMONIC_PURSUIT_ANIMATION = "133363345661032"
+INFERNAL_CRY_ANIMATIONS = { "121808371053483" }
+DEMONIC_PURSUIT_ANIMATIONS = { "133363345661032" }
 BLOOD_HUNT_ACTIVATION_ANIMATION = "117834850464068"
 KILL_ANIMATION_NORMAL = "131140322818412"
 KILL_ANIMATION_NOOB = "101413761015692"
@@ -339,7 +323,7 @@ autoBloodOrb = false
 bloodOrbConnection = nil
 
 -- M1 Warning feature
-killerM1WarningEnabled = false  -- NEW toggle state
+killerM1WarningEnabled = false
 
 -- Aimbot Variables
 aimbotEnabled = false
@@ -810,7 +794,6 @@ function stopAimbot()
 end
 
 -- ===== M1 WARNING FUNCTIONS =====
-
 function cleanupM1Warning(killer)
     if not killer then return end
     local existingHighlight = killer:FindFirstChild("M1WarningHighlight")
@@ -831,7 +814,6 @@ function showM1Warning(killer, duration)
     cleanupM1Warning(killer)
     killer:SetAttribute("M1WarningActive", true)
 
-    -- Steady red highlight
     local highlight = Instance.new("Highlight")
     highlight.Name = "M1WarningHighlight"
     highlight.FillColor = Color3.fromRGB(255, 0, 0)
@@ -842,7 +824,6 @@ function showM1Warning(killer, duration)
     highlight.Adornee = killer
     highlight.Parent = killer
 
-    -- Exclamation mark on torso
     local torso = killer:FindFirstChild("Torso") or killer:FindFirstChild("UpperTorso") or killer:FindFirstChild("HumanoidRootPart")
     local text = nil
     if torso then
@@ -865,7 +846,6 @@ function showM1Warning(killer, duration)
         text.Parent = billboard
     end
 
-    -- Alarm-light pulse on the "!" only
     local flashConn
     local t = 0
     local PULSE_SPEED = 4
@@ -881,7 +861,6 @@ function showM1Warning(killer, duration)
         text.TextTransparency = 0.2 + (1 - pulse) * 0.5
     end)
 
-    -- Auto-remove
     task.delay(duration or 0.5, function()
         if killer then
             killer:SetAttribute("M1WarningActive", nil)
@@ -895,7 +874,6 @@ function showM1Warning(killer, duration)
     end)
 end
 
--- Animation start-time tracking for M1 Warning
 function setupAnimationStartTracking(killer)
     if not killer then return end
     if killer:GetAttribute("AnimStartTracked") then return end
@@ -944,7 +922,7 @@ end
 task.spawn(scanForAnimationTracking)
 task.spawn(watchForNewKillersForAnimTracking)
 
--- ===== SLASHER BEHEAD TRACKING (with casting window) =====
+-- ===== SLASHER BEHEAD TRACKING =====
 function isSlasherEnragedForBehead(slasher)
     local head = slasher:FindFirstChild("Head")
     if head then
@@ -1049,13 +1027,12 @@ function checkForAttackSounds()
                     if (not facingCheckEnabled) or isFacing(myRoot, khrp) then
                         if shouldBlock() then
                             local doBlock = false
-                            local detectedBy = nil  -- "animation" or "sound"
+                            local detectedBy = nil
 
                             if killer.Name == "Slasher" then
                                 local beheadReady = isSlasherBeheadReady(killer)
                                 local casting = isSlasherBeheadCasting(killer)
                                 if beheadReady or casting then
-                                    -- Use animations (start-time tracked)
                                     local hum = killer:FindFirstChildOfClass("Humanoid")
                                     if hum then
                                         local a = hum:FindFirstChildOfClass("Animator")
@@ -1075,7 +1052,6 @@ function checkForAttackSounds()
                                         end
                                     end
                                 else
-                                    -- Sound check
                                     local window = KILLER_ATTACK_WINDOWS[killer.Name] or DEFAULT_ATTACK_WINDOW
                                     for _, s in ipairs(killer:GetDescendants()) do
                                         if s:IsA("Sound") then
@@ -1091,7 +1067,6 @@ function checkForAttackSounds()
                                     end
                                 end
                             else
-                                -- Non-Slasher: sound check
                                 local window
                                 if killer.Name == "Sixer" then
                                     window = SIXER_SOUND_WINDOW
@@ -1113,7 +1088,6 @@ function checkForAttackSounds()
                             end
 
                             if doBlock then
-                                -- Trigger M1 warning
                                 if killerM1WarningEnabled then
                                     local w = KILLER_ATTACK_WINDOWS[killer.Name] or DEFAULT_ATTACK_WINDOW
                                     if killer.Name == "Sixer" then w = 0.3 end
@@ -1929,8 +1903,12 @@ function cleanupCharacterTimers(character)
     if aimbotCurrentTarget == character then stopAimbot() end
     if currentDusekkarTarget == character then stopDusekkar() end
     if activeCooldownTimers[character] then
-        if activeCooldownTimers[character].billboard then pcall(function() activeCooldownTimers[character].billboard:Destroy() end) end
-        if activeCooldownTimers[character].connection then activeCooldownTimers[character].connection:Disconnect() end
+        for _, d in pairs(activeCooldownTimers[character]) do
+            if type(d) == "table" then
+                if d.billboard then pcall(function() d.billboard:Destroy() end) end
+                if d.connection then d.connection:Disconnect() end
+            end
+        end
         activeCooldownTimers[character] = nil
     end
     cleanupAbilityTimers(slasherActiveCooldownTimers, character)
@@ -2304,6 +2282,544 @@ function startBloodOrbLoop()
     bloodOrbConnection = RunService.Heartbeat:Connect(function() pcall(bringBloodOrbsToPlayer) end)
 end
 
+-- ===== SHARED KILLER TRACKER HELPERS =====
+local function formatKillerCooldownTime(s)
+    if s <= 0 then return "0.0"
+    elseif s < 10 then return string.format("%.1f", s)
+    else return tostring(math.floor(s)) end
+end
+
+local function createKillerCooldownDisplay(store, offsets, n, endTime, ability)
+    if store[n] and store[n][ability] then
+        local ex = store[n][ability]
+        if ex.billboard then pcall(function() ex.billboard:Destroy() end) end
+        if ex.connection then ex.connection:Disconnect() end
+        store[n][ability] = nil
+    end
+    local hrp = n:FindFirstChild("HumanoidRootPart") or n:FindFirstChild("Head") or n:FindFirstChild("Torso")
+    if not hrp then return end
+    local oy = (offsets and offsets[ability]) or 3
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "KillerCooldown_" .. ability
+    bb.Size = UDim2.new(0, 140, 0, 25)
+    bb.StudsOffset = Vector3.new(0, oy, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = hrp
+    local tl = Instance.new("TextLabel")
+    tl.Size = UDim2.new(1, 0, 1, 0)
+    tl.BackgroundTransparency = 1
+    tl.Text = ability .. ": " .. formatKillerCooldownTime(endTime - tick())
+    tl.TextStrokeTransparency = 0
+    tl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    tl.TextScaled = true
+    tl.Font = Enum.Font.GothamBold
+    tl.Parent = bb
+    if not store[n] then store[n] = {} end
+    local td = { endTime = endTime, billboard = bb, textLabel = tl, abilityName = ability, connection = nil }
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not n or not n.Parent then
+            if conn then conn:Disconnect() end
+            if bb then pcall(function() bb:Destroy() end) end
+            if store[n] then store[n][ability] = nil end
+            return
+        end
+        local rem = td.endTime - tick()
+        if rem <= 0.1 then
+            if conn then conn:Disconnect() end
+            if bb then pcall(function() bb:Destroy() end) end
+            if store[n] then store[n][ability] = nil end
+        else
+            tl.Text = ability .. ": " .. formatKillerCooldownTime(rem)
+            if rem < 5 then tl.TextColor3 = Color3.fromRGB(255, 0, 0)
+            elseif rem < 10 then tl.TextColor3 = Color3.fromRGB(255, 165, 0)
+            else tl.TextColor3 = Color3.fromRGB(255, 255, 255) end
+        end
+    end)
+    td.connection = conn
+    store[n][ability] = td
+end
+
+local function getKillerCharsByName(name)
+    local out = {}
+    if not KillersFolder then return out end
+    for _, k in ipairs(KillersFolder:GetChildren()) do
+        if k.Name == name then table.insert(out, k) end
+    end
+    return out
+end
+
+-- ===== SLASHER TRACKER =====
+local function listenForSlasherAbilities(slasher)
+    if not slasher or isLocalPlayer(slasher) then return end
+    if slasher:GetAttribute("SlasherCooldownListener") then return end
+    slasher:SetAttribute("SlasherCooldownListener", true)
+    local hum = slasher:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = slasher:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not slasherTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            for _, i in ipairs(BEHEAD_ANIMATIONS) do
+                if id == i then
+                    local enraged = isSlasherEnragedForBehead(slasher)
+                    local cd = enraged and SLASHER_BEHEAD_ENRAGED or SLASHER_BEHEAD_NORMAL
+                    createKillerCooldownDisplay(slasherActiveCooldownTimers, SLASHER_ABILITY_OFFSETS, slasher, tick() + cd, "Behead")
+                    return
+                end
+            end
+            for _, i in ipairs(GASHING_WOUND_ANIMATIONS) do
+                if id == i then
+                    local enraged = isSlasherEnragedForBehead(slasher)
+                    local cd = enraged and SLASHER_GASHING_WOUND_ENRAGED or SLASHER_GASHING_WOUND_NORMAL
+                    createKillerCooldownDisplay(slasherActiveCooldownTimers, SLASHER_ABILITY_OFFSETS, slasher, tick() + cd, "Gashing Wound")
+                    return
+                end
+            end
+            for _, i in ipairs(RAGING_PACE_STARTUP_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(slasherActiveCooldownTimers, SLASHER_ABILITY_OFFSETS, slasher, tick() + SLASHER_RAGING_PACE_COOLDOWN, "Raging Pace")
+                    return
+                end
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+end
+
+function startSlasherTracking()
+    if slasherUpdateConnection then return end
+    for _, s in ipairs(getKillerCharsByName("Slasher")) do listenForSlasherAbilities(s) end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(c)
+            if c.Name == "Slasher" then task.wait(0.5); listenForSlasherAbilities(c) end
+        end)
+    end
+    slasherUpdateConnection = RunService.Heartbeat:Connect(function()
+        if slasherTrackerEnabled then
+            for _, s in ipairs(getKillerCharsByName("Slasher")) do listenForSlasherAbilities(s) end
+        end
+    end)
+end
+
+function stopSlasherTracking()
+    if slasherUpdateConnection then slasherUpdateConnection:Disconnect(); slasherUpdateConnection = nil end
+    for n, ab in pairs(slasherActiveCooldownTimers) do
+        for _, d in pairs(ab) do
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.connection then d.connection:Disconnect() end
+        end
+        if n then n:SetAttribute("SlasherCooldownListener", nil) end
+    end
+    slasherActiveCooldownTimers = {}
+end
+
+-- ===== ONEX TRACKER =====
+local function listenForOnexAbilities(k)
+    if not k or isLocalPlayer(k) then return end
+    if k:GetAttribute("OnexCooldownListener") then return end
+    k:SetAttribute("OnexCooldownListener", true)
+    local hum = k:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = k:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not onexTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            for _, i in ipairs(MASS_INFECTION_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(onexActiveCooldownTimers, ONEX_ABILITY_OFFSETS, k, tick() + MASS_INFECTION_COOLDOWN, "Mass Infection")
+                    return
+                end
+            end
+            for _, i in ipairs(ENTANGLEMENT_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(onexActiveCooldownTimers, ONEX_ABILITY_OFFSETS, k, tick() + ENTANGLEMENT_COOLDOWN, "Entanglement")
+                    return
+                end
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+end
+
+function startOnexTracking()
+    if onexUpdateConnection then return end
+    for _, k in ipairs(getKillerCharsByName("1x1x1x1")) do listenForOnexAbilities(k) end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(c)
+            if c.Name == "1x1x1x1" then task.wait(0.5); listenForOnexAbilities(c) end
+        end)
+    end
+    onexUpdateConnection = RunService.Heartbeat:Connect(function()
+        if onexTrackerEnabled then
+            for _, k in ipairs(getKillerCharsByName("1x1x1x1")) do listenForOnexAbilities(k) end
+        end
+    end)
+end
+
+function stopOnexTracking()
+    if onexUpdateConnection then onexUpdateConnection:Disconnect(); onexUpdateConnection = nil end
+    for n, ab in pairs(onexActiveCooldownTimers) do
+        for _, d in pairs(ab) do
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.connection then d.connection:Disconnect() end
+        end
+        if n then n:SetAttribute("OnexCooldownListener", nil) end
+    end
+    onexActiveCooldownTimers = {}
+end
+
+-- ===== SIXER TRACKER =====
+local function listenForSixerAbilities(sixer)
+    if not sixer or isLocalPlayer(sixer) then return end
+    if sixer:GetAttribute("SixerCooldownListener") then return end
+    sixer:SetAttribute("SixerCooldownListener", true)
+    local hum = sixer:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = sixer:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not sixerTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            for _, i in ipairs(INFERNAL_CRY_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(sixerActiveCooldownTimers, SIXER_ABILITY_OFFSETS, sixer, tick() + INFERNAL_CRY_COOLDOWN, "Infernal Cry")
+                    return
+                end
+            end
+            for _, i in ipairs(DEMONIC_PURSUIT_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(sixerActiveCooldownTimers, SIXER_ABILITY_OFFSETS, sixer, tick() + DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
+                    return
+                end
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+end
+
+function startSixerTracking()
+    if sixerUpdateConnection then return end
+    for _, s in ipairs(getKillerCharsByName("Sixer")) do listenForSixerAbilities(s) end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(c)
+            if c.Name == "Sixer" then task.wait(0.5); listenForSixerAbilities(c) end
+        end)
+    end
+    sixerUpdateConnection = RunService.Heartbeat:Connect(function()
+        if sixerTrackerEnabled then
+            for _, s in ipairs(getKillerCharsByName("Sixer")) do listenForSixerAbilities(s) end
+        end
+    end)
+end
+
+function stopSixerTracking()
+    if sixerUpdateConnection then sixerUpdateConnection:Disconnect(); sixerUpdateConnection = nil end
+    for n, ab in pairs(sixerActiveCooldownTimers) do
+        for _, d in pairs(ab) do
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.connection then d.connection:Disconnect() end
+        end
+        if n then n:SetAttribute("SixerCooldownListener", nil) end
+    end
+    sixerActiveCooldownTimers = {}
+end
+
+-- ===== NOLI TRACKER =====
+local function listenForNoliAbilities(k)
+    if not k or isLocalPlayer(k) then return end
+    if k:GetAttribute("NoliCooldownListener") then return end
+    k:SetAttribute("NoliCooldownListener", true)
+    local hum = k:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = k:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not noliTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            for _, i in ipairs(VOID_RUSH_START_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, k, tick() + VOID_RUSH_COOLDOWN, "Void Rush")
+                    return
+                end
+            end
+            for _, i in ipairs(VOID_RUSH_INSTANT_ANIMATIONS) do
+                if id == i then
+                    local now = tick()
+                    if now - noliLastVoidRushTrigger >= VOID_RUSH_ANTI_SPAM then
+                        noliLastVoidRushTrigger = now
+                        createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, k, now + NOVA_COOLDOWN, "Nova")
+                    end
+                    return
+                end
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+end
+
+function startNoliTracking()
+    if noliUpdateConnection then return end
+    for _, k in ipairs(getKillerCharsByName("Noli")) do listenForNoliAbilities(k) end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(c)
+            if c.Name == "Noli" then task.wait(0.5); listenForNoliAbilities(c) end
+        end)
+    end
+    noliUpdateConnection = RunService.Heartbeat:Connect(function()
+        if noliTrackerEnabled then
+            for _, k in ipairs(getKillerCharsByName("Noli")) do listenForNoliAbilities(k) end
+        end
+    end)
+end
+
+function stopNoliTracking()
+    if noliUpdateConnection then noliUpdateConnection:Disconnect(); noliUpdateConnection = nil end
+    for n, ab in pairs(noliActiveCooldownTimers) do
+        for _, d in pairs(ab) do
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.connection then d.connection:Disconnect() end
+        end
+        if n then n:SetAttribute("NoliCooldownListener", nil) end
+    end
+    noliActiveCooldownTimers = {}
+end
+
+-- ===== C00LKIDD TRACKER =====
+local function listenForC00lkiddAbilities(k)
+    if not k or isLocalPlayer(k) then return end
+    if k:GetAttribute("C00lkiddCooldownListener") then return end
+    k:SetAttribute("C00lkiddCooldownListener", true)
+    local hum = k:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = k:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not c00lkiddTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            for _, i in ipairs(CORRUPT_NATURE_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(c00lkiddActiveCooldownTimers, C00LKIDD_ABILITY_OFFSETS, k, tick() + CORRUPT_NATURE_COOLDOWN, "Corrupt Nature")
+                    return
+                end
+            end
+            for _, i in ipairs(WALKSPEED_OVERRIDE_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(c00lkiddActiveCooldownTimers, C00LKIDD_ABILITY_OFFSETS, k, tick() + WALKSPEED_OVERRIDE_COOLDOWN, "Walkspeed Override")
+                    return
+                end
+            end
+            for _, i in ipairs(PIZZA_DELIVERY_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(c00lkiddActiveCooldownTimers, C00LKIDD_ABILITY_OFFSETS, k, tick() + PIZZA_DELIVERY_COOLDOWN, "Pizza Delivery")
+                    return
+                end
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+end
+
+function startC00lkiddTracking()
+    if c00lkiddUpdateConnection then return end
+    for _, k in ipairs(getKillerCharsByName("c00lkidd")) do listenForC00lkiddAbilities(k) end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(c)
+            if c.Name == "c00lkidd" then task.wait(0.5); listenForC00lkiddAbilities(c) end
+        end)
+    end
+    c00lkiddUpdateConnection = RunService.Heartbeat:Connect(function()
+        if c00lkiddTrackerEnabled then
+            for _, k in ipairs(getKillerCharsByName("c00lkidd")) do listenForC00lkiddAbilities(k) end
+        end
+    end)
+end
+
+function stopC00lkiddTracking()
+    if c00lkiddUpdateConnection then c00lkiddUpdateConnection:Disconnect(); c00lkiddUpdateConnection = nil end
+    for n, ab in pairs(c00lkiddActiveCooldownTimers) do
+        for _, d in pairs(ab) do
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.connection then d.connection:Disconnect() end
+        end
+        if n then n:SetAttribute("C00lkiddCooldownListener", nil) end
+    end
+    c00lkiddActiveCooldownTimers = {}
+end
+
+-- ===== JOHNDOE TRACKER =====
+local function listenForJohnDoeAbilities(k)
+    if not k or isLocalPlayer(k) then return end
+    if k:GetAttribute("JohnDoeCooldownListener") then return end
+    k:SetAttribute("JohnDoeCooldownListener", true)
+    local hum = k:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = k:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not johnDoeTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            for _, i in ipairs(CORRUPT_ENERGY_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_COOLDOWN, "Corrupt Energy")
+                    return
+                end
+            end
+            for _, i in ipairs(UNSTOPPABLE_ANIMATIONS) do
+                if id == i then
+                    createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_STUNNED_COOLDOWN, "DontStunWarning")
+                    return
+                end
+            end
+            if id == ANNIHILATION_CORRUPT_ENERGY then
+                createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_COOLDOWN, "Corrupt Energy")
+                return
+            end
+            if id == ANNIHILATION_UNSTOPPABLE_TRIGGER then
+                createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_STUNNED_COOLDOWN, "DontStunWarning")
+                return
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+end
+
+function startJohnDoeTracking()
+    if johnDoeUpdateConnection then return end
+    for _, k in ipairs(getKillerCharsByName("JohnDoe")) do listenForJohnDoeAbilities(k) end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(c)
+            if c.Name == "JohnDoe" then task.wait(0.5); listenForJohnDoeAbilities(c) end
+        end)
+    end
+    johnDoeUpdateConnection = RunService.Heartbeat:Connect(function()
+        if johnDoeTrackerEnabled then
+            for _, k in ipairs(getKillerCharsByName("JohnDoe")) do listenForJohnDoeAbilities(k) end
+        end
+    end)
+end
+
+function stopJohnDoeTracking()
+    if johnDoeUpdateConnection then johnDoeUpdateConnection:Disconnect(); johnDoeUpdateConnection = nil end
+    for n, ab in pairs(johnDoeActiveCooldownTimers) do
+        for _, d in pairs(ab) do
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.connection then d.connection:Disconnect() end
+        end
+        if n then n:SetAttribute("JohnDoeCooldownListener", nil) end
+    end
+    johnDoeActiveCooldownTimers = {}
+end
+
+-- ===== AZURE TRACKER =====
+local function listenForAzureAbilities(k)
+    if not k or isLocalPlayer(k) then return end
+    if k:GetAttribute("AzureCooldownListener") then return end
+    k:SetAttribute("AzureCooldownListener", true)
+    local hum = k:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = k:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local azureOffsets = { ["Seeker Bulb"] = 3, ["Stigmatize"] = 5, ["Enstrangle"] = 7, ["Blooming"] = 3, ["Unearthing"] = 5 }
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not azureTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            if id == SEEKER_BULB_ANIMATION then
+                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + SEEKER_BULB_COOLDOWN, "Seeker Bulb")
+                return
+            end
+            if id == STIGMATIZE_ANIMATION then
+                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + STIGMATIZE_COOLDOWN, "Stigmatize")
+                return
+            end
+            if id == ENSTRANGLE_ANIMATION_1 or id == ENSTRANGLE_ANIMATION_2 then
+                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + ENSTRANGLE_COOLDOWN, "Enstrangle")
+                return
+            end
+            if id == BLOOMING_ANIMATION then
+                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + BLOOMING_COOLDOWN, "Blooming")
+                return
+            end
+            if id == UNEARTHING_ANIMATION then
+                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + UNEARTHING_COOLDOWN, "Unearthing")
+                return
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+end
+
+function startAzureTracking()
+    if azureUpdateConnection then return end
+    for _, k in ipairs(getKillerCharsByName("Azure")) do listenForAzureAbilities(k) end
+    if KillersFolder then
+        KillersFolder.ChildAdded:Connect(function(c)
+            if c.Name == "Azure" then task.wait(0.5); listenForAzureAbilities(c) end
+        end)
+    end
+    azureUpdateConnection = RunService.Heartbeat:Connect(function()
+        if azureTrackerEnabled then
+            for _, k in ipairs(getKillerCharsByName("Azure")) do listenForAzureAbilities(k) end
+        end
+    end)
+end
+
+function stopAzureTracking()
+    if azureUpdateConnection then azureUpdateConnection:Disconnect(); azureUpdateConnection = nil end
+    for n, ab in pairs(azureActiveCooldownTimers) do
+        for _, d in pairs(ab) do
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.connection then d.connection:Disconnect() end
+        end
+        if n then n:SetAttribute("AzureCooldownListener", nil) end
+    end
+    azureActiveCooldownTimers = {}
+end
+
 -- ===== NOSFERATU TRACKER =====
 function getAllNosferatus()
     local out = {}
@@ -2493,6 +3009,182 @@ function stopNosferatuTracking()
     nosferatuActiveCooldownTimers = {}
     nosferatuHunterFeastActive = {}
     nosferatuHunterFeastTracked = {}
+end
+
+-- ===== SURVIVOR COOLDOWN TRACKER =====
+local SURVIVOR_ABILITY_OFFSETS = {
+    ["Shedletsky Sword"] = 3,
+    ["TwoTime Dagger"] = 3,
+    ["Chance Ability"] = 3,
+    ["JaneDoe Ability"] = 3,
+    ["Elliot Throw"] = 3,
+    ["Guest1337 Punch"] = 3,
+}
+
+local function createSurvivorCooldownDisplay(survivor, endTime, ability)
+    if not survivor or isLocalPlayer(survivor) then return end
+    if not activeCooldownTimers[survivor] then activeCooldownTimers[survivor] = {} end
+    if activeCooldownTimers[survivor][ability] then
+        local ex = activeCooldownTimers[survivor][ability]
+        if ex.billboard then pcall(function() ex.billboard:Destroy() end) end
+        if ex.connection then ex.connection:Disconnect() end
+        activeCooldownTimers[survivor][ability] = nil
+    end
+    local hrp = survivor:FindFirstChild("HumanoidRootPart") or survivor:FindFirstChild("Head") or survivor:FindFirstChild("Torso")
+    if not hrp then return end
+    local oy = SURVIVOR_ABILITY_OFFSETS[ability] or 3
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "SurvivorCooldown_" .. ability
+    bb.Size = UDim2.new(0, 140, 0, 25)
+    bb.StudsOffset = Vector3.new(0, oy, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = hrp
+    local tl = Instance.new("TextLabel")
+    tl.Size = UDim2.new(1, 0, 1, 0)
+    tl.BackgroundTransparency = 1
+    tl.Text = ability .. ": " .. formatKillerCooldownTime(endTime - tick())
+    tl.TextStrokeTransparency = 0
+    tl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    tl.TextScaled = true
+    tl.Font = Enum.Font.GothamBold
+    tl.Parent = bb
+    local td = { endTime = endTime, billboard = bb, textLabel = tl, abilityName = ability, connection = nil }
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not survivor or not survivor.Parent then
+            if conn then conn:Disconnect() end
+            if bb then pcall(function() bb:Destroy() end) end
+            if activeCooldownTimers[survivor] then activeCooldownTimers[survivor][ability] = nil end
+            return
+        end
+        local rem = td.endTime - tick()
+        if rem <= 0.1 then
+            if conn then conn:Disconnect() end
+            if bb then pcall(function() bb:Destroy() end) end
+            if activeCooldownTimers[survivor] then activeCooldownTimers[survivor][ability] = nil end
+        else
+            tl.Text = ability .. ": " .. formatKillerCooldownTime(rem)
+            if rem < 5 then tl.TextColor3 = Color3.fromRGB(255, 0, 0)
+            elseif rem < 10 then tl.TextColor3 = Color3.fromRGB(255, 165, 0)
+            else tl.TextColor3 = Color3.fromRGB(255, 255, 255) end
+        end
+    end)
+    td.connection = conn
+    activeCooldownTimers[survivor][ability] = td
+end
+
+local function hasAnySoundMatch(character, soundTable)
+    for _, s in ipairs(character:GetDescendants()) do
+        if s:IsA("Sound") and s.IsPlaying then
+            local id = extractNumericSoundId(s)
+            if id and soundTable[id] then
+                if s.TimePosition > 0 and s.TimePosition < 0.5 then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function listenForSurvivorAbilities(survivor)
+    if not survivor or isLocalPlayer(survivor) then return end
+    if survivor:GetAttribute("CooldownListener") then return end
+    survivor:SetAttribute("CooldownListener", true)
+    local hum = survivor:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        hum = survivor:WaitForChild("Humanoid", 5)
+        if not hum then return end
+    end
+    local function setupAnim(anim)
+        if not anim then return end
+        anim.AnimationPlayed:Connect(function(track)
+            if not cooldownTrackerEnabled then return end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then return end
+            local now = tick()
+            local name = survivor.Name
+            if name == "Chance" then
+                if chanceAnimIds[id] then
+                    if not lastChanceTrigger["anim"] or now - lastChanceTrigger["anim"] >= CHANCE_ANTI_SPAM_TIME then
+                        lastChanceTrigger["anim"] = now
+                        createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Chance Ability")
+                    end
+                    return
+                end
+            elseif name == "Elliot" then
+                if elliotThrowAnimation[id] then
+                    createSurvivorCooldownDisplay(survivor, now + ELLIOT_COOLDOWN, "Elliot Throw")
+                    return
+                end
+            elseif name == "Guest1337" then
+                if guest1337AllAnims[id] or guest1337PunchAnims[id] then
+                    if not lastGuest1337Trigger["anim"] or now - lastGuest1337Trigger["anim"] >= GUEST1337_ANTI_SPAM_TIME then
+                        lastGuest1337Trigger["anim"] = now
+                        createSurvivorCooldownDisplay(survivor, now + GUEST1337_COOLDOWN, "Guest1337 Punch")
+                    end
+                    return
+                end
+            end
+        end)
+    end
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then setupAnim(a) end
+    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+
+    task.spawn(function()
+        while cooldownTrackerEnabled and survivor and survivor.Parent do
+            if not cooldownTrackerEnabled then break end
+            local name = survivor.Name
+            local now = tick()
+            if name == "Shedletsky" then
+                if hasAnySoundMatch(survivor, shedletskySwingSounds) then
+                    createSurvivorCooldownDisplay(survivor, now + SHEDLETSKY_COOLDOWN, "Shedletsky Sword")
+                end
+            elseif name == "TwoTime" then
+                if hasAnySoundMatch(survivor, twotimeSounds) then
+                    createSurvivorCooldownDisplay(survivor, now + TWOTIME_COOLDOWN, "TwoTime Dagger")
+                end
+            elseif name == "Chance" then
+                if hasAnySoundMatch(survivor, chanceSounds) then
+                    if not lastChanceTrigger["sound"] or now - lastChanceTrigger["sound"] >= CHANCE_ANTI_SPAM_TIME then
+                        lastChanceTrigger["sound"] = now
+                        createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Chance Ability")
+                    end
+                end
+            elseif name == "JaneDoe" then
+                if hasAnySoundMatch(survivor, janeDoeSounds) then
+                    createSurvivorCooldownDisplay(survivor, now + JANEDOE_COOLDOWN, "JaneDoe Ability")
+                end
+            end
+            task.wait(0.1)
+        end
+    end)
+end
+
+function scanForAllCooldownSurvivors()
+    if not SurvivorsFolder then return end
+    for _, s in ipairs(SurvivorsFolder:GetChildren()) do
+        if not isLocalPlayer(s) then
+            local nm = s.Name
+            if nm == "Shedletsky" or nm == "TwoTime" or nm == "Chance" or nm == "JaneDoe" or nm == "Elliot" or nm == "Guest1337" then
+                listenForSurvivorAbilities(s)
+            end
+        end
+    end
+end
+
+function watchForNewCooldownSurvivors()
+    if not SurvivorsFolder then return end
+    SurvivorsFolder.ChildAdded:Connect(function(child)
+        task.wait(0.5)
+        local nm = child.Name
+        if nm == "Shedletsky" or nm == "TwoTime" or nm == "Chance" or nm == "JaneDoe" or nm == "Elliot" or nm == "Guest1337" then
+            if cooldownTrackerEnabled and not isLocalPlayer(child) then
+                listenForSurvivorAbilities(child)
+            end
+        end
+    end)
 end
 
 -- ===== NOOB TRACKER =====
@@ -3525,6 +4217,23 @@ VisualsTab:CreateToggle({
     end
 })
 
+KillerCooldownToggle = VisualsTab:CreateToggle({
+    Name = "Show Ability Cooldowns (Killers)",
+    CurrentValue = false,
+    Flag = "KillerCooldownToggle",
+    Callback = function(Value)
+        slasherTrackerEnabled = Value; if Value then startSlasherTracking() else stopSlasherTracking() end
+        onexTrackerEnabled = Value; if Value then startOnexTracking() else stopOnexTracking() end
+        sixerTrackerEnabled = Value; if Value then startSixerTracking() else stopSixerTracking() end
+        noliTrackerEnabled = Value; if Value then startNoliTracking() else stopNoliTracking() end
+        c00lkiddTrackerEnabled = Value; if Value then startC00lkiddTracking() else stopC00lkiddTracking() end
+        johnDoeTrackerEnabled = Value; if Value then startJohnDoeTracking() else stopJohnDoeTracking() end
+        nosferatuTrackerEnabled = Value; if Value then startNosferatuTracking() else stopNosferatuTracking() end
+        azureTrackerEnabled = Value; if Value then startAzureTracking() else stopAzureTracking() end
+        SendNotif("Killer Cooldown Tracker", Value and "Enabled" or "Disabled", 2)
+    end
+})
+
 CooldownTrackerToggle = VisualsTab:CreateToggle({
     Name = "Show Ability Cooldowns (Survivors)",
     CurrentValue = false,
@@ -3544,9 +4253,15 @@ CooldownTrackerToggle = VisualsTab:CreateToggle({
             end)
             SendNotif("Cooldown Tracker", "Enabled", 2)
         else
-            for s, d in pairs(activeCooldownTimers) do
-                if d.billboard then pcall(function() d.billboard:Destroy() end) end
-                if d.connection then d.connection:Disconnect() end
+            for s, ab in pairs(activeCooldownTimers) do
+                if type(ab) == "table" then
+                    for _, d in pairs(ab) do
+                        if type(d) == "table" then
+                            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+                            if d.connection then d.connection:Disconnect() end
+                        end
+                    end
+                end
                 if s then s:SetAttribute("CooldownListener", nil) end
             end
             activeCooldownTimers = {}
@@ -3555,23 +4270,6 @@ CooldownTrackerToggle = VisualsTab:CreateToggle({
             stopNoobTracking()
             SendNotif("Cooldown Tracker", "Disabled", 1)
         end
-    end
-})
-
-KillerCooldownToggle = VisualsTab:CreateToggle({
-    Name = "Show Ability Cooldowns (Killers)",
-    CurrentValue = false,
-    Flag = "KillerCooldownToggle",
-    Callback = function(Value)
-        slasherTrackerEnabled = Value; if Value then startSlasherTracking() else stopSlasherTracking() end
-        onexTrackerEnabled = Value; if Value then startOnexTracking() else stopOnexTracking() end
-        sixerTrackerEnabled = Value; if Value then startSixerTracking() else stopSixerTracking() end
-        noliTrackerEnabled = Value; if Value then startNoliTracking() else stopNoliTracking() end
-        c00lkiddTrackerEnabled = Value; if Value then startC00lkiddTracking() else stopC00lkiddTracking() end
-        johnDoeTrackerEnabled = Value; if Value then startJohnDoeTracking() else stopJohnDoeTracking() end
-        nosferatuTrackerEnabled = Value; if Value then startNosferatuTracking() else stopNosferatuTracking() end
-        azureTrackerEnabled = Value; if Value then startAzureTracking() else stopAzureTracking() end
-        SendNotif("Killer Cooldown Tracker", Value and "Enabled" or "Disabled", 2)
     end
 })
 
