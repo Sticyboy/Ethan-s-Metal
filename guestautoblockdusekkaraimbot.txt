@@ -2636,42 +2636,99 @@ function stopSixerTracking()
 end
 
 -- ===== NOLI TRACKER =====
-local function listenForNoliAbilities(k)
-    if not k or isLocalPlayer(k) then return end
-    if k:GetAttribute("NoliCooldownListener") then return end
-    k:SetAttribute("NoliCooldownListener", true)
-    local hum = k:FindFirstChildOfClass("Humanoid")
-    if not hum then
-        hum = k:WaitForChild("Humanoid", 5)
-        if not hum then return end
+local function clearPendingNoliVoidRush()
+    if noliPendingTimer then
+        task.cancel(noliPendingTimer)
+        noliPendingTimer = nil
     end
-    local function setupAnim(anim)
-        if not anim then return end
-        anim.AnimationPlayed:Connect(function(track)
+    noliPendingNoli = nil
+end
+
+local function listenForNoliAbilities(noli)
+    if not noli or isLocalPlayer(noli) then return end
+    if noli:GetAttribute("NoliCooldownListener") then return end
+    noli:SetAttribute("NoliCooldownListener", true)
+    local humanoid = noli:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        humanoid = noli:WaitForChild("Humanoid", 5)
+        if not humanoid then return end
+    end
+    local function setupAnimator(animator)
+        if not animator then return end
+        animator.AnimationPlayed:Connect(function(animationTrack)
             if not noliTrackerEnabled then return end
-            local id = extractNumericAnimationId(track.Animation.AnimationId)
-            if not id then return end
-            for _, i in ipairs(VOID_RUSH_START_ANIMATIONS) do
-                if id == i then
-                    createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, k, tick() + VOID_RUSH_COOLDOWN, "Void Rush")
-                    return
-                end
-            end
-            for _, i in ipairs(VOID_RUSH_INSTANT_ANIMATIONS) do
-                if id == i then
+            local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
+            if not animId then return end
+
+            -- Instant Void Rush confirm
+            for _, id in ipairs(VOID_RUSH_INSTANT_ANIMATIONS) do
+                if animId == id then
                     local now = tick()
                     if now - noliLastVoidRushTrigger >= VOID_RUSH_ANTI_SPAM then
                         noliLastVoidRushTrigger = now
-                        createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, k, now + NOVA_COOLDOWN, "Nova")
+                        clearPendingNoliVoidRush()
+                        createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, noli, now + VOID_RUSH_COOLDOWN, "Void Rush")
+                    end
+                    return
+                end
+            end
+
+            -- Void Rush startup — needs confirmation within VOID_RUSH_WINDOW
+            for _, startAnim in ipairs(VOID_RUSH_START_ANIMATIONS) do
+                if animId == startAnim then
+                    clearPendingNoliVoidRush()
+                    noliPendingNoli = noli
+                    noliPendingTimer = task.delay(VOID_RUSH_WINDOW, function()
+                        local now = tick()
+                        if now - noliLastVoidRushTrigger >= VOID_RUSH_ANTI_SPAM then
+                            noliLastVoidRushTrigger = now
+                            createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, noli, now + VOID_RUSH_COOLDOWN, "Void Rush")
+                        end
+                        clearPendingNoliVoidRush()
+                    end)
+                    return
+                end
+            end
+
+            -- Cancel pending Void Rush
+            for _, cancelAnim in ipairs(VOID_RUSH_CANCEL_ANIMATIONS) do
+                if animId == cancelAnim then
+                    if noliPendingNoli == noli then
+                        clearPendingNoliVoidRush()
                     end
                     return
                 end
             end
         end)
     end
-    local a = hum:FindFirstChildOfClass("Animator")
-    if a then setupAnim(a) end
-    hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if animator then setupAnimator(animator) end
+    humanoid.ChildAdded:Connect(function(c)
+        if c:IsA("Animator") then setupAnimator(c) end
+    end)
+end
+
+-- Nova is detected by watching the Voidstar object in the map.
+local function startNoliVoidstarWatcher()
+    local lastState = false
+    local watcher = RunService.Heartbeat:Connect(function()
+        if not noliTrackerEnabled then return end
+        local map = Workspace:FindFirstChild("Map")
+        if not map then return end
+        local ingame = map:FindFirstChild("Ingame")
+        if not ingame then return end
+        local voidstar = ingame:FindFirstChild("Voidstar")
+        local currentState = voidstar ~= nil
+        if lastState == true and currentState == false then
+            for _, k in ipairs(getKillerCharsByName("Noli")) do
+                if not isLocalPlayer(k) then
+                    createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, k, tick() + NOVA_COOLDOWN, "Nova")
+                end
+            end
+        end
+        lastState = currentState
+    end)
+    return watcher
 end
 
 function startNoliTracking()
@@ -2687,10 +2744,13 @@ function startNoliTracking()
             for _, k in ipairs(getKillerCharsByName("Noli")) do listenForNoliAbilities(k) end
         end
     end)
+    noliVoidstarWatcher = startNoliVoidstarWatcher()
 end
 
 function stopNoliTracking()
     if noliUpdateConnection then noliUpdateConnection:Disconnect(); noliUpdateConnection = nil end
+    if noliVoidstarWatcher then noliVoidstarWatcher:Disconnect(); noliVoidstarWatcher = nil end
+    clearPendingNoliVoidRush()
     for n, ab in pairs(noliActiveCooldownTimers) do
         for _, d in pairs(ab) do
             if d.billboard then pcall(function() d.billboard:Destroy() end) end
@@ -3101,14 +3161,14 @@ function stopNosferatuTracking()
     nosferatuHunterFeastTracked = {}
 end
 
--- ===== SURVIVOR COOLDOWN TRACKER =====
 local SURVIVOR_ABILITY_OFFSETS = {
-    ["Shedletsky Sword"] = 3,
-    ["TwoTime Dagger"] = 3,
-    ["Chance Ability"] = 3,
-    ["JaneDoe Ability"] = 3,
-    ["Elliot Throw"] = 3,
-    ["Guest1337 Punch"] = 3,
+    ["Sword"] = 3,
+    ["Dagger"] = 3,
+    ["Gun"] = 3,
+    ["Hatchet"] = 3,
+    ["Pizza"] = 3,
+    ["Block"] = 3,
+    ["Clone"] = 3,
 }
 
 local function createSurvivorCooldownDisplay(survivor, endTime, ability)
@@ -3198,20 +3258,20 @@ local function listenForSurvivorAbilities(survivor)
                 if chanceAnimIds[id] then
                     if not lastChanceTrigger["anim"] or now - lastChanceTrigger["anim"] >= CHANCE_ANTI_SPAM_TIME then
                         lastChanceTrigger["anim"] = now
-                        createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Chance Ability")
+                        createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Gun")
                     end
                     return
                 end
             elseif name == "Elliot" then
                 if elliotThrowAnimation[id] then
-                    createSurvivorCooldownDisplay(survivor, now + ELLIOT_COOLDOWN, "Elliot Throw")
+                    createSurvivorCooldownDisplay(survivor, now + ELLIOT_COOLDOWN, "Pizza")
                     return
                 end
             elseif name == "Guest1337" then
-                if guest1337AllAnims[id] or guest1337PunchAnims[id] then
+                if guest1337AllAnims[id] then
                     if not lastGuest1337Trigger["anim"] or now - lastGuest1337Trigger["anim"] >= GUEST1337_ANTI_SPAM_TIME then
                         lastGuest1337Trigger["anim"] = now
-                        createSurvivorCooldownDisplay(survivor, now + GUEST1337_COOLDOWN, "Guest1337 Punch")
+                        createSurvivorCooldownDisplay(survivor, now + GUEST1337_COOLDOWN, "Block")
                     end
                     return
                 end
@@ -3229,22 +3289,22 @@ local function listenForSurvivorAbilities(survivor)
             local now = tick()
             if name == "Shedletsky" then
                 if hasAnySoundMatch(survivor, shedletskySwingSounds) then
-                    createSurvivorCooldownDisplay(survivor, now + SHEDLETSKY_COOLDOWN, "Shedletsky Sword")
+                    createSurvivorCooldownDisplay(survivor, now + SHEDLETSKY_COOLDOWN, "Sword")
                 end
             elseif name == "TwoTime" then
                 if hasAnySoundMatch(survivor, twotimeSounds) then
-                    createSurvivorCooldownDisplay(survivor, now + TWOTIME_COOLDOWN, "TwoTime Dagger")
+                    createSurvivorCooldownDisplay(survivor, now + TWOTIME_COOLDOWN, "Dagger")
                 end
             elseif name == "Chance" then
                 if hasAnySoundMatch(survivor, chanceSounds) then
                     if not lastChanceTrigger["sound"] or now - lastChanceTrigger["sound"] >= CHANCE_ANTI_SPAM_TIME then
                         lastChanceTrigger["sound"] = now
-                        createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Chance Ability")
+                        createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Gun")
                     end
                 end
             elseif name == "JaneDoe" then
                 if hasAnySoundMatch(survivor, janeDoeSounds) then
-                    createSurvivorCooldownDisplay(survivor, now + JANEDOE_COOLDOWN, "JaneDoe Ability")
+                    createSurvivorCooldownDisplay(survivor, now + JANEDOE_COOLDOWN, "Hatchet")
                 end
             end
             task.wait(0.1)
