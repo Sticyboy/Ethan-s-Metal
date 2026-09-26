@@ -876,6 +876,99 @@ function showM1Warning(killer, duration)
     end)
 end
 
+-- ===== STANDALONE M1 WARNING SCANNER (works even with auto-block OFF) =====
+local M1_WARNING_COOLDOWN = 0.4
+local lastM1WarningPerKiller = {}
+
+function scanForM1WarningsGlobal()
+    if not killerM1WarningEnabled then return end
+    local isG = amIGuest1337()
+    local is7 = amI7n7()
+    if not (isG or is7) then return end
+    if not KillersFolder then return end
+
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    local now = tick()
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local u = killer:GetAttribute("Username")
+        if not (u and u == lp.Name) then
+            local khrp = killer:FindFirstChild("HumanoidRootPart")
+            if khrp then
+                local dist = (khrp.Position - myRoot.Position).Magnitude
+                if dist <= detectionRange then
+                    if (not facingCheckEnabled) or isFacing(myRoot, khrp) then
+                        if not lastM1WarningPerKiller[killer] or (now - lastM1WarningPerKiller[killer]) >= M1_WARNING_COOLDOWN then
+                            local detected = false
+
+                            if killer.Name == "Slasher" then
+                                local hum = killer:FindFirstChildOfClass("Humanoid")
+                                if hum then
+                                    local a = hum:FindFirstChildOfClass("Animator")
+                                    if a then
+                                        local window = KILLER_ATTACK_WINDOWS[killer.Name] or DEFAULT_ATTACK_WINDOW
+                                        for _, t in ipairs(a:GetPlayingAnimationTracks()) do
+                                            local id = extractNumericAnimationId(t.Animation.AnimationId)
+                                            if id and autoBlockTriggerAnimations[id] then
+                                                local startedAt = animationStartTimes[killer] and animationStartTimes[killer][id]
+                                                if startedAt and (tick() - startedAt) < window then
+                                                    detected = true
+                                                    break
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                                if not detected then
+                                    local window = KILLER_ATTACK_WINDOWS[killer.Name] or DEFAULT_ATTACK_WINDOW
+                                    for _, s in ipairs(killer:GetDescendants()) do
+                                        if s:IsA("Sound") then
+                                            local id = extractNumericSoundId(s)
+                                            if id and autoBlockTriggerSounds[id] then
+                                                if s.TimePosition > 0 and s.TimePosition < window then
+                                                    detected = true
+                                                    break
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            else
+                                local window
+                                if killer.Name == "Sixer" then
+                                    window = SIXER_SOUND_WINDOW
+                                else
+                                    window = KILLER_ATTACK_WINDOWS[killer.Name] or DEFAULT_ATTACK_WINDOW
+                                end
+                                for _, s in ipairs(killer:GetDescendants()) do
+                                    if s:IsA("Sound") then
+                                        local id = extractNumericSoundId(s)
+                                        if id and autoBlockTriggerSounds[id] then
+                                            if s.TimePosition > 0 and s.TimePosition < window then
+                                                detected = true
+                                                break
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+
+                            if detected then
+                                local w = KILLER_ATTACK_WINDOWS[killer.Name] or DEFAULT_ATTACK_WINDOW
+                                if killer.Name == "Sixer" then w = 0.3 end
+                                showM1Warning(killer, w)
+                                lastM1WarningPerKiller[killer] = now
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 function setupAnimationStartTracking(killer)
     if not killer then return end
     if killer:GetAttribute("AnimStartTracked") then return end
@@ -4072,7 +4165,6 @@ function setupInputHook()
     end)
 end
 
--- ===== MAIN LOOP =====
 RunService.Heartbeat:Connect(function()
     pcall(checkSpecialKillerStatus)
     if isPlayingAsSpecialKiller then pcall(checkSpecialKillerActions) end
@@ -4081,6 +4173,7 @@ RunService.Heartbeat:Connect(function()
     if autoBlockForGuest and not isPlayingAsSpecialKiller then pcall(checkForAttackSounds) end
     if autoCloneFor7n7 and not isPlayingAsSpecialKiller then pcall(checkForCloneTrigger) end
     if killerCirclesVisible then pcall(updateDetectionRangeVisuals) end
+    if killerM1WarningEnabled then pcall(scanForM1WarningsGlobal) end
 end)
 
 -- ===== UI =====
