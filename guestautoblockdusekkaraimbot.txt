@@ -100,7 +100,7 @@ autoBlockTriggerSounds = {
     ["99856718263455"] = true, ["88589682639517"] = true, ["109570290393196"] = true, ["70739368096233"] = true,
     ["105516183226360"] = true, ["98742773509325"] = true, ["73662192846371"] = true, ["132581672170205"] = true,
     ["112809109188560"] = true, ["77649238882198"] = true, ["94632255644411"] = true, ["92869747208256"] = true, 
-    ["93299090238530"] = true, 
+    ["93299090238530"] = true, ["79612713897495"] = true, ["70626755789950"] = true, 
 }
 
 autoBlockTriggerAnimations = {
@@ -166,9 +166,17 @@ ENTANGLEMENT_ANIMATIONS = {
 }
 INFERNAL_CRY_ANIMATIONS = { "121808371053483", "113637819866249" }
 DEMONIC_PURSUIT_ANIMATIONS = { "133363345661032", "72097991746015" }
-BLOOD_HUNT_ACTIVATION_ANIMATION = "117834850464068"
-KILL_ANIMATION_NORMAL = "131140322818412"
-KILL_ANIMATION_NOOB = "101413761015692"
+BLOOD_HUNT_ACTIVATION_ANIMATIONS = {
+    "117834850464068",
+    "132092856625156",
+}
+KILL_ANIMATIONS = {
+    "131140322818412",  
+    "101413761015692", 
+    "138682080672091", 
+    "111858181427137", 
+    "78667132854228", 
+}
 BLOOD_ORB_SOUND_ID = "7837536770"
 BLOOD_HUNT_DURATION = 25
 
@@ -2573,7 +2581,50 @@ function stopOnexTracking()
     onexActiveCooldownTimers = {}
 end
 
--- ===== SIXER TRACKER =====
+-- ===== SIXER TRACKER HELPERS =====
+local function clearAllSixerCooldowns(sixer)
+    if not sixerActiveCooldownTimers[sixer] then return end
+    for n, d in pairs(sixerActiveCooldownTimers[sixer]) do
+        if d.billboard then pcall(function() d.billboard:Destroy() end) end
+        if d.connection then d.connection:Disconnect() end
+        sixerActiveCooldownTimers[sixer][n] = nil
+    end
+    if next(sixerActiveCooldownTimers[sixer]) == nil then sixerActiveCooldownTimers[sixer] = nil end
+end
+
+local function setSixerBloodHuntActive(sixer, active)
+    sixerBloodHuntActive[sixer] = active
+    if sixerBloodHuntTimers[sixer] then task.cancel(sixerBloodHuntTimers[sixer]); sixerBloodHuntTimers[sixer] = nil end
+    if active then
+        sixerBloodHuntTimers[sixer] = task.delay(BLOOD_HUNT_DURATION, function() sixerBloodHuntActive[sixer] = false end)
+    end
+end
+
+local function isSixerBloodHuntActive(sixer)
+    local a = sixer:GetAttribute("Hunting")
+    if a ~= nil then return a == true end
+    return sixerBloodHuntActive[sixer] == true
+end
+
+local function reduceSixerCooldownByBloodOrb(sixer)
+    if not sixerActiveCooldownTimers[sixer] then return end
+    for n, d in pairs(sixerActiveCooldownTimers[sixer]) do
+        if d and d.endTime then
+            local rem = d.endTime - tick()
+            local new = rem - BLOOD_ORB_REDUCTION
+            if new <= 0 then
+                if d.billboard then pcall(function() d.billboard:Destroy() end) end
+                if d.connection then d.connection:Disconnect() end
+                sixerActiveCooldownTimers[sixer][n] = nil
+            else
+                d.endTime = tick() + new
+                if d.textLabel then d.textLabel.Text = n .. ": " .. formatKillerCooldownTime(new) end
+            end
+        end
+    end
+    if sixerActiveCooldownTimers[sixer] and next(sixerActiveCooldownTimers[sixer]) == nil then sixerActiveCooldownTimers[sixer] = nil end
+end
+
 local function listenForSixerAbilities(sixer)
     if not sixer or isLocalPlayer(sixer) then return end
     if sixer:GetAttribute("SixerCooldownListener") then return end
@@ -2583,24 +2634,84 @@ local function listenForSixerAbilities(sixer)
         hum = sixer:WaitForChild("Humanoid", 5)
         if not hum then return end
     end
+
+    local function onDetected(cd, ability)
+        createKillerCooldownDisplay(sixerActiveCooldownTimers, SIXER_ABILITY_OFFSETS, sixer, tick() + cd, ability)
+    end
+
+    -- Blood orb sound hook (reduces cooldowns by BLOOD_ORB_REDUCTION)
+    local function onBloodOrbSound(s)
+        if not s:IsA("Sound") then return end
+        if extractNumericSoundId(s) == BLOOD_ORB_SOUND_ID then
+            reduceSixerCooldownByBloodOrb(sixer)
+        end
+    end
+    local hrp = sixer:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        for _, s in ipairs(hrp:GetChildren()) do onBloodOrbSound(s) end
+        if sixerBloodOrbSoundConnections[sixer] then sixerBloodOrbSoundConnections[sixer]:Disconnect() end
+        sixerBloodOrbSoundConnections[sixer] = hrp.ChildAdded:Connect(onBloodOrbSound)
+    end
+
+    -- Shared animation handler (works for both Omega and normal skins)
+    local function handleAnim(id)
+        for _, i in ipairs(INFERNAL_CRY_ANIMATIONS) do
+            if id == i then
+                onDetected(INFERNAL_CRY_COOLDOWN, "Infernal Cry")
+                return
+            end
+        end
+        for _, i in ipairs(DEMONIC_PURSUIT_ANIMATIONS) do
+            if id == i then
+                onDetected(DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
+                return
+            end
+        end
+        for _, i in ipairs(BLOOD_HUNT_ACTIVATION_ANIMATIONS) do
+            if id == i then
+                setSixerBloodHuntActive(sixer, true)
+                clearAllSixerCooldowns(sixer)
+                return
+            end
+        end
+        for _, i in ipairs(KILL_ANIMATIONS) do
+            if id == i then
+                if isSixerBloodHuntActive(sixer) then
+                    clearAllSixerCooldowns(sixer)
+                end
+                return
+            end
+        end
+    end
+
+    -- Omega Guest path: scan currently playing anims + hook future ones
+    if isOmegaGuestSixer(sixer) then
+        task.spawn(function()
+            local h = sixer:FindFirstChild("Humanoid") or sixer:WaitForChild("Humanoid", 3)
+            if not h then return end
+            local a = h:FindFirstChild("Animator") or h:WaitForChild("Animator", 2)
+            if not a then return end
+            for _, t in ipairs(a:GetPlayingAnimationTracks()) do
+                local id = extractNumericAnimationId(t.Animation.AnimationId)
+                if id then handleAnim(id) end
+            end
+            a.AnimationPlayed:Connect(function(t)
+                if not sixerTrackerEnabled then return end
+                local id = extractNumericAnimationId(t.Animation.AnimationId)
+                if id then handleAnim(id) end
+            end)
+        end)
+        return
+    end
+
+    -- Normal path
     local function setupAnim(anim)
         if not anim then return end
         anim.AnimationPlayed:Connect(function(track)
             if not sixerTrackerEnabled then return end
             local id = extractNumericAnimationId(track.Animation.AnimationId)
             if not id then return end
-            for _, i in ipairs(INFERNAL_CRY_ANIMATIONS) do
-                if id == i then
-                    createKillerCooldownDisplay(sixerActiveCooldownTimers, SIXER_ABILITY_OFFSETS, sixer, tick() + INFERNAL_CRY_COOLDOWN, "Infernal Cry")
-                    return
-                end
-            end
-            for _, i in ipairs(DEMONIC_PURSUIT_ANIMATIONS) do
-                if id == i then
-                    createKillerCooldownDisplay(sixerActiveCooldownTimers, SIXER_ABILITY_OFFSETS, sixer, tick() + DEMONIC_PURSUIT_COOLDOWN, "Demonic Pursuit")
-                    return
-                end
-            end
+            handleAnim(id)
         end)
     end
     local a = hum:FindFirstChildOfClass("Animator")
@@ -2632,7 +2743,16 @@ function stopSixerTracking()
         end
         if n then n:SetAttribute("SixerCooldownListener", nil) end
     end
+    for s, c in pairs(sixerBloodOrbSoundConnections) do
+        if c then c:Disconnect() end
+    end
+    for s, t in pairs(sixerBloodHuntTimers) do
+        if t then task.cancel(t) end
+    end
     sixerActiveCooldownTimers = {}
+    sixerBloodHuntActive = {}
+    sixerBloodHuntTimers = {}
+    sixerBloodOrbSoundConnections = {}
 end
 
 -- ===== NOLI TRACKER =====
