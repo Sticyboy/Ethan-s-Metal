@@ -27,10 +27,6 @@ local lastVisualUpdate = 0
 local VISUAL_UPDATE_COOLDOWN = 0.5
 
 -- Dummy global declarations
-function setupSilentAim() end
-function restoreSilentAim() end
-function stopDusekkar() end
-function useSilentAim() end
 function startNosferatuTracking() end
 function stopNosferatuTracking() end
 function startNoobTracking() end
@@ -38,7 +34,6 @@ function stopNoobTracking() end
 function startAbilityWarner() end
 function stopAbilityWarner() end
 function startBloodOrbLoop() end
-function updateInventoryESP() end
 function updateAimbot() end
 function startGeneralAimbot() end
 function stopAimbot() end
@@ -4175,6 +4170,266 @@ RunService.Heartbeat:Connect(function()
     if killerCirclesVisible then pcall(updateDetectionRangeVisuals) end
     if killerM1WarningEnabled then pcall(scanForM1WarningsGlobal) end
 end)
+
+-- ===== INVENTORY ESP =====
+local function getPlayerItems(player)
+    local items = {}
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") or item:IsA("HopperBin") then
+                table.insert(items, item.Name)
+            end
+        end
+    end
+    return items
+end
+
+function updateInventoryESP()
+    for survivor, billboard in pairs(inventoryEspBillboards) do
+        pcall(function() billboard:Destroy() end)
+    end
+    inventoryEspBillboards = {}
+    if not inventoryEspEnabled then return end
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return end
+    local survivorsFolder = playersFolder:FindFirstChild("Survivors")
+    if not survivorsFolder then return end
+    for _, survivor in ipairs(survivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if usernameAttr and usernameAttr ~= lp.Name then
+            local player = Players:FindFirstChild(usernameAttr)
+            if player then
+                local items = getPlayerItems(player)
+                if #items > 0 then
+                    local hrp = survivor:FindFirstChild("HumanoidRootPart") or survivor:FindFirstChild("Head") or survivor:FindFirstChild("Torso")
+                    if hrp then
+                        local billboard = Instance.new("BillboardGui")
+                        billboard.Name = "InventoryESP"
+                        billboard.Size = UDim2.new(0, 150, 0, 50)
+                        billboard.StudsOffset = Vector3.new(0, -5, 0)
+                        billboard.AlwaysOnTop = true
+                        billboard.Parent = hrp
+
+                        local layout = Instance.new("UIListLayout")
+                        layout.FillDirection = Enum.FillDirection.Vertical
+                        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                        layout.VerticalAlignment = Enum.VerticalAlignment.Top
+                        layout.Padding = UDim.new(0, 2)
+                        layout.Parent = billboard
+
+                        for _, itemName in ipairs(items) do
+                            local textLabel = Instance.new("TextLabel")
+                            textLabel.Size = UDim2.new(0, 100, 0, 20)
+                            textLabel.BackgroundTransparency = 1
+                            textLabel.Text = itemName
+                            textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                            textLabel.TextStrokeTransparency = 0
+                            textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                            textLabel.TextScaled = true
+                            textLabel.Font = Enum.Font.GothamBold
+                            textLabel.Parent = billboard
+                        end
+
+                        inventoryEspBillboards[survivor] = billboard
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ===== DUSEKKAR SILENT AIM =====
+local function isPlasmaBeamOnCooldown()
+    local success, cooldownText = pcall(function()
+        return lp.PlayerGui.MainUI.AbilityContainer.PlasmaBeam.CooldownTime.Text
+    end)
+    if success then
+        return cooldownText ~= "" and cooldownText ~= "0"
+    end
+    return true
+end
+
+local function firePlasmaBeam()
+    if not testRemote then return false end
+    if isPlasmaBeamOnCooldown() then return false end
+    local args = { "UseActorAbility", { buffer.fromstring("\003\n\000\000\000PlasmaBeam") } }
+    local success = pcall(function()
+        testRemote:FireServer(unpack(args))
+    end)
+    return success
+end
+
+local function getSurvivorClosestToCursor()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local mousePosition = UserInputService:GetMouseLocation()
+    local validTargets = {}
+
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetHrp.Position)
+                    if onScreen then
+                        local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                        local distanceToCursor = (screenVector - mousePosition).Magnitude
+                        table.insert(validTargets, { survivor = survivor, screenDistance = distanceToCursor })
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(validTargets, function(a, b) return a.screenDistance < b.screenDistance end)
+    if #validTargets > 0 then return validTargets[1].survivor end
+
+    -- Fallback: nearest by 3D distance
+    local nearestByDistance = nil
+    local nearestDist = math.huge
+    for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
+        local usernameAttr = survivor:GetAttribute("Username")
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            local humanoid = survivor:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetHrp = survivor:FindFirstChild("HumanoidRootPart")
+                if targetHrp then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDist then
+                        nearestDist = distance
+                        nearestByDistance = survivor
+                    end
+                end
+            end
+        end
+    end
+    return nearestByDistance
+end
+
+local function getNearestKillerForDusekkar()
+    local myChar = lp.Character
+    if not myChar then return nil end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+    local nearestKiller = nil
+    local nearestDistance = math.huge
+    for _, killer in ipairs(KillersFolder:GetChildren()) do
+        local usernameAttr = killer:GetAttribute("Username")
+        if not (usernameAttr and usernameAttr == lp.Name) then
+            local targetHrp = killer:FindFirstChild("HumanoidRootPart")
+            if targetHrp then
+                local humanoid = killer:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local distance = (targetHrp.Position - myRoot.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestKiller = killer
+                    end
+                end
+            end
+        end
+    end
+    return nearestKiller
+end
+
+function stopDusekkar()
+    dusekkarActive = false
+    currentDusekkarTarget = nil
+    silentAimActive = false
+    if currentTargetSphere then pcall(function() currentTargetSphere:Destroy() end); currentTargetSphere = nil end
+    if currentSphereConnection then pcall(function() currentSphereConnection:Disconnect() end); currentSphereConnection = nil end
+    if dusekkarTimer then task.cancel(dusekkarTimer); dusekkarTimer = nil end
+end
+
+function setupSilentAim()
+    if isSilentAimHooked then return true end
+    local module = nil
+    local success, mod = pcall(function()
+        return require(ReplicatedStorage:FindFirstChild("Systems"):FindFirstChild("Player"):FindFirstChild("Miscellaneous"):FindFirstChild("GetPlayerMousePosition"))
+    end)
+    if success and mod then
+        module = mod
+    else
+        success, mod = pcall(function()
+            return require(ReplicatedStorage.Systems.Player.Miscellaneous.GetPlayerMousePosition)
+        end)
+        if success and mod then
+            module = mod
+        end
+    end
+    if module then
+        mousePositionModule = module
+        originalGetMousePos = module.GetMousePos
+        local function hookedGetMousePos(self, ...)
+            if silentAimActive and currentTargetSphere then
+                return currentTargetSphere.Position
+            end
+            return originalGetMousePos(self, ...)
+        end
+        module.GetMousePos = hookedGetMousePos
+        isSilentAimHooked = true
+        return true
+    end
+    return false
+end
+
+function restoreSilentAim()
+    if mousePositionModule and originalGetMousePos then
+        mousePositionModule.GetMousePos = originalGetMousePos
+        isSilentAimHooked = false
+    end
+    mousePositionModule = nil
+    originalGetMousePos = nil
+end
+
+function useSilentAim()
+    if not dusekkarEnabled then return false end
+    if not amIDusekkar() then return false end
+    if not isSilentAimHooked then
+        setupSilentAim()
+    end
+    local target = nil
+    if dusekkarTargetMode == "Survivors" then
+        target = getSurvivorClosestToCursor()
+        if target then
+            SendNotif("Dusekkar", "Targeting survivor: " .. target.Name, 1.5)
+        end
+    else
+        target = getNearestKillerForDusekkar()
+        if target then
+            SendNotif("Dusekkar", "Targeting killer: " .. target.Name, 1.5)
+        end
+    end
+    if not target then
+        SendNotif("Dusekkar", "No target found!", 1)
+        return false
+    end
+    if isPlasmaBeamOnCooldown() then
+        SendNotif("Dusekkar", "Plasma Beam on cooldown!", 1)
+        return false
+    end
+    currentDusekkarTarget = target
+    silentAimActive = true
+    dusekkarActive = true
+    createTargetSphere(target, Color3.fromRGB(0, 170, 255), dusekkarPredictionMultiplier)
+    local success = firePlasmaBeam()
+    if success then
+        if dusekkarTimer then task.cancel(dusekkarTimer) end
+        dusekkarTimer = task.delay(2.5, function()
+            stopDusekkar()
+        end)
+        return true
+    else
+        stopDusekkar()
+        return false
+    end
+end
 
 -- ===== UI =====
 Window = Rayfield:CreateWindow({
