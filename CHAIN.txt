@@ -155,8 +155,8 @@ local AimbotToggle = nil
 local chainExists = false
 
 -- ===== TOGGLE VARIABLES =====
-local aimbotActive = false  -- Toggle state
-local TOGGLE_KEY = Enum.KeyCode.X  -- Changed from Y to X
+local aimbotActive = false  -- True while right-click is held
+local MOUSE_HOLD_BUTTON = Enum.UserInputType.MouseButton2  -- Right click
 
 -- ===== KEYBIND FUNCTIONS =====
 local function getKeyName(inputType)
@@ -318,31 +318,19 @@ local function stopAimbot()
     chainExists = false
 end
 
--- ===== KEYBOARD TOGGLE SETUP =====
-local function setupToggleListener()
+-- ===== HOLD-TO-AIM SETUP (Right Click) =====
+local function setupHoldListener()
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         if UserInputService:GetFocusedTextBox() ~= nil then return end
-        
-        -- Check if X key was pressed
-        if input.KeyCode == TOGGLE_KEY then
-            aimbotActive = not aimbotActive
-            
-            if aimbotActive then
-                Rayfield:Notify({
-                    Title = "Aimbot",
-                    Content = "🔴 CHAIN Aimbot TOGGLED ON",
-                    Duration = 2,
-                    Image = 4483362458
-                })
-            else
-                Rayfield:Notify({
-                    Title = "Aimbot",
-                    Content = "⚪ CHAIN Aimbot TOGGLED OFF",
-                    Duration = 2,
-                    Image = 4483362458
-                })
-            end
+        if input.UserInputType == MOUSE_HOLD_BUTTON then
+            aimbotActive = true
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if input.UserInputType == MOUSE_HOLD_BUTTON then
+            aimbotActive = false
         end
     end)
 end
@@ -362,7 +350,7 @@ AimbotToggle = AimbotTab:CreateToggle({
             startAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "CHAIN Aimbot enabled | Press X to toggle on/off" .. (RequireHoldingTool and " | Requires holding a tool" or " | No tool required"),
+                Content = "CHAIN Aimbot enabled | Hold Right Click to aim" .. (RequireHoldingTool and " | Requires holding a tool" or " | No tool required"),
                 Duration = 4,
                 Image = 4483362458
             })
@@ -395,8 +383,8 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
     end,
 })
 
--- Display the toggle key
-AimbotTab:CreateLabel("Toggle Key: X (press to toggle on/off)", "key")
+-- Display the hold key
+AimbotTab:CreateLabel("Hold Right Click to aim at CHAIN", "key")
 
 local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
     Name = "Aimbot Smoothness",
@@ -432,8 +420,8 @@ local WallCheckToggle = AimbotTab:CreateToggle({
     end,
 })
 
--- Setup toggle listener
-setupToggleListener()
+-- Setup hold-to-aim listener
+setupHoldListener()
 
 -- ===== BLUEPRINTS TAB =====
 local BlueprintsTab = Window:CreateTab("Blueprints", "printer")
@@ -1606,4 +1594,4 @@ local Toggle = Tab:CreateToggle({
 -- ===== INITIALIZATION =====
 Rayfield:LoadConfiguration()
 
-print("XCHain loaded! Press X to toggle aimbot on/off")
+print("XCHain loaded! Hold Right Click to aim at CHAIN")
