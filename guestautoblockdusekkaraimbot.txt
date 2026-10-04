@@ -134,7 +134,7 @@ guest1337AllAnims = {
 guest1337PunchAnims = {
     ["87259391926321"] = true, ["138040001965654"] = true, ["72007882634344"] = true,
     ["132010205222516"] = true, ["86096387000557"] = true, ["138936949998619"] = true,
-    ["87716278630738"] = true, ["116427323741607"] = true, ["116427323741607"] = true, 
+    ["87716278630738"] = true, ["116427323741607"] = true, 
 }
 chanceAnimIds = {
     ["133491532453922"] = true, ["76649505662612"] = true, ["86371356500204"] = true,
@@ -412,6 +412,7 @@ johnDoePendingCorruptEnergy = {}
 johnDoeWarningBillboards = {}
 johnDoeWarningPulseConnections = {}
 johnDoeIsAnnihilationSkin = {}
+johnDoeStunWindowTimers = {}
 
 nosferatuTrackerEnabled = false
 nosferatuActiveCooldownTimers = {}
@@ -879,7 +880,7 @@ function showM1Warning(killer, duration)
     end)
 end
 
--- ===== STANDALONE M1 WARNING SCANNER (works even with auto-block OFF) =====
+-- ===== STANDALONE M1 WARNING SCANNER =====
 local M1_WARNING_COOLDOWN = 0.4
 local lastM1WarningPerKiller = {}
 
@@ -1863,8 +1864,7 @@ function getAzureForm()
                     elseif t == "Burrowing" then return "Beast" end
                 end
             end
-        end
-    end
+        end    end
     return nil
 end
 
@@ -2026,6 +2026,10 @@ function cleanupCharacterTimers(character)
     if slasherBeheadCooldowns[character] then slasherBeheadCooldowns[character] = nil end
     if slasherBeheadTracked[character] then slasherBeheadTracked[character] = nil end
     if slasherBeheadCasting[character] then slasherBeheadCasting[character] = nil end
+    if johnDoeStunWindowTimers[character] then task.cancel(johnDoeStunWindowTimers[character]); johnDoeStunWindowTimers[character] = nil end
+    if johnDoePendingCorruptEnergy[character] then johnDoePendingCorruptEnergy[character] = nil end
+    if johnDoeWarningBillboards[character] then pcall(function() johnDoeWarningBillboards[character]:Destroy() end); johnDoeWarningBillboards[character] = nil end
+    if johnDoeWarningPulseConnections[character] then johnDoeWarningPulseConnections[character]:Disconnect(); johnDoeWarningPulseConnections[character] = nil end
     cleanupM1Warning(character)
 end
 
@@ -2639,7 +2643,6 @@ local function listenForSixerAbilities(sixer)
         createKillerCooldownDisplay(sixerActiveCooldownTimers, SIXER_ABILITY_OFFSETS, sixer, tick() + cd, ability)
     end
 
-    -- Blood orb sound hook (reduces cooldowns by BLOOD_ORB_REDUCTION)
     local function onBloodOrbSound(s)
         if not s:IsA("Sound") then return end
         if extractNumericSoundId(s) == BLOOD_ORB_SOUND_ID then
@@ -2653,7 +2656,6 @@ local function listenForSixerAbilities(sixer)
         sixerBloodOrbSoundConnections[sixer] = hrp.ChildAdded:Connect(onBloodOrbSound)
     end
 
-    -- Shared animation handler (works for both Omega and normal skins)
     local function handleAnim(id)
         for _, i in ipairs(INFERNAL_CRY_ANIMATIONS) do
             if id == i then
@@ -2684,7 +2686,6 @@ local function listenForSixerAbilities(sixer)
         end
     end
 
-    -- Omega Guest path: scan currently playing anims + hook future ones
     if isOmegaGuestSixer(sixer) then
         task.spawn(function()
             local h = sixer:FindFirstChild("Humanoid") or sixer:WaitForChild("Humanoid", 3)
@@ -2704,7 +2705,6 @@ local function listenForSixerAbilities(sixer)
         return
     end
 
-    -- Normal path
     local function setupAnim(anim)
         if not anim then return end
         anim.AnimationPlayed:Connect(function(track)
@@ -2780,7 +2780,6 @@ local function listenForNoliAbilities(noli)
             local animId = extractNumericAnimationId(animationTrack.Animation.AnimationId)
             if not animId then return end
 
-            -- Instant Void Rush confirm
             for _, id in ipairs(VOID_RUSH_INSTANT_ANIMATIONS) do
                 if animId == id then
                     local now = tick()
@@ -2793,7 +2792,6 @@ local function listenForNoliAbilities(noli)
                 end
             end
 
-            -- Void Rush startup — needs confirmation within VOID_RUSH_WINDOW
             for _, startAnim in ipairs(VOID_RUSH_START_ANIMATIONS) do
                 if animId == startAnim then
                     clearPendingNoliVoidRush()
@@ -2810,7 +2808,6 @@ local function listenForNoliAbilities(noli)
                 end
             end
 
-            -- Cancel pending Void Rush
             for _, cancelAnim in ipairs(VOID_RUSH_CANCEL_ANIMATIONS) do
                 if animId == cancelAnim then
                     if noliPendingNoli == noli then
@@ -2828,7 +2825,6 @@ local function listenForNoliAbilities(noli)
     end)
 end
 
--- Nova is detected by watching the Voidstar object in the map.
 local function startNoliVoidstarWatcher()
     local lastState = false
     local watcher = RunService.Heartbeat:Connect(function()
@@ -2949,7 +2945,109 @@ function stopC00lkiddTracking()
     c00lkiddActiveCooldownTimers = {}
 end
 
--- ===== JOHNDOE TRACKER =====
+-- ===== JOHNDOE TRACKER HELPERS =====
+local function removeJohnDoeWarning(j)
+    if not j then return end
+    if johnDoeWarningBillboards[j] then
+        pcall(function() johnDoeWarningBillboards[j]:Destroy() end)
+        johnDoeWarningBillboards[j] = nil
+    end
+    if johnDoeWarningPulseConnections[j] then
+        johnDoeWarningPulseConnections[j]:Disconnect()
+        johnDoeWarningPulseConnections[j] = nil
+    end
+end
+
+local function createJohnDoeWarning(j)
+    if not j then return end
+    removeJohnDoeWarning(j)
+    local hrp = j:FindFirstChild("HumanoidRootPart") or j:FindFirstChild("Head") or j:FindFirstChild("Torso")
+    if not hrp then return end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "JohnDoeWarning"
+    bb.Size = UDim2.new(0, 150, 0, 30)
+    bb.StudsOffset = Vector3.new(0, 1, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = hrp
+
+    local tl = Instance.new("TextLabel")
+    tl.Size = UDim2.new(1, 0, 1, 0)
+    tl.BackgroundTransparency = 1
+    tl.Text = "⚠️ DON'T STUN ⚠️"
+    tl.TextColor3 = Color3.fromRGB(255, 0, 0)
+    tl.TextStrokeTransparency = 0
+    tl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    tl.TextScaled = true
+    tl.Font = Enum.Font.GothamBold
+    tl.Parent = bb
+
+    local pulseDir = 1
+    local pulseConn
+    pulseConn = RunService.Heartbeat:Connect(function()
+        if not bb or not bb.Parent then
+            if pulseConn then pulseConn:Disconnect() end
+            return
+        end
+        local nt = tl.TextTransparency + (0.05 * pulseDir)
+        if nt >= 0.8 then nt = 0.8; pulseDir = -1
+        elseif nt <= 0.2 then nt = 0.2; pulseDir = 1 end
+        tl.TextTransparency = nt
+    end)
+
+    johnDoeWarningBillboards[j] = bb
+    johnDoeWarningPulseConnections[j] = pulseConn
+end
+
+local function isAnnihilationJohnDoe(j)
+    if not j then return false end
+    if johnDoeIsAnnihilationSkin[j] ~= nil then return johnDoeIsAnnihilationSkin[j] end
+    local skin = j:GetAttribute("SkinName")
+    local r = (skin == "AnnihilationJohnDoe")
+    johnDoeIsAnnihilationSkin[j] = r
+    return r
+end
+
+local function isCorruptEnergyAnimation(id, j)
+    if isAnnihilationJohnDoe(j) then return id == ANNIHILATION_CORRUPT_ENERGY end
+    for _, i in ipairs(CORRUPT_ENERGY_ANIMATIONS) do
+        if id == i then return true end
+    end
+    return false
+end
+
+local function isUnstoppableAnimation(id, j)
+    if isAnnihilationJohnDoe(j) then return id == ANNIHILATION_UNSTOPPABLE_TRIGGER end
+    for _, i in ipairs(UNSTOPPABLE_ANIMATIONS) do
+        if id == i then return true end
+    end
+    return false
+end
+
+local function reduceJohnDoeCooldown(j)
+    if not j then return end
+    if not johnDoeActiveCooldownTimers[j] then return end
+    local d = johnDoeActiveCooldownTimers[j]["Corrupt Energy"]
+    if not d then return end
+    local rem = d.endTime - tick()
+    if rem > CORRUPT_ENERGY_STUNNED_COOLDOWN then
+        d.endTime = tick() + CORRUPT_ENERGY_STUNNED_COOLDOWN
+        if d.textLabel then
+            d.textLabel.Text = "Corrupt Energy: " .. formatKillerCooldownTime(CORRUPT_ENERGY_STUNNED_COOLDOWN)
+        end
+    end
+end
+
+local function closeStunWindow(j)
+    if not j then return end
+    johnDoePendingCorruptEnergy[j] = nil
+    if johnDoeStunWindowTimers[j] then
+        task.cancel(johnDoeStunWindowTimers[j])
+        johnDoeStunWindowTimers[j] = nil
+    end
+    removeJohnDoeWarning(j)
+end
+
 local function listenForJohnDoeAbilities(k)
     if not k or isLocalPlayer(k) then return end
     if k:GetAttribute("JohnDoeCooldownListener") then return end
@@ -2959,34 +3057,51 @@ local function listenForJohnDoeAbilities(k)
         hum = k:WaitForChild("Humanoid", 5)
         if not hum then return end
     end
+
     local function setupAnim(anim)
         if not anim then return end
         anim.AnimationPlayed:Connect(function(track)
             if not johnDoeTrackerEnabled then return end
             local id = extractNumericAnimationId(track.Animation.AnimationId)
             if not id then return end
-            for _, i in ipairs(CORRUPT_ENERGY_ANIMATIONS) do
-                if id == i then
-                    createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_COOLDOWN, "Corrupt Energy")
-                    return
+
+            if isCorruptEnergyAnimation(id, k) then
+                johnDoePendingCorruptEnergy[k] = true
+                if johnDoeStunWindowTimers[k] then
+                    task.cancel(johnDoeStunWindowTimers[k])
+                    johnDoeStunWindowTimers[k] = nil
                 end
-            end
-            for _, i in ipairs(UNSTOPPABLE_ANIMATIONS) do
-                if id == i then
-                    createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_STUNNED_COOLDOWN, "DontStunWarning")
-                    return
-                end
-            end
-            if id == ANNIHILATION_CORRUPT_ENERGY then
                 createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_COOLDOWN, "Corrupt Energy")
+                createJohnDoeWarning(k)
+
+                local stoppedConn
+                stoppedConn = track.Stopped:Connect(function()
+                    if stoppedConn then stoppedConn:Disconnect() end
+                    if not johnDoePendingCorruptEnergy[k] then return end
+                    if johnDoeStunWindowTimers[k] then
+                        task.cancel(johnDoeStunWindowTimers[k])
+                    end
+                    johnDoeStunWindowTimers[k] = task.delay(1.5, function()
+                        johnDoeStunWindowTimers[k] = nil
+                        if johnDoePendingCorruptEnergy[k] then
+                            johnDoePendingCorruptEnergy[k] = nil
+                            removeJohnDoeWarning(k)
+                        end
+                    end)
+                end)
                 return
             end
-            if id == ANNIHILATION_UNSTOPPABLE_TRIGGER then
-                createKillerCooldownDisplay(johnDoeActiveCooldownTimers, JOHNDOE_ABILITY_OFFSETS, k, tick() + CORRUPT_ENERGY_STUNNED_COOLDOWN, "DontStunWarning")
+
+            if isUnstoppableAnimation(id, k) then
+                if johnDoePendingCorruptEnergy[k] then
+                    reduceJohnDoeCooldown(k)
+                    closeStunWindow(k)
+                end
                 return
             end
         end)
     end
+
     local a = hum:FindFirstChildOfClass("Animator")
     if a then setupAnim(a) end
     hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
@@ -3016,10 +3131,121 @@ function stopJohnDoeTracking()
         end
         if n then n:SetAttribute("JohnDoeCooldownListener", nil) end
     end
+    for n, t in pairs(johnDoeStunWindowTimers) do
+        if t then task.cancel(t) end
+    end
+    for n, _ in pairs(johnDoeWarningBillboards) do
+        removeJohnDoeWarning(n)
+    end
     johnDoeActiveCooldownTimers = {}
+    johnDoePendingCorruptEnergy = {}
+    johnDoeStunWindowTimers = {}
+    johnDoeWarningBillboards = {}
+    johnDoeWarningPulseConnections = {}
+    johnDoeIsAnnihilationSkin = {}
 end
 
--- ===== AZURE TRACKER =====
+-- ===== AZURE TRACKER (FORM-AWARE) =====
+local function checkAzureBeastMode(a)
+    if not a then return false end
+    local sm = a:FindFirstChild("SpeedMultipliers")
+    if sm then
+        if sm:FindFirstChild("GolemDefaultWalkspeed") then return true end
+    end
+    return false
+end
+
+local AZURE_ABILITY_OFFSETS = {
+    ["Seeker Bulb"] = 3,
+    ["Stigmatize"] = 5,
+    ["Enstrangle"] = 7,
+    ["Blooming"] = 9,
+    ["Unearthing"] = 11,
+}
+
+local function createAzureCooldownDisplay(a, endTime, ability)
+    if not a or isLocalPlayer(a) then return end
+    if azureActiveCooldownTimers[a] and azureActiveCooldownTimers[a][ability] then
+        local ex = azureActiveCooldownTimers[a][ability]
+        if ex.billboard then pcall(function() ex.billboard:Destroy() end) end
+        if ex.connection then ex.connection:Disconnect() end
+        azureActiveCooldownTimers[a][ability] = nil
+    end
+    local hrp = a:FindFirstChild("HumanoidRootPart") or a:FindFirstChild("Head") or a:FindFirstChild("Torso")
+    if not hrp then return end
+
+    local isBeast = checkAzureBeastMode(a)
+    local isNormalAbility, isBeastAbility = false, false
+    for _, n in ipairs(azureNormalAbilities) do if ability == n then isNormalAbility = true; break end end
+    for _, n in ipairs(azureBeastAbilities) do if ability == n then isBeastAbility = true; break end end
+    local shouldShow = (not isBeast and isNormalAbility) or (isBeast and isBeastAbility)
+
+    local oy = AZURE_ABILITY_OFFSETS[ability] or 3
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "AzureCooldown_" .. ability
+    bb.Size = UDim2.new(0, 140, 0, 25)
+    bb.StudsOffset = Vector3.new(0, oy, 0)
+    bb.AlwaysOnTop = true
+    bb.Enabled = shouldShow
+    bb.Parent = hrp
+
+    local tl = Instance.new("TextLabel")
+    tl.Size = UDim2.new(1, 0, 1, 0)
+    tl.BackgroundTransparency = 1
+    tl.Text = ability .. ": " .. formatKillerCooldownTime(endTime - tick())
+    tl.TextStrokeTransparency = 0
+    tl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    tl.TextScaled = true
+    tl.Font = Enum.Font.GothamBold
+    tl.Parent = bb
+
+    if not azureActiveCooldownTimers[a] then azureActiveCooldownTimers[a] = {} end
+    local data = {
+        endTime = endTime,
+        billboard = bb,
+        textLabel = tl,
+        abilityName = ability,
+        isBeast = isBeast,
+        isNormalAbility = isNormalAbility,
+        isBeastAbility = isBeastAbility,
+        connection = nil,
+    }
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if not a or not a.Parent then
+            if conn then conn:Disconnect() end
+            if bb then pcall(function() bb:Destroy() end) end
+            if azureActiveCooldownTimers[a] then azureActiveCooldownTimers[a][ability] = nil end
+            return
+        end
+
+        -- Re-evaluate form each frame and toggle visibility
+        local curBeast = checkAzureBeastMode(a)
+        if curBeast ~= data.isBeast then
+            data.isBeast = curBeast
+            if (not curBeast and data.isNormalAbility) or (curBeast and data.isBeastAbility) then
+                bb.Enabled = true
+            else
+                bb.Enabled = false
+            end
+        end
+
+        local rem = data.endTime - tick()
+        if rem <= 0.1 then
+            if conn then conn:Disconnect() end
+            if bb then pcall(function() bb:Destroy() end) end
+            if azureActiveCooldownTimers[a] then azureActiveCooldownTimers[a][ability] = nil end
+        else
+            tl.Text = ability .. ": " .. formatKillerCooldownTime(rem)
+            if rem < 5 then tl.TextColor3 = Color3.fromRGB(255, 0, 0)
+            elseif rem < 10 then tl.TextColor3 = Color3.fromRGB(255, 165, 0)
+            else tl.TextColor3 = Color3.fromRGB(255, 255, 255) end
+        end
+    end)
+    data.connection = conn
+    azureActiveCooldownTimers[a][ability] = data
+end
+
 local function listenForAzureAbilities(k)
     if not k or isLocalPlayer(k) then return end
     if k:GetAttribute("AzureCooldownListener") then return end
@@ -3029,7 +3255,6 @@ local function listenForAzureAbilities(k)
         hum = k:WaitForChild("Humanoid", 5)
         if not hum then return end
     end
-    local azureOffsets = { ["Seeker Bulb"] = 3, ["Stigmatize"] = 5, ["Enstrangle"] = 7, ["Blooming"] = 3, ["Unearthing"] = 5 }
     local function setupAnim(anim)
         if not anim then return end
         anim.AnimationPlayed:Connect(function(track)
@@ -3037,23 +3262,28 @@ local function listenForAzureAbilities(k)
             local id = extractNumericAnimationId(track.Animation.AnimationId)
             if not id then return end
             if id == SEEKER_BULB_ANIMATION then
-                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + SEEKER_BULB_COOLDOWN, "Seeker Bulb")
+                createAzureCooldownDisplay(k, tick() + SEEKER_BULB_COOLDOWN, "Seeker Bulb")
+                SendNotif("Azure", "Seeker Bulb detected!", 1)
                 return
             end
             if id == STIGMATIZE_ANIMATION then
-                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + STIGMATIZE_COOLDOWN, "Stigmatize")
+                createAzureCooldownDisplay(k, tick() + STIGMATIZE_COOLDOWN, "Stigmatize")
+                SendNotif("Azure", "Stigmatize detected!", 1)
                 return
             end
             if id == ENSTRANGLE_ANIMATION_1 or id == ENSTRANGLE_ANIMATION_2 then
-                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + ENSTRANGLE_COOLDOWN, "Enstrangle")
+                createAzureCooldownDisplay(k, tick() + ENSTRANGLE_COOLDOWN, "Enstrangle")
+                SendNotif("Azure", "Enstrangle detected!", 1)
                 return
             end
             if id == BLOOMING_ANIMATION then
-                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + BLOOMING_COOLDOWN, "Blooming")
+                createAzureCooldownDisplay(k, tick() + BLOOMING_COOLDOWN, "Blooming")
+                SendNotif("Azure", "Blooming (AOE) detected!", 1)
                 return
             end
             if id == UNEARTHING_ANIMATION then
-                createKillerCooldownDisplay(azureActiveCooldownTimers, azureOffsets, k, tick() + UNEARTHING_COOLDOWN, "Unearthing")
+                createAzureCooldownDisplay(k, tick() + UNEARTHING_COOLDOWN, "Unearthing")
+                SendNotif("Azure", "Unearthing (Trail) detected!", 1)
                 return
             end
         end)
@@ -3281,6 +3511,7 @@ function stopNosferatuTracking()
     nosferatuHunterFeastTracked = {}
 end
 
+-- ===== SURVIVOR COOLDOWN DISPLAY =====
 local SURVIVOR_ABILITY_OFFSETS = {
     ["Sword"] = 3,
     ["Dagger"] = 3,
@@ -3364,8 +3595,7 @@ local function listenForSurvivorAbilities(survivor)
     local hum = survivor:FindFirstChildOfClass("Humanoid")
     if not hum then
         hum = survivor:WaitForChild("Humanoid", 5)
-        if not hum then return end
-    end
+        if not hum then return end    end
     local function setupAnim(anim)
         if not anim then return end
         anim.AnimationPlayed:Connect(function(track)
@@ -4470,7 +4700,6 @@ local function getSurvivorClosestToCursor()
     table.sort(validTargets, function(a, b) return a.screenDistance < b.screenDistance end)
     if #validTargets > 0 then return validTargets[1].survivor end
 
-    -- Fallback: nearest by 3D distance
     local nearestByDistance = nil
     local nearestDist = math.huge
     for _, survivor in ipairs(SurvivorsFolder:GetChildren()) do
