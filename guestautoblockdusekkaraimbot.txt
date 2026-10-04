@@ -5095,4 +5095,4 @@ setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("loaded, also matthew sucks")
+print("took too long for this update to fix the entire script")
