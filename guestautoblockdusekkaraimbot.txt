@@ -83,7 +83,7 @@ autoBlockTriggerSounds = {
     ["108651070773439"] = true, ["131123355704017"] = true, ["128856426573270"] = true, ["128367348686124"] = true,
     ["104910828105172"] = true, ["140242176732868"] = true, ["115026634746636"] = true, ["84116622032112"] = true,
     ["108907358619313"] = true, ["127793641088496"] = true, ["86174610237192"] = true, ["95079963655241"] = true,
-    ["101199185291628"] = true, ["119942598489800"] = true, ["84307400688050"] = true, ["113037804008732"] = true,
+    ["101199185291628"] = true, ["119942598489800"] = true, ["84307400688050"] = true, ["70626755789950"] = true,
     ["105200830849301"] = true, ["75330693422988"] = true, ["124397369810639"] = true, ["107444859834748"] = true,
     ["82221759983649"] = true, ["76467993976301"] = true, ["81702359653578"] = true, ["128195973631079"] = true,
     ["108610718831698"] = true, ["112395455254818"] = true, ["109431876587852"] = true, ["109348678063422"] = true,
@@ -100,7 +100,7 @@ autoBlockTriggerSounds = {
     ["99856718263455"] = true, ["88589682639517"] = true, ["109570290393196"] = true, ["70739368096233"] = true,
     ["105516183226360"] = true, ["98742773509325"] = true, ["73662192846371"] = true, ["132581672170205"] = true,
     ["112809109188560"] = true, ["77649238882198"] = true, ["94632255644411"] = true, ["92869747208256"] = true, 
-    ["93299090238530"] = true, ["79612713897495"] = true, ["70626755789950"] = true, 
+    ["93299090238530"] = true, ["79612713897495"] = true, 
 }
 
 autoBlockTriggerAnimations = {
@@ -398,6 +398,7 @@ noliUpdateConnection = nil
 noliPendingTimer = nil
 noliPendingNoli = nil
 noliVoidstarWatcher = nil
+noliVoidstarOwnerMap = {}
 noliLastVoidstarState = false
 noliLastVoidRushTrigger = 0
 
@@ -419,6 +420,7 @@ nosferatuActiveCooldownTimers = {}
 nosferatuHunterFeastActive = {}
 nosferatuHunterFeastTracked = {}
 nosferatuUpdateConnection = nil
+nosferatuBatsWatcher = nil
 
 azureTrackerEnabled = false
 azureActiveCooldownTimers = {}
@@ -2825,24 +2827,58 @@ local function listenForNoliAbilities(noli)
     end)
 end
 
-local function startNoliVoidstarWatcher()
-    local lastState = false
-    local watcher = RunService.Heartbeat:Connect(function()
-        if not noliTrackerEnabled then return end
-        local map = Workspace:FindFirstChild("Map")
-        if not map then return end
-        local ingame = map:FindFirstChild("Ingame")
-        if not ingame then return end
-        local voidstar = ingame:FindFirstChild("Voidstar")
-        local currentState = voidstar ~= nil
-        if lastState == true and currentState == false then
-            for _, k in ipairs(getKillerCharsByName("Noli")) do
-                if not isLocalPlayer(k) then
-                    createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, k, tick() + NOVA_COOLDOWN, "Nova")
+local function findNearestNoliToPosition(pos)
+    local nearest, nearestDist = nil, math.huge
+    for _, k in ipairs(getKillerCharsByName("Noli")) do
+        if not isLocalPlayer(k) then
+            local hrp = k:FindFirstChild("HumanoidRootPart") or k:FindFirstChild("Head") or k:FindFirstChild("Torso")
+            if hrp then
+                local d = (hrp.Position - pos).Magnitude
+                if d < nearestDist then
+                    nearestDist = d
+                    nearest = k
                 end
             end
         end
-        lastState = currentState
+    end
+    return nearest
+end
+
+local function startNoliVoidstarWatcher()
+    local map = Workspace:FindFirstChild("Map")
+    if not map then return nil end
+    local ingame = map:FindFirstChild("Ingame")
+    if not ingame then return nil end
+
+    -- Ignore any Voidstar that already exists when the tracker turns on
+    local ignored = {}
+    for _, v in ipairs(ingame:GetChildren()) do
+        if v.Name == "Voidstar" then ignored[v] = true end
+    end
+
+    local watcher = ingame.ChildAdded:Connect(function(child)
+        if not noliTrackerEnabled then return end
+        if child.Name ~= "Voidstar" then return end
+        if ignored[child] then return end
+
+        -- Resolve owner NOW, at spawn, while the projectile is still on the caster
+        local owner = findNearestNoliToPosition(child.Position)
+        if not owner then return end
+
+        -- Remember this specific Voidstar's owner until it despawns
+        noliVoidstarOwnerMap[child] = owner
+
+        local conn
+        conn = child.AncestryChanged:Connect(function()
+            if not child or not child.Parent then
+                if conn then conn:Disconnect() end
+                local resolvedOwner = noliVoidstarOwnerMap[child]
+                noliVoidstarOwnerMap[child] = nil
+                if resolvedOwner and resolvedOwner.Parent then
+                    createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, resolvedOwner, tick() + NOVA_COOLDOWN, "Nova")
+                end
+            end
+        end)
     end)
     return watcher
 end
@@ -2866,6 +2902,7 @@ end
 function stopNoliTracking()
     if noliUpdateConnection then noliUpdateConnection:Disconnect(); noliUpdateConnection = nil end
     if noliVoidstarWatcher then noliVoidstarWatcher:Disconnect(); noliVoidstarWatcher = nil end
+    noliVoidstarOwnerMap = {}
     clearPendingNoliVoidRush()
     for n, ab in pairs(noliActiveCooldownTimers) do
         for _, d in pairs(ab) do
@@ -3219,7 +3256,6 @@ local function createAzureCooldownDisplay(a, endTime, ability)
             return
         end
 
-        -- Re-evaluate form each frame and toggle visibility
         local curBeast = checkAzureBeastMode(a)
         if curBeast ~= data.isBeast then
             data.isBeast = curBeast
@@ -3403,38 +3439,57 @@ function resetNosferatuBloodhookCooldown(n)
     createNosferatuCooldownDisplay(n, tick() + BLOODHOOK_COOLDOWN, "Bloodhook")
 end
 
-function checkForNosferatuBats()
-    local m = Workspace:FindFirstChild("Map")
-    if not m then return end
-    local ig = m:FindFirstChild("Ingame")
-    if not ig then return end
-    local bats = ig:FindFirstChild("Bats")
-    if bats then
-        local found
-        for _, n in ipairs(getAllNosferatus()) do
-            if not isLocalPlayer(n) then
-                local hrp = n:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position - bats.Position).Magnitude < 50 then found = n; break end
-            end
-        end
-        if found then
-            nosferatuHunterFeastActive[found] = true
-            if not nosferatuHunterFeastTracked[found] then
-                nosferatuHunterFeastTracked[found] = true
-                local conn
-                conn = bats.AncestryChanged:Connect(function()
-                    if not bats or not bats.Parent then
-                        if conn then conn:Disconnect() end
-                        nosferatuHunterFeastTracked[found] = nil
-                        if nosferatuHunterFeastActive[found] then
-                            nosferatuHunterFeastActive[found] = nil
-                            createNosferatuCooldownDisplay(found, tick() + HUNTERS_FEAST_COOLDOWN, "Hunter's Feast")
-                        end
-                    end
-                end)
+local function findNearestNosferatuToPosition(pos)
+    local nearest, nearestDist = nil, math.huge
+    for _, n in ipairs(getAllNosferatus()) do
+        if not isLocalPlayer(n) then
+            local hrp = n:FindFirstChild("HumanoidRootPart") or n:FindFirstChild("Head") or n:FindFirstChild("Torso")
+            if hrp then
+                local d = (hrp.Position - pos).Magnitude
+                if d < nearestDist then
+                    nearestDist = d
+                    nearest = n
+                end
             end
         end
     end
+    return nearest
+end
+
+local function startNosferatuBatsWatcher()
+    local map = Workspace:FindFirstChild("Map")
+    if not map then return nil end
+    local ingame = map:FindFirstChild("Ingame")
+    if not ingame then return nil end
+
+    local ignored = {}
+    for _, v in ipairs(ingame:GetChildren()) do
+        if v.Name == "Bats" then ignored[v] = true end
+    end
+
+    local watcher = ingame.ChildAdded:Connect(function(child)
+        if not nosferatuTrackerEnabled then return end
+        if child.Name ~= "Bats" then return end
+        if ignored[child] then return end
+
+        local owner = findNearestNosferatuToPosition(child.Position)
+        if not owner then return end
+
+        nosferatuHunterFeastTracked[child] = owner
+
+        local conn
+        conn = child.AncestryChanged:Connect(function()
+            if not child or not child.Parent then
+                if conn then conn:Disconnect() end
+                local resolvedOwner = nosferatuHunterFeastTracked[child]
+                nosferatuHunterFeastTracked[child] = nil
+                if resolvedOwner and resolvedOwner.Parent then
+                    createNosferatuCooldownDisplay(resolvedOwner, tick() + HUNTERS_FEAST_COOLDOWN, "Hunter's Feast")
+                end
+            end
+        end)
+    end)
+    return watcher
 end
 
 function listenForNosferatuAbilities(n)
@@ -3489,16 +3544,17 @@ function startNosferatuTracking()
     if nosferatuUpdateConnection then return end
     scanForAllNosferatus()
     watchForNewNosferatus()
+    nosferatuBatsWatcher = startNosferatuBatsWatcher()
     nosferatuUpdateConnection = RunService.Heartbeat:Connect(function()
         if nosferatuTrackerEnabled then
             scanForAllNosferatus()
-            checkForNosferatuBats()
         end
     end)
 end
 
 function stopNosferatuTracking()
     if nosferatuUpdateConnection then nosferatuUpdateConnection:Disconnect(); nosferatuUpdateConnection = nil end
+    if nosferatuBatsWatcher then nosferatuBatsWatcher:Disconnect(); nosferatuBatsWatcher = nil end
     for n, ab in pairs(nosferatuActiveCooldownTimers) do
         for _, d in pairs(ab) do
             if d.billboard then pcall(function() d.billboard:Destroy() end) end
@@ -4726,8 +4782,7 @@ local function getNearestKillerForDusekkar()
     if not myChar then return nil end
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
-    local nearestKiller = nil
-    local nearestDistance = math.huge
+    local nearestKiller = nil    local nearestDistance = math.huge
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
@@ -5095,4 +5150,4 @@ setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
 
-print("took too long for this update to fix the entire script")
+print("loaded, also matthew sucks")
