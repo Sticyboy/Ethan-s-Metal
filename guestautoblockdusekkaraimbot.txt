@@ -83,7 +83,7 @@ autoBlockTriggerSounds = {
     ["108651070773439"] = true, ["131123355704017"] = true, ["128856426573270"] = true, ["128367348686124"] = true,
     ["104910828105172"] = true, ["140242176732868"] = true, ["115026634746636"] = true, ["84116622032112"] = true,
     ["108907358619313"] = true, ["127793641088496"] = true, ["86174610237192"] = true, ["95079963655241"] = true,
-    ["101199185291628"] = true, ["119942598489800"] = true, ["84307400688050"] = true, ["70626755789950"] = true,
+    ["101199185291628"] = true, ["119942598489800"] = true, ["84307400688050"] = true,
     ["105200830849301"] = true, ["75330693422988"] = true, ["124397369810639"] = true, ["107444859834748"] = true,
     ["82221759983649"] = true, ["76467993976301"] = true, ["81702359653578"] = true, ["128195973631079"] = true,
     ["108610718831698"] = true, ["112395455254818"] = true, ["109431876587852"] = true, ["109348678063422"] = true,
@@ -100,7 +100,7 @@ autoBlockTriggerSounds = {
     ["99856718263455"] = true, ["88589682639517"] = true, ["109570290393196"] = true, ["70739368096233"] = true,
     ["105516183226360"] = true, ["98742773509325"] = true, ["73662192846371"] = true, ["132581672170205"] = true,
     ["112809109188560"] = true, ["77649238882198"] = true, ["94632255644411"] = true, ["92869747208256"] = true, 
-    ["93299090238530"] = true, ["79612713897495"] = true, 
+    ["93299090238530"] = true, ["79612713897495"] = true, ["70626755789950"] = true, 
 }
 
 autoBlockTriggerAnimations = {
@@ -497,6 +497,32 @@ MESSAGE_BLOCK_COOLDOWN = 0.6
 autoBlockEnabledTime = 0
 autoCloneEnabledTime = 0
 
+-- Indicators
+indicatorsEnabled = false
+indicatorGui = nil
+indicatorContainer = nil
+indicatorLabels = {}
+INDICATOR_AIMBOT_CHARS = {
+    Survivors = {
+        Shedletsky = true,
+        TwoTime = true,
+        Chance = true,
+        JaneDoe = true,
+        Elliot = true,
+        Guest1337 = true,
+    },
+    Killers = {
+        Slasher = true,
+        JohnDoe = true,
+        ["1x1x1x1"] = true,
+        Sixer = true,
+        c00lkidd = true,
+        Noli = true,
+        Azure = true,
+        Nosferatu = true,
+    },
+}
+
 -- LOCAL hot-path helpers
 local function SendNotif(title, text, duration)
     pcall(function()
@@ -508,6 +534,107 @@ local function pressKey(keyCode)
     VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
     task.wait(0.05)
     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+end
+
+-- ===== INDICATOR FUNCTIONS =====
+local function ensureIndicatorGui()
+    if not PlayerGui then return nil end
+    if indicatorGui and indicatorGui.Parent then return indicatorGui end
+    indicatorGui = Instance.new("ScreenGui")
+    indicatorGui.Name = "PillagerIndicators"
+    indicatorGui.ResetOnSpawn = false
+    indicatorGui.IgnoreGuiInset = true
+    indicatorGui.DisplayOrder = 999
+    indicatorGui.Parent = PlayerGui
+
+    indicatorContainer = Instance.new("Frame")
+    indicatorContainer.Name = "IndicatorContainer"
+    indicatorContainer.Size = UDim2.new(0, 200, 0, 100)
+    indicatorContainer.Position = UDim2.new(0.5, 0, 1, 0)
+    indicatorContainer.AnchorPoint = Vector2.new(0.5, 1)
+    indicatorContainer.BackgroundTransparency = 1
+    indicatorContainer.Parent = indicatorGui
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 0)
+    layout.Parent = indicatorContainer
+
+    return indicatorGui
+end
+
+local function clearIndicatorLabels()
+    if not indicatorContainer then return end
+    for _, c in ipairs(indicatorContainer:GetChildren()) do
+        if c:IsA("TextLabel") then c:Destroy() end
+    end
+    indicatorLabels = {}
+end
+
+local function addIndicatorLabel(text, color, order)
+    if not indicatorContainer then return nil end
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.LayoutOrder = order
+    label.Parent = indicatorContainer
+    indicatorLabels[order] = label
+    return label
+end
+
+function refreshIndicators()
+    if not indicatorsEnabled then
+        if indicatorGui then indicatorGui.Enabled = false end
+        return
+    end
+    ensureIndicatorGui()
+    if not indicatorContainer then return end
+    indicatorGui.Enabled = true
+    clearIndicatorLabels()
+
+    local team, charName = getMyCharacterInfo()
+    if not team or not charName then return end
+
+    -- Aimbot indicator: killers or specific survivors
+    local showAimbot = false
+    if team == "Killer" and INDICATOR_AIMBOT_CHARS.Killers[charName] then
+        showAimbot = true
+    elseif team == "Survivor" and INDICATOR_AIMBOT_CHARS.Survivors[charName] then
+        showAimbot = true
+    end
+
+    if showAimbot then
+        addIndicatorLabel("Aimbot: " .. (aimbotEnabled and "True" or "False"),
+            aimbotEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0), 1)
+    end
+
+    -- Guest Auto Block
+    if team == "Survivor" and charName == "Guest1337" then
+        addIndicatorLabel("Auto Block: " .. (autoBlockForGuest and "True" or "False"),
+            autoBlockForGuest and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0), 2)
+    end
+
+    -- 7n7 Auto Clone
+    if team == "Survivor" and (charName == "007n7" or charName == "7n7") then
+        addIndicatorLabel("Auto Clone: " .. (autoCloneFor7n7 and "True" or "False"),
+            autoCloneFor7n7 and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0), 2)
+    end
+
+    -- Dusekkar target mode
+    if team == "Survivor" and charName == "Dusekkar" then
+        local isSurvivorMode = (dusekkarTargetMode == "Survivors")
+        addIndicatorLabel("Target: " .. (isSurvivorMode and "Survivor" or "Killer"),
+            isSurvivorMode and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0), 3)
+    end
 end
 
 local function refreshUIRefs()
@@ -565,7 +692,7 @@ local function extractNumericAnimationId(animationId)
     return id:match("rbxassetid://(%d+)") or id:match("://(%d+)") or id:match("^(%d+)$")
 end
 
-local function getMyCharacterInfo()
+function getMyCharacterInfo()
     if SurvivorsFolder then
         for _, s in ipairs(SurvivorsFolder:GetChildren()) do
             local u = s:GetAttribute("Username")
@@ -2850,7 +2977,6 @@ local function startNoliVoidstarWatcher()
     local ingame = map:FindFirstChild("Ingame")
     if not ingame then return nil end
 
-    -- Ignore any Voidstar that already exists when the tracker turns on
     local ignored = {}
     for _, v in ipairs(ingame:GetChildren()) do
         if v.Name == "Voidstar" then ignored[v] = true end
@@ -2861,11 +2987,9 @@ local function startNoliVoidstarWatcher()
         if child.Name ~= "Voidstar" then return end
         if ignored[child] then return end
 
-        -- Resolve owner NOW, at spawn, while the projectile is still on the caster
         local owner = findNearestNoliToPosition(child.Position)
         if not owner then return end
 
-        -- Remember this specific Voidstar's owner until it despawns
         noliVoidstarOwnerMap[child] = owner
 
         local conn
@@ -4782,7 +4906,8 @@ local function getNearestKillerForDusekkar()
     if not myChar then return nil end
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
-    local nearestKiller = nil    local nearestDistance = math.huge
+    local nearestKiller = nil
+    local nearestDistance = math.huge
     for _, killer in ipairs(KillersFolder:GetChildren()) do
         local usernameAttr = killer:GetAttribute("Username")
         if not (usernameAttr and usernameAttr == lp.Name) then
@@ -5120,6 +5245,18 @@ VisualsTab:CreateButton({
 
 VisualsTab:CreateToggle({ Name = "Inventory ESP - Shows items below survivors", CurrentValue = false, Flag = "InventoryEspToggle", Callback = function(Value) inventoryEspEnabled = Value; if Value then updateInventoryESP(); if not inventoryEspConnection then inventoryEspConnection = RunService.Heartbeat:Connect(function() updateInventoryESP() end) end; SendNotif("Inventory ESP", "Enabled", 2) else for _, bb in pairs(inventoryEspBillboards) do pcall(function() bb:Destroy() end) end; inventoryEspBillboards = {}; if inventoryEspConnection then inventoryEspConnection:Disconnect(); inventoryEspConnection = nil end; SendNotif("Inventory ESP", "Disabled", 1) end end })
 
+-- ===== INDICATORS TOGGLE (NEW) =====
+VisualsTab:CreateToggle({
+    Name = "Enable Indicators",
+    CurrentValue = false,
+    Flag = "IndicatorsToggle",
+    Callback = function(Value)
+        indicatorsEnabled = Value
+        refreshIndicators()
+        SendNotif("Indicators", Value and "Enabled" or "Disabled", 2)
+    end
+})
+
 DusekkarTab = Window:CreateTab("Dusekkar", 4483362458)
 DusekkarToggle = DusekkarTab:CreateToggle({
     Name = "Enable Dusekkar Silent Aim",
@@ -5149,5 +5286,10 @@ task.spawn(setupInputHook)
 setupSilentAim()
 refreshUIRefs()
 Rayfield:LoadConfiguration()
+
+-- ===== INDICATORS HEARTBEAT REFRESH (NEW) =====
+RunService.Heartbeat:Connect(function()
+    if indicatorsEnabled then pcall(refreshIndicators) end
+end)
 
 print("loaded, also matthew sucks")
