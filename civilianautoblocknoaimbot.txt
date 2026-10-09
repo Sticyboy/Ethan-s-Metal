@@ -1,0 +1,607 @@
+-- ============================================================
+--  AUTOBLOCK — Civilian vs Pursuer / Badware / Harken
+--  - Fires UseAbility("Block") when a tracked killer uses a tracked attack sound
+--  - BoltStartup waits until TimePosition >= 0.3s before blocking
+--  - All other sounds block instantly
+--  - Range circle, facing check, indicators
+-- ============================================================
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Autoblock",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "Civilian Autoblock",
+    ConfigurationSaving = { Enabled = true, FolderName = "Autoblock", FileName = "Settings" },
+    Discord = { Enabled = false },
+    KeySystem = false,
+})
+
+local AutoBlockTab = Window:CreateTab("Auto Block", "shield")
+
+-- ===== SERVICES =====
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+local lp = Players.LocalPlayer
+
+-- ===== REMOTE =====
+local UseAbility = ReplicatedStorage:WaitForChild("Events")
+    :WaitForChild("RemoteFunctions")
+    :WaitForChild("UseAbility")
+
+-- ===== CONFIG =====
+-- Per-killer sound watchlist. Only sounds in the killer's own list will trigger a block.
+local TRACKED_SOUNDS = {
+    Pursuer = {
+        Cleave = true,
+        CleaveVariantWindup = true,
+        HowlVariantWindup = true,
+        Swing = true,
+    },
+    Badware = {
+        BoltLoop = true,
+        BoltStartup = true,
+        Swing = true,
+    },
+    Harken = {
+        Swing = true,
+    },
+}
+
+-- Sounds that should wait until they've been playing for at least N seconds
+-- before firing the block.
+-- Keyed by [KillerName][SoundName] = seconds
+-- Everything NOT in this list blocks instantly on .Played
+local SOUNDS_THAT_WAIT = {
+    Badware = {
+        BoltStartup = 0.3,
+    },
+}
+
+-- ===== STATE =====
+local autoBlockEnabled = false
+local facingCheckEnabled = true
+local customFacingDot = -0.3
+local detectionRange = 18
+local rangeVisualEnabled = false
+
+-- ===== INDICATORS =====
+local indicatorsEnabled = false
+local indicatorGui = nil
+local indicatorContainer = nil
+local indicatorLabels = {}
+
+-- ===== RUNTIME DATA =====
+local killerData = {}
+local detectionCircles = {}
+local scanConnection = nil
+local lastVisualUpdate = 0
+local VISUAL_UPDATE_COOLDOWN = 0.5
+
+-- ===== HELPERS =====
+local function SendNotif(title, text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title or "Autoblock",
+            Text = text or "",
+            Duration = duration or 3,
+        })
+    end)
+end
+
+local function getTeamsFolder()
+    local gameAssets = Workspace:FindFirstChild("GameAssets")
+    if not gameAssets then return nil end
+    return gameAssets:FindFirstChild("Teams")
+end
+
+local function getKillerFolder()
+    local teams = getTeamsFolder()
+    if not teams then return nil end
+    return teams:FindFirstChild("Killer")
+end
+
+local function getSurvivorFolder()
+    local teams = getTeamsFolder()
+    if not teams then return nil end
+    return teams:FindFirstChild("Survivor")
+end
+
+local function amISurvivor()
+    local survivors = getSurvivorFolder()
+    if not survivors then return false end
+    for _, child in ipairs(survivors:GetChildren()) do
+        if child.Name == lp.Name then
+            return true
+        end
+    end
+    return false
+end
+
+-- ===== INDICATOR GUI =====
+local function ensureIndicatorGui()
+    local playerGui = lp:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+    if indicatorGui and indicatorGui.Parent then return indicatorGui end
+
+    indicatorGui = Instance.new("ScreenGui")
+    indicatorGui.Name = "AutoblockIndicators"
+    indicatorGui.ResetOnSpawn = false
+    indicatorGui.IgnoreGuiInset = true
+    indicatorGui.DisplayOrder = 999
+    indicatorGui.Parent = playerGui
+
+    indicatorContainer = Instance.new("Frame")
+    indicatorContainer.Name = "IndicatorContainer"
+    indicatorContainer.Size = UDim2.new(0, 200, 0, 100)
+    indicatorContainer.Position = UDim2.new(0.5, 0, 1, 0)
+    indicatorContainer.AnchorPoint = Vector2.new(0.5, 1)
+    indicatorContainer.BackgroundTransparency = 1
+    indicatorContainer.Parent = indicatorGui
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 0)
+    layout.Parent = indicatorContainer
+
+    return indicatorGui
+end
+
+local function clearIndicatorLabels()
+    if not indicatorContainer then return end
+    for _, c in ipairs(indicatorContainer:GetChildren()) do
+        if c:IsA("TextLabel") then c:Destroy() end
+    end
+    indicatorLabels = {}
+end
+
+local function addIndicatorLabel(text, color, order)
+    if not indicatorContainer then return nil end
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.LayoutOrder = order
+    label.Parent = indicatorContainer
+    indicatorLabels[order] = label
+    return label
+end
+
+function refreshIndicators()
+    if not indicatorsEnabled then
+        if indicatorGui then indicatorGui.Enabled = false end
+        return
+    end
+    ensureIndicatorGui()
+    if not indicatorContainer then return end
+
+    indicatorGui.Enabled = true
+    clearIndicatorLabels()
+
+    addIndicatorLabel(
+        "Autoblock: " .. (autoBlockEnabled and "True" or "False"),
+        autoBlockEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 60, 60),
+        1
+    )
+end
+
+-- ===== FACING CHECK =====
+local function isFacing(localRoot, targetRoot)
+    if not facingCheckEnabled then return true end
+    local dx = localRoot.Position.X - targetRoot.Position.X
+    local dy = localRoot.Position.Y - targetRoot.Position.Y
+    local dz = localRoot.Position.Z - targetRoot.Position.Z
+    local mag = math.sqrt(dx*dx + dy*dy + dz*dz)
+    if mag == 0 then return true end
+    local inv = 1 / mag
+    local ux, uy, uz = dx * inv, dy * inv, dz * inv
+    local lv = targetRoot.CFrame.LookVector
+    return (lv.X * ux + lv.Y * uy + lv.Z * uz) > customFacingDot
+end
+
+-- ===== FIRE BLOCK =====
+local function fireBlock()
+    if not amISurvivor() then return end
+    pcall(function()
+        UseAbility:InvokeServer("Block")
+    end)
+end
+
+-- ===== RANGE VISUAL =====
+local function safeDestroyCircle(c)
+    if not c then return end
+    pcall(function()
+        if c.Parent then c:Destroy() end
+    end)
+end
+
+local function updateRangeVisuals()
+    local now = tick()
+    if now - lastVisualUpdate < VISUAL_UPDATE_COOLDOWN then return end
+    lastVisualUpdate = now
+
+    for _, c in pairs(detectionCircles) do safeDestroyCircle(c) end
+    detectionCircles = {}
+
+    if not rangeVisualEnabled then return end
+
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    local killerFolder = getKillerFolder()
+    if not killerFolder then return end
+
+    for _, killer in ipairs(killerFolder:GetChildren()) do
+        local killerName = killer:GetAttribute("KillerName")
+        if killerName and TRACKED_SOUNDS[killerName] then
+            local hrp = killer:FindFirstChild("HumanoidRootPart")
+            if hrp and not hrp:FindFirstChild("AutoblockRangeCircle") then
+                local inRange = (hrp.Position - myRoot.Position).Magnitude <= detectionRange
+                pcall(function()
+                    local c = Instance.new("CylinderHandleAdornment")
+                    c.Name = "AutoblockRangeCircle"
+                    c.Adornee = hrp
+                    c.Color3 = inRange and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 165, 0)
+                    c.AlwaysOnTop = true
+                    c.ZIndex = 1
+                    c.Transparency = 0.6
+                    c.Radius = detectionRange
+                    c.Height = 0.12
+                    c.CFrame = CFrame.new(0, -(hrp.Size.Y / 2 + 0.05), 0) * CFrame.Angles(math.rad(90), 0, 0)
+                    c.Parent = hrp
+                    detectionCircles[killer] = c
+                end)
+            end
+        end
+    end
+end
+
+-- ===== KILLER SCANNING =====
+local function isKillerAlive(killer)
+    local humanoid = killer:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    local health = humanoid:GetAttribute("Health") or humanoid.Health
+    return health and health > 0
+end
+
+local function isKillerInRange(killer)
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+    local hrp = killer:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    return (hrp.Position - myRoot.Position).Magnitude <= detectionRange
+end
+
+local function allGatesPass(killer)
+    if not autoBlockEnabled then return false end
+    if not amISurvivor() then return false end
+    if not isKillerAlive(killer) then return false end
+    if not isKillerInRange(killer) then return false end
+
+    local myRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    local killerRoot = killer:FindFirstChild("HumanoidRootPart")
+    if not myRoot or not killerRoot then return false end
+    if not isFacing(myRoot, killerRoot) then return false end
+
+    return true
+end
+
+-- ===== SOUND HOOKS =====
+local function hookSound(killer, sound)
+    if not sound:IsA("Sound") then return end
+    if sound:GetAttribute("AutoblockHooked") then return end
+    sound:SetAttribute("AutoblockHooked", true)
+
+    sound.Played:Connect(function()
+        if not allGatesPass(killer) then return end
+
+        local killerName = killer:GetAttribute("KillerName")
+        local waitSeconds = nil
+        if killerName and SOUNDS_THAT_WAIT[killerName] then
+            waitSeconds = SOUNDS_THAT_WAIT[killerName][sound.Name]
+        end
+
+        if type(waitSeconds) ~= "number" or waitSeconds <= 0 then
+            fireBlock()
+            return
+        end
+
+        task.spawn(function()
+            local startTime = tick()
+            local fired = false
+
+            while not fired do
+                if tick() - startTime > 10 then return end
+
+                if not sound.Playing and sound.TimePosition < waitSeconds then
+                    return
+                end
+
+                if sound.TimePosition >= waitSeconds then
+                    if allGatesPass(killer) then
+                        fireBlock()
+                    end
+                    fired = true
+                    return
+                end
+
+                RunService.Heartbeat:Wait()
+            end
+        end)
+    end)
+end
+
+local function hookKillerSounds(killer)
+    local hrp = killer:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local killerName = killer:GetAttribute("KillerName")
+    local soundList = killerName and TRACKED_SOUNDS[killerName]
+    if not soundList then return end
+
+    for _, child in ipairs(hrp:GetChildren()) do
+        if child:IsA("Sound") and soundList[child.Name] then
+            hookSound(killer, child)
+        end
+    end
+end
+
+-- ===== CLEANUP KILLER =====
+local function clearKillerData(killer)
+    local data = killerData[killer]
+    if data then
+        if data.soundConnections then
+            for _, conn in ipairs(data.soundConnections) do
+                pcall(function() conn:Disconnect() end)
+            end
+        end
+        killerData[killer] = nil
+    end
+
+    if detectionCircles[killer] then
+        safeDestroyCircle(detectionCircles[killer])
+        detectionCircles[killer] = nil
+    end
+
+    local hrp = killer and killer:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local c = hrp:FindFirstChild("AutoblockRangeCircle")
+        if c then pcall(function() c:Destroy() end) end
+    end
+end
+
+-- ===== SCAN KILLERS =====
+local function scanKillers()
+    local killerFolder = getKillerFolder()
+    if not killerFolder then return end
+
+    local seen = {}
+
+    for _, killer in ipairs(killerFolder:GetChildren()) do
+        local killerName = killer:GetAttribute("KillerName")
+        if killerName and TRACKED_SOUNDS[killerName] then
+            seen[killer] = true
+
+            if not killerData[killer] then
+                killerData[killer] = {
+                    soundConnections = {},
+                    killerName = killerName,
+                }
+            end
+
+            hookKillerSounds(killer)
+
+            if not killer:GetAttribute("AutoblockScanBound") then
+                killer:SetAttribute("AutoblockScanBound", true)
+
+                task.spawn(function()
+                    local hrp = killer:WaitForChild("HumanoidRootPart", 10)
+                    if hrp then
+                        hookKillerSounds(killer)
+
+                        hrp.ChildAdded:Connect(function(child)
+                            if child:IsA("Sound") then
+                                local kName = killer:GetAttribute("KillerName")
+                                local sList = kName and TRACKED_SOUNDS[kName]
+                                if sList and sList[child.Name] then
+                                    hookSound(killer, child)
+                                end
+                            end
+                        end)
+                    end
+                end)
+            end
+        end
+    end
+
+    for killer, _ in pairs(killerData) do
+        if not seen[killer] or not killer.Parent then
+            clearKillerData(killer)
+        end
+    end
+end
+
+-- ===== WATCH KILLER FOLDER =====
+local function bindKillerFolder()
+    local killerFolder = getKillerFolder()
+    if not killerFolder then return end
+    if killerFolder:GetAttribute("AutoblockFolderBound") then return end
+    killerFolder:SetAttribute("AutoblockFolderBound", true)
+
+    killerFolder.ChildAdded:Connect(function(child)
+        task.wait(0.3)
+        scanKillers()
+    end)
+
+    killerFolder.ChildRemoved:Connect(function(child)
+        clearKillerData(child)
+    end)
+end
+
+-- ===== START / STOP =====
+local function startAutoblock()
+    if scanConnection then return end
+
+    bindKillerFolder()
+    scanKillers()
+
+    scanConnection = RunService.Heartbeat:Connect(function()
+        pcall(scanKillers)
+        pcall(updateRangeVisuals)
+        if indicatorsEnabled then pcall(refreshIndicators) end
+    end)
+end
+
+local function stopAutoblock()
+    if scanConnection then
+        scanConnection:Disconnect()
+        scanConnection = nil
+    end
+
+    for _, c in pairs(detectionCircles) do safeDestroyCircle(c) end
+    detectionCircles = {}
+
+    local killerFolder = getKillerFolder()
+    if killerFolder then
+        for _, killer in ipairs(killerFolder:GetChildren()) do
+            local hrp = killer:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local c = hrp:FindFirstChild("AutoblockRangeCircle")
+                if c then pcall(function() c:Destroy() end) end
+            end
+        end
+    end
+end
+
+startAutoblock()
+
+-- ============================================================
+--  RAYFIELD UI — Auto Block tab
+-- ============================================================
+
+AutoBlockTab:CreateSection("Autoblock")
+
+local AutoBlockToggle = AutoBlockTab:CreateToggle({
+    Name = "Auto Block Civilian",
+    CurrentValue = false,
+    Flag = "AutoblockCivilianToggle",
+    Callback = function(Value)
+        autoBlockEnabled = Value
+        SendNotif("Autoblock", Value and "Enabled" or "Disabled", Value and 2 or 1)
+        refreshIndicators()
+    end
+})
+
+AutoBlockTab:CreateKeybind({
+    Name = "Auto Block Civilian Keybind",
+    CurrentKeybind = "T",
+    HoldToInteract = false,
+    Flag = "AutoblockCivilianKey",
+    Callback = function()
+        local nv = not autoBlockEnabled
+        autoBlockEnabled = nv
+        if AutoBlockToggle then AutoBlockToggle:Set(nv) end
+        SendNotif("Autoblock", nv and "Enabled" or "Disabled", 1)
+        refreshIndicators()
+    end,
+})
+
+AutoBlockTab:CreateSection("Detection")
+
+AutoBlockTab:CreateToggle({
+    Name = "Enable Facing Check",
+    CurrentValue = true,
+    Flag = "FacingCheckToggle",
+    Callback = function(Value)
+        facingCheckEnabled = Value
+    end,
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Facing Check angle (DOT)",
+    PlaceholderText = "-0.3",
+    RemoveTextAfterFocusLost = false,
+    Flag = "FacingCheckDot",
+    Callback = function(Text)
+        local v = tonumber(Text)
+        if v then customFacingDot = v end
+    end,
+})
+
+AutoBlockTab:CreateInput({
+    Name = "Detection Range",
+    PlaceholderText = "18",
+    RemoveTextAfterFocusLost = false,
+    Flag = "DetectionRangeInput",
+    Callback = function(Text)
+        local v = tonumber(Text)
+        if v and v > 0 then detectionRange = v end
+    end,
+})
+
+AutoBlockTab:CreateToggle({
+    Name = "Range Visual",
+    CurrentValue = false,
+    Flag = "RangeVisualToggle",
+    Callback = function(Value)
+        rangeVisualEnabled = Value
+        if not Value then
+            for _, c in pairs(detectionCircles) do safeDestroyCircle(c) end
+            detectionCircles = {}
+
+            local killerFolder = getKillerFolder()
+            if killerFolder then
+                for _, killer in ipairs(killerFolder:GetChildren()) do
+                    local hrp = killer:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local c = hrp:FindFirstChild("AutoblockRangeCircle")
+                        if c then pcall(function() c:Destroy() end) end
+                    end
+                end
+            end
+        end
+    end,
+})
+
+AutoBlockTab:CreateSection("UI")
+
+AutoBlockTab:CreateToggle({
+    Name = "Enable Indicators",
+    CurrentValue = false,
+    Flag = "IndicatorsToggle",
+    Callback = function(Value)
+        indicatorsEnabled = Value
+        refreshIndicators()
+        SendNotif("Indicators", Value and "Enabled" or "Disabled", 2)
+    end,
+})
+
+-- ============================================================
+--  LOAD
+-- ============================================================
+
+Rayfield:LoadConfiguration()
+
+print("[autoblock] loaded")
+print("  - fires: UseAbility:InvokeServer(\"Block\")")
+local killerNames = {}
+for name, sounds in pairs(TRACKED_SOUNDS) do
+    local soundNames = {}
+    for sname in pairs(sounds) do table.insert(soundNames, sname) end
+    table.insert(killerNames, name .. " (" .. table.concat(soundNames, ", ") .. ")")
+end
+print("  - watching:", table.concat(killerNames, " | "))
+print("  - waits:", "Badware.BoltStartup >= 0.3s")
