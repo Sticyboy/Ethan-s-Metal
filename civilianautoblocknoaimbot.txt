@@ -34,7 +34,6 @@ local UseAbility = ReplicatedStorage:WaitForChild("Events")
     :WaitForChild("UseAbility")
 
 -- ===== CONFIG =====
--- Per-killer sound watchlist. Only sounds in the killer's own list will trigger a block.
 local TRACKED_SOUNDS = {
     Pursuer = {
         Cleave = true,
@@ -55,10 +54,6 @@ local TRACKED_SOUNDS = {
     },
 }
 
--- Sounds that should wait until they've been playing for at least N seconds
--- before firing the block.
--- Keyed by [KillerName][SoundName] = seconds
--- Everything NOT in this list blocks instantly on .Played
 local SOUNDS_THAT_WAIT = {
     Badware = {
         BoltStartup = 0.3,
@@ -125,28 +120,45 @@ local function amISurvivor()
     return false
 end
 
--- ===== HAS BLOCK ABILITY CHECK =====
+-- ===== HAS BLOCK ABILITY CHECK (robust, respawn-safe) =====
 local function hasBlockAbility()
+    -- Fresh lookups every call -- no caching -- handles respawn
     local playerGui = lp:FindFirstChild("PlayerGui")
     if not playerGui then return false end
+
     local mainGui = playerGui:FindFirstChild("MainGui")
     if not mainGui then return false end
+
     local roundUI = mainGui:FindFirstChild("RoundUI")
     if not roundUI then return false end
+
     local civilian = roundUI:FindFirstChild("Civilian")
     if not civilian then return false end
+
     local tasks = civilian:FindFirstChild("Tasks")
     if not tasks then return false end
+
     local list = tasks:FindFirstChild("List")
     if not list then return false end
-    return list:FindFirstChild("Block_1") ~= nil
+
+    -- Accept any child whose name starts with "Block_" (Block_1, Block_2, etc.)
+    for _, child in ipairs(list:GetChildren()) do
+        if child.Name:sub(1, 6) == "Block_" then
+            return true
+        end
+    end
+    return false
 end
 
 -- ===== INDICATOR GUI =====
 local function ensureIndicatorGui()
     local playerGui = lp:FindFirstChild("PlayerGui")
     if not playerGui then return nil end
-    if indicatorGui and indicatorGui.Parent then return indicatorGui end
+
+    -- If the cached gui is gone OR parented to a destroyed PlayerGui, rebuild
+    if indicatorGui and indicatorGui.Parent and indicatorGui.Parent == playerGui then
+        return indicatorGui
+    end
 
     indicatorGui = Instance.new("ScreenGui")
     indicatorGui.Name = "AutoblockIndicators"
@@ -523,6 +535,17 @@ local AutoBlockToggle = AutoBlockTab:CreateToggle({
     CurrentValue = false,
     Flag = "AutoblockCivilianToggle",
     Callback = function(Value)
+        -- Block turning ON if the player doesn't have the Block ability
+        if Value and not hasBlockAbility() then
+            if AutoBlockToggle then
+                pcall(function() AutoBlockToggle:Set(false) end)
+            end
+            SendNotif("Autoblock", "You don't have the Block ability", 2)
+            autoBlockEnabled = false
+            refreshIndicators()
+            return
+        end
+
         autoBlockEnabled = Value
         SendNotif("Autoblock", Value and "Enabled" or "Disabled", Value and 2 or 1)
         refreshIndicators()
@@ -535,9 +558,23 @@ AutoBlockTab:CreateKeybind({
     HoldToInteract = false,
     Flag = "AutoblockCivilianKey",
     Callback = function()
+        if not hasBlockAbility() then
+            SendNotif("Autoblock", "You don't have the Block ability", 2)
+            if autoBlockEnabled then
+                autoBlockEnabled = false
+                if AutoBlockToggle then
+                    pcall(function() AutoBlockToggle:Set(false) end)
+                end
+                refreshIndicators()
+            end
+            return
+        end
+
         local nv = not autoBlockEnabled
         autoBlockEnabled = nv
-        if AutoBlockToggle then AutoBlockToggle:Set(nv) end
+        if AutoBlockToggle then
+            pcall(function() AutoBlockToggle:Set(nv) end)
+        end
         SendNotif("Autoblock", nv and "Enabled" or "Disabled", 1)
         refreshIndicators()
     end,
@@ -652,4 +689,4 @@ for name, sounds in pairs(TRACKED_SOUNDS) do
 end
 print("  - watching:", table.concat(killerNames, " | "))
 print("  - waits:", "Badware.BoltStartup >= 0.3s")
-print("  - gate: requires Block_1 in MainGui.RoundUI.Civilian.Tasks.List")
+print("  - gate: requires any Block_* in MainGui.RoundUI.Civilian.Tasks.List")
