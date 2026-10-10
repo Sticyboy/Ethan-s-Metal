@@ -1,8 +1,9 @@
 -- ============================================================
---  AUTOBLOCK — Civilian vs Pursuer / Badware / Harken
+--  AUTOBLOCK — Civilian vs Pursuer / Badware / Harken / Artful
 --  - Fires UseAbility("Block") when a tracked killer uses a tracked attack sound
 --  - BoltStartup waits until TimePosition >= 0.3s before blocking
 --  - All other sounds block instantly
+--  - Toggle + indicators gated behind "has Block ability"
 --  - Range circle, facing check, indicators
 -- ============================================================
 
@@ -47,6 +48,9 @@ local TRACKED_SOUNDS = {
         Swing = true,
     },
     Harken = {
+        Swing = true,
+    },
+    Artful = {
         Swing = true,
     },
 }
@@ -121,6 +125,23 @@ local function amISurvivor()
     return false
 end
 
+-- ===== HAS BLOCK ABILITY CHECK =====
+local function hasBlockAbility()
+    local playerGui = lp:FindFirstChild("PlayerGui")
+    if not playerGui then return false end
+    local mainGui = playerGui:FindFirstChild("MainGui")
+    if not mainGui then return false end
+    local roundUI = mainGui:FindFirstChild("RoundUI")
+    if not roundUI then return false end
+    local civilian = roundUI:FindFirstChild("Civilian")
+    if not civilian then return false end
+    local tasks = civilian:FindFirstChild("Tasks")
+    if not tasks then return false end
+    local list = tasks:FindFirstChild("List")
+    if not list then return false end
+    return list:FindFirstChild("Block_1") ~= nil
+end
+
 -- ===== INDICATOR GUI =====
 local function ensureIndicatorGui()
     local playerGui = lp:FindFirstChild("PlayerGui")
@@ -179,10 +200,11 @@ local function addIndicatorLabel(text, color, order)
 end
 
 function refreshIndicators()
-    if not indicatorsEnabled then
+    if not indicatorsEnabled or not hasBlockAbility() then
         if indicatorGui then indicatorGui.Enabled = false end
         return
     end
+
     ensureIndicatorGui()
     if not indicatorContainer then return end
 
@@ -213,6 +235,7 @@ end
 -- ===== FIRE BLOCK =====
 local function fireBlock()
     if not amISurvivor() then return end
+    if not hasBlockAbility() then return end
     pcall(function()
         UseAbility:InvokeServer("Block")
     end)
@@ -287,6 +310,7 @@ end
 
 local function allGatesPass(killer)
     if not autoBlockEnabled then return false end
+    if not hasBlockAbility() then return false end
     if not amISurvivor() then return false end
     if not isKillerAlive(killer) then return false end
     if not isKillerInRange(killer) then return false end
@@ -461,7 +485,7 @@ local function startAutoblock()
     scanConnection = RunService.Heartbeat:Connect(function()
         pcall(scanKillers)
         pcall(updateRangeVisuals)
-        if indicatorsEnabled then pcall(refreshIndicators) end
+        pcall(refreshIndicators)
     end)
 end
 
@@ -590,6 +614,29 @@ AutoBlockTab:CreateToggle({
 })
 
 -- ============================================================
+--  WATCH BLOCK ABILITY
+-- ============================================================
+
+task.spawn(function()
+    local lastHad = hasBlockAbility()
+    while true do
+        task.wait(0.5)
+        local has = hasBlockAbility()
+        if has ~= lastHad then
+            lastHad = has
+            if not has and autoBlockEnabled then
+                autoBlockEnabled = false
+                if AutoBlockToggle then
+                    pcall(function() AutoBlockToggle:Set(false) end)
+                end
+                SendNotif("Autoblock", "Disabled (lost Block ability)", 2)
+            end
+            refreshIndicators()
+        end
+    end
+end)
+
+-- ============================================================
 --  LOAD
 -- ============================================================
 
@@ -605,3 +652,4 @@ for name, sounds in pairs(TRACKED_SOUNDS) do
 end
 print("  - watching:", table.concat(killerNames, " | "))
 print("  - waits:", "Badware.BoltStartup >= 0.3s")
+print("  - gate: requires Block_1 in MainGui.RoundUI.Civilian.Tasks.List")
