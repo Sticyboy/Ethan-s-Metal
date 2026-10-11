@@ -1,0 +1,203 @@
+--// ============================================================
+--// DoD Infinite Stamina + Realistic Ghost Stamina HUD
+--//
+--// - Real stamina (Movement.Stamina) is forced infinite every frame
+--// - HUD runs its OWN simulation using the REAL DoD constants:
+--//     Drain: 10/sec (20/sec if exhausted)
+--//     Regen: 20/sec
+--//     Post-sprint delay: 0.5s
+--//     Zero-stamina lockout: 1.0s
+--//     No killer/survivor difference
+--// ============================================================
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Cleanup previous instance
+local old = CoreGui:FindFirstChild("DoDStaminaHUD")
+if old then old:Destroy() end
+
+-- ============================================================
+-- REAL DoD STAMINA CONSTANTS
+-- ============================================================
+local CONST = {
+    SPRINT_DRAIN      = 10,    -- SP/sec while sprinting
+    EXHAUSTED_DRAIN   = 20,    -- SP/sec while sprinting + exhausted
+    REGEN_RATE        = 20,    -- SP/sec while regenerating
+    POST_SPRINT_DELAY = 0.5,   -- seconds after unsprinting before regen
+    ZERO_LOCKOUT      = 1.0,   -- seconds of no-regen after hitting 0
+}
+
+-- ============================================================
+-- GRAB MOVEMENT MODULE
+-- ============================================================
+local Movement
+local ok, err = pcall(function()
+    Movement = require(ReplicatedStorage.ClientModules.Gui.Game.Movement)
+end)
+
+if not ok or not Movement then
+    warn("[DoDStamina] Failed to require Movement:", err)
+    return
+end
+
+-- ============================================================
+-- BUILD HUD
+-- ============================================================
+local gui = Instance.new("ScreenGui")
+gui.Name = "DoDStaminaHUD"
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+gui.ResetOnSpawn = false
+gui.Parent = CoreGui
+
+local barBg = Instance.new("Frame")
+barBg.Parent = gui
+barBg.Size = UDim2.new(0, 320, 0, 24)
+barBg.Position = UDim2.new(0, 20, 1, -60)
+barBg.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+barBg.BorderSizePixel = 0
+
+local barFill = Instance.new("Frame")
+barFill.Parent = barBg
+barFill.Size = UDim2.new(1, 0, 1, 0)
+barFill.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+barFill.BorderSizePixel = 0
+
+local barLabel = Instance.new("TextLabel")
+barLabel.Parent = barBg
+barLabel.Size = UDim2.new(1, 0, 1, 0)
+barLabel.BackgroundTransparency = 1
+barLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+barLabel.Font = Enum.Font.SourceSansBold
+barLabel.TextScaled = true
+barLabel.TextStrokeTransparency = 0.5
+barLabel.Text = "100 / 100"
+
+-- ============================================================
+-- GHOST STAMINA STATE
+-- ============================================================
+local ghost = {
+    Stamina = 100,
+    MaxStamina = 100,
+    PostSprintTimer = 0,   -- counts down from 0.5 when sprinting stops
+    ZeroLockout = 0,       -- counts down from 1.0 when stamina hits 0
+}
+
+-- ============================================================
+-- CORE LOOP
+-- ============================================================
+RunService.Heartbeat:Connect(function(dt)
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    -- -------- 1. FORCE REAL STAMINA INFINITE --------
+    if Movement.MaxStamina and Movement.MaxStamina > 0 then
+        Movement.Stamina = Movement.MaxStamina
+    end
+
+    -- -------- 2. DETECT IN-GAME --------
+    local teams = workspace:FindFirstChild("GameAssets")
+        and workspace.GameAssets:FindFirstChild("Teams")
+    local inGame = teams and char:IsDescendantOf(teams)
+
+    if not inGame then
+        ghost.Stamina = ghost.MaxStamina
+        ghost.PostSprintTimer = 0
+        ghost.ZeroLockout = 0
+    else
+        local maxAttr = char:GetAttribute("MaxStamina") or 100
+        ghost.MaxStamina = maxAttr
+        ghost.Stamina = math.min(ghost.Stamina, ghost.MaxStamina)
+
+        local sprinting = char:GetAttribute("Sprinting") == true
+        local moving = false
+        do
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                moving = hrp.AssemblyLinearVelocity.Magnitude > 0.4
+            end
+        end
+
+        -- Modifiers
+        local exhausted   = tonumber(char:GetAttribute("Exhausted") or 0) or 0
+        local pauseRegen  = tonumber(char:GetAttribute("PauseRegen") or 0) or 0
+        local halveRegen  = tonumber(char:GetAttribute("HalveRegen") or 0) or 0
+        local caffeinated = char:GetAttribute("Caffeinated") == true
+
+        -- -------- 3. ARE WE DRAINING? --------
+        local draining = sprinting and moving and ghost.Stamina > 0
+
+        if draining then
+            local drainRate = CONST.SPRINT_DRAIN
+            if exhausted > 0 then
+                drainRate = CONST.EXHAUSTED_DRAIN
+            end
+
+            ghost.Stamina = math.max(0, ghost.Stamina - drainRate * dt)
+            ghost.PostSprintTimer = CONST.POST_SPRINT_DELAY
+
+            if ghost.Stamina <= 0 then
+                ghost.Stamina = 0
+                ghost.ZeroLockout = CONST.ZERO_LOCKOUT
+            end
+        else
+            -- -------- 4. NOT DRAINING — HANDLE TIMERS --------
+            if ghost.PostSprintTimer > 0 then
+                ghost.PostSprintTimer = math.max(0, ghost.PostSprintTimer - dt)
+            end
+
+            if ghost.ZeroLockout > 0 then
+                ghost.ZeroLockout = math.max(0, ghost.ZeroLockout - dt)
+            end
+
+            -- -------- 5. CAN WE REGEN? --------
+            local canRegen = true
+            if ghost.PostSprintTimer > 0 then canRegen = false end
+            if ghost.ZeroLockout > 0      then canRegen = false end
+            if exhausted > 0              then canRegen = false end
+            if pauseRegen > 0             then canRegen = false end
+
+            if canRegen and ghost.Stamina < ghost.MaxStamina then
+                local mult = 1
+                if halveRegen >= 1 then mult = mult * 0.5 end
+                if caffeinated    then mult = mult * 2   end
+
+                local rate = CONST.REGEN_RATE * mult
+                ghost.Stamina = math.min(ghost.MaxStamina, ghost.Stamina + rate * dt)
+            end
+        end
+    end
+
+    -- -------- 6. UPDATE HUD --------
+    local ratio = math.clamp(ghost.Stamina / ghost.MaxStamina, 0, 1)
+    barFill.Size = UDim2.new(ratio, 0, 1, 0)
+
+    local suffix = ""
+    if ghost.ZeroLockout > 0 then
+        suffix = string.format("  (LOCKED %.1fs)", ghost.ZeroLockout)
+    elseif ghost.PostSprintTimer > 0 and ghost.Stamina < ghost.MaxStamina then
+        suffix = string.format("  (%.1fs)", ghost.PostSprintTimer)
+    end
+
+    barLabel.Text = string.format("%d / %d%s",
+        math.floor(ghost.Stamina + 0.5),
+        math.floor(ghost.MaxStamina + 0.5),
+        suffix)
+
+    -- Color
+    if ratio <= 0 then
+        barFill.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+    elseif ratio < 0.2 then
+        barFill.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    elseif ratio < 0.5 then
+        barFill.BackgroundColor3 = Color3.fromRGB(220, 180, 60)
+    else
+        barFill.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+    end
+end)
+
+print("[DoDStamina] Loaded. Real stamina = infinite, HUD = accurate ghost drain/regen.")
