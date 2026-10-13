@@ -155,8 +155,10 @@ local AimbotToggle = nil
 local chainExists = false
 
 -- ===== TOGGLE VARIABLES =====
-local aimbotActive = false  -- True while right-click is held
-local MOUSE_HOLD_BUTTON = Enum.UserInputType.MouseButton2  -- Right click
+local aimbotActive = false
+local useSpaceKey = false
+local MOUSE_HOLD_BUTTON = Enum.UserInputType.MouseButton2
+local SPACE_HOLD_KEY = Enum.KeyCode.Space
 
 -- ===== KEYBIND FUNCTIONS =====
 local function getKeyName(inputType)
@@ -226,7 +228,6 @@ local function wallCheck(targetPosition)
     return false
 end
 
--- Check if CHAIN exists and is alive
 local function checkChainExists()
     local chain = workspace:FindFirstChild("Misc")
     if chain then
@@ -243,7 +244,6 @@ local function checkChainExists()
     return false
 end
 
--- Find CHAIN's head or torso to aim at
 local function findChainTarget()
     local chain = workspace:FindFirstChild("Misc")
     if chain then
@@ -276,27 +276,20 @@ local function startAimbot()
     aimbotConnection = RunService.RenderStepped:Connect(function()
         if not AimbotEnabled then return end
         if UserInputService:GetFocusedTextBox() ~= nil then return end
-        
-        -- Check if aimbot is toggled on
         if not aimbotActive then return end
         
-        -- Track if CHAIN exists
         chainExists = checkChainExists()
         
-        -- Check if player has a character and is alive
         local character = LocalPlayer.Character
         if not character or not isAlive(character) then
             return
         end
         
-        -- If chain exists, aim at chain
         if chainExists then
-            -- Check if we need to hold a tool
             if RequireHoldingTool and not isHoldingItem() then return end
             
             local target = findChainTarget()
             if target then
-                -- Wall check
                 if not wallCheck(target.Position) then
                     local currentCamera = workspace.CurrentCamera
                     if currentCamera then
@@ -318,19 +311,31 @@ local function stopAimbot()
     chainExists = false
 end
 
--- ===== HOLD-TO-AIM SETUP (Right Click) =====
 local function setupHoldListener()
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         if UserInputService:GetFocusedTextBox() ~= nil then return end
-        if input.UserInputType == MOUSE_HOLD_BUTTON then
-            aimbotActive = true
+        
+        if useSpaceKey then
+            if input.KeyCode == SPACE_HOLD_KEY then
+                aimbotActive = true
+            end
+        else
+            if input.UserInputType == MOUSE_HOLD_BUTTON then
+                aimbotActive = true
+            end
         end
     end)
 
     UserInputService.InputEnded:Connect(function(input, gameProcessed)
-        if input.UserInputType == MOUSE_HOLD_BUTTON then
-            aimbotActive = false
+        if useSpaceKey then
+            if input.KeyCode == SPACE_HOLD_KEY then
+                aimbotActive = false
+            end
+        else
+            if input.UserInputType == MOUSE_HOLD_BUTTON then
+                aimbotActive = false
+            end
         end
     end)
 end
@@ -350,7 +355,7 @@ AimbotToggle = AimbotTab:CreateToggle({
             startAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "CHAIN Aimbot enabled | Hold Right Click to aim" .. (RequireHoldingTool and " | Requires holding a tool" or " | No tool required"),
+                Content = "CHAIN Aimbot enabled | Hold " .. (useSpaceKey and "Space" or "Right Click") .. " to aim" .. (RequireHoldingTool and " | Requires holding a tool" or " | No tool required"),
                 Duration = 4,
                 Image = 4483362458
             })
@@ -383,7 +388,24 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
     end,
 })
 
--- Display the hold key
+-- ===== AIM KEY TOGGLE (NEW) =====
+local SpaceAimToggle = AimbotTab:CreateToggle({
+    Name = "Hold space to aimbot instead of right click",
+    CurrentValue = false,
+    Flag = "SpaceAimToggle",
+    Callback = function(Value)
+        useSpaceKey = Value
+        aimbotActive = false
+        local message = Value and "Aimbot now activates while holding Space" or "Aimbot now activates while holding Right Click"
+        Rayfield:Notify({
+            Title = "Aimbot Settings",
+            Content = message,
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
 AimbotTab:CreateLabel("Hold Right Click to aim at CHAIN", "key")
 
 local AimbotSmoothnessSlider = AimbotTab:CreateSlider({
@@ -420,7 +442,6 @@ local WallCheckToggle = AimbotTab:CreateToggle({
     end,
 })
 
--- Setup hold-to-aim listener
 setupHoldListener()
 
 -- ===== BLUEPRINTS TAB =====
@@ -739,6 +760,7 @@ local function toggleQTE(Value)
         qtePollingThreads = {}
         monitorQTE("QTEToma", "QTEToma")
         monitorQTE("QTE", "QTE")
+        monitorQTE("QTEXSaw", "QTEXSaw")
     else
         for _, conn in ipairs(qteConnections) do conn:Disconnect() end
         qteConnections = {}
@@ -994,7 +1016,7 @@ local Button = Tab:CreateButton({
 
 local Divider = Tab:CreateDivider()
 
--- ===== SCRAP ESP (WITH DEATH CLEANUP) =====
+-- ===== SCRAP ESP =====
 local scrapESPEnabled = false
 local scrapComponents = {}
 local scrapScreenGui = nil
@@ -1342,10 +1364,8 @@ local chainCheckConnection = nil
 local chainStatusBillboard = nil
 local chainStatusLabels = {}
 
--- CHAIN's anger requirement (dynamically fetched)
-local MAX_ANGER = 190  -- Default fallback
+local MAX_ANGER = 190
 
--- Function to get CHAIN's actual anger requirement
 local function getChainAngerRequirement()
     local chain = workspace:FindFirstChild("Misc")
     if chain then
@@ -1356,7 +1376,7 @@ local function getChainAngerRequirement()
     end
     
     if not chain then
-        return MAX_ANGER  -- Return default if CHAIN not found
+        return MAX_ANGER
     end
     
     local angerRequirement = chain:GetAttribute("RequirementForAnger")
@@ -1364,7 +1384,7 @@ local function getChainAngerRequirement()
         return angerRequirement
     end
     
-    return MAX_ANGER  -- Fallback to default
+    return MAX_ANGER
 end
 
 local function calculateHealthFromAnger(anger)
@@ -1390,7 +1410,6 @@ local function updateChainStatusDisplay(chain)
     local isQTEImmune = chain:GetAttribute("QTEImmunity") == true
     local anger = chain:GetAttribute("Anger") or 0
     
-    -- Update MAX_ANGER dynamically each time we update the display
     MAX_ANGER = getChainAngerRequirement()
     
     local health = calculateHealthFromAnger(anger)
@@ -1489,7 +1508,6 @@ local function updateChainESP()
     
     local chain = findChain()
     if chain and chain:IsA("Model") then
-        -- Update MAX_ANGER when CHAIN is found
         MAX_ANGER = getChainAngerRequirement()
         print("[CHAIN] Anger Requirement: " .. MAX_ANGER)
         
@@ -1504,7 +1522,6 @@ local function updateChainESP()
         
         local function onAttributeChanged()
             if chain and chain.Parent then
-                -- Update MAX_ANGER on attribute changes
                 MAX_ANGER = getChainAngerRequirement()
                 updateChainStatusDisplay(chain)
             end
