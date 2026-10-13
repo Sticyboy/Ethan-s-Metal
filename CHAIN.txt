@@ -388,7 +388,6 @@ local ToolRequirementToggle = AimbotTab:CreateToggle({
     end,
 })
 
--- ===== AIM KEY TOGGLE (NEW) =====
 local SpaceAimToggle = AimbotTab:CreateToggle({
     Name = "Hold space to aimbot instead of right click",
     CurrentValue = false,
@@ -666,6 +665,238 @@ local Button = Tab:CreateButton({
 local Divider = Tab:CreateDivider()
 local Section = Tab:CreateSection("Inf dodge is sadly patched")
 
+-- ===== AUTO SHOOT =====
+local autoShootEnabled = false
+local autoShootLoopThread = nil
+
+do
+    local RS = game:GetService("ReplicatedStorage")
+    local LP = Players.LocalPlayer
+    local unpack = table.unpack or unpack
+
+    local CONFIG = {
+        weapon = "AK47", hitPart = "Head", baseDamage = 20, packetDamage = 20,
+        spread = 0, distance = 157, interval = 0
+    }
+    local PRESETS = { AK47 = true, DoubleBarrel = true, Deagle = true, M1911 = true }
+
+    local function getInventoryFolder()
+        local pg = LP:FindFirstChild("PlayerGui")
+        local ing = pg and pg:FindFirstChild("Ingame")
+        return ing and ing:FindFirstChild("Inventory")
+    end
+
+    local function hasWeaponInInventory(name)
+        if type(name) ~= "string" or not PRESETS[name] then return false end
+        local inv = getInventoryFolder()
+        if not inv then return false end
+        for _, c in ipairs(inv:GetChildren()) do
+            if c:IsA("ImageLabel") then
+                local v = c:FindFirstChild("Values")
+                local n = v and v:FindFirstChild("ItemName")
+                if n and n.Value == name then return true end
+            end
+        end
+        return false
+    end
+
+    local function isWeaponInHands()
+        local w = CONFIG.weapon
+        local char = LP.Character
+        if not char then return false end
+        local handler = char:FindFirstChild("CharacterHandler")
+        local contents = handler and handler:FindFirstChild("Contents")
+        local values = contents and contents:FindFirstChild("Values")
+        local eq = values and values:FindFirstChild("Equipped")
+        if eq and eq:IsA("BoolValue") and eq.Value ~= true then return false end
+        local names = {w}
+        if w == "Deagle" then names[#names+1] = "DesertEagle" end
+        local strg = char:FindFirstChild("STRG_")
+        for _, n in ipairs(names) do
+            if char:FindFirstChild(n) then return true end
+            if strg and strg:FindFirstChild(n) then return true end
+        end
+        for _, c in ipairs(char:GetChildren()) do
+            if c:IsA("Tool") and (c.Name == w or (w == "Deagle" and c.Name == "DesertEagle")) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function findChain()
+        local misc = workspace:FindFirstChild("Misc")
+        local ai = misc and misc:FindFirstChild("AI")
+        if not ai then return nil end
+        local named = ai:FindFirstChild("CHAIN") or ai:FindFirstChild("Chain")
+        if named then return named end
+        for _, c in ipairs(ai:GetChildren()) do
+            if c:FindFirstChild("HumanoidRootPart") and string.find(string.lower(c.Name), "chain", 1, true) then
+                return c
+            end
+        end
+    end
+
+    local function getSettings()
+        local ii = RS:FindFirstChild("GameStuff")
+        ii = ii and ii:FindFirstChild("ItemInfo")
+        local gun = ii and ii:FindFirstChild(CONFIG.weapon)
+        if not gun then return nil, nil end
+        local setting = gun:FindFirstChild("Setting")
+        if not setting then return nil, gun end
+        local ok, result = pcall(require, setting)
+        if not ok or type(result) ~= "table" then return nil, gun end
+        local s = {}
+        for k, v in pairs(result) do s[k] = v end
+        s.BaseDamage = CONFIG.baseDamage
+        s.Spread = CONFIG.spread
+        return s, gun
+    end
+
+    local function prepare()
+        if not hasWeaponInInventory(CONFIG.weapon) then return nil, nil end
+        if not isWeaponInHands() then return nil, nil end
+        local char = LP.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil, nil end
+        local chain = findChain()
+        if not chain then return nil, nil end
+        local hum = chain:FindFirstChildOfClass("Humanoid")
+        local chainHrp = chain:FindFirstChild("HumanoidRootPart")
+        local target = chain:FindFirstChild(CONFIG.hitPart) or chain:FindFirstChild("Head")
+            or chain:FindFirstChild("UpperTorso") or chain:FindFirstChild("Torso") or chainHrp
+        if not hum or not chainHrp or not target then return nil, nil end
+        local settings, gun = getSettings()
+        if not settings or not gun then return nil, nil end
+        local remotes = RS:FindFirstChild("GameStuff")
+        remotes = remotes and remotes:FindFirstChild("Remotes")
+        local inflict = remotes and remotes:FindFirstChild("InflictTarget")
+        if not inflict then return nil, nil end
+        local dist = CONFIG.distance
+        if dist <= 0 then dist = (hrp.Position - target.Position).Magnitude end
+        local gore = gun:FindFirstChild("GoreEffect")
+        return inflict, {
+            settings, hrp, LP, hum, chainHrp,
+            {CONFIG.packetDamage, 2, true, dist, false, 10000, 1000},
+            {0, 0, false, "", 100},
+            {false, 5, 3},
+            target,
+            {false, {1930359546}, 1, 1.5, 1, gore, 50}
+        }
+    end
+
+    local function fireOnce()
+        local remote, args = prepare()
+        if not remote then return false end
+        pcall(function() remote:InvokeServer(unpack(args, 1, 10)) end)
+        return true
+    end
+
+    local function stopAutoShoot()
+        if autoShootLoopThread then
+            pcall(task.cancel, autoShootLoopThread)
+            autoShootLoopThread = nil
+        end
+    end
+
+    local Toggle = Tab:CreateToggle({
+        Name = "Auto Shoot",
+        CurrentValue = false,
+        Flag = "AutoShoot",
+        Callback = function(Value)
+            autoShootEnabled = Value
+            if autoShootEnabled then
+                if not hasWeaponInInventory(CONFIG.weapon) then
+                    autoShootEnabled = false
+                    Rayfield:Notify({Title = "Auto Shoot", Content = "You need an " .. CONFIG.weapon .. " in your inventory.", Duration = 3, Image = 4483362458})
+                    return
+                end
+                if not isWeaponInHands() then
+                    autoShootEnabled = false
+                    Rayfield:Notify({Title = "Auto Shoot", Content = "Equip your " .. CONFIG.weapon .. " first.", Duration = 3, Image = 4483362458})
+                    return
+                end
+                stopAutoShoot()
+                autoShootLoopThread = task.spawn(function()
+                    while autoShootEnabled do
+                        if not isWeaponInHands() then autoShootEnabled = false break end
+                        fireOnce()
+                        task.wait()
+                    end
+                end)
+            else
+                stopAutoShoot()
+            end
+        end
+    })
+end
+
+-- ===== NO RECOIL =====
+local noRecoilEnabled = false
+local noRecoilCharConn = nil
+local noRecoilLoopThread = nil
+
+do
+    local LP = Players.LocalPlayer
+    local noRecoil = { enabled = false, charConn = nil, loop = nil }
+    local RECOIL_FUNCS = {"DeagleRecoil","DBRecoil","AKRecoil","M1911Recoil"}
+
+    local function killRecoil()
+        local char = LP.Character
+        local handler = char and char:FindFirstChild("CharacterHandler")
+        if not handler then return false end
+        local killed = false
+        if type(getsenv) == "function" then
+            local ok, env = pcall(getsenv, handler)
+            if ok and type(env) == "table" then
+                for i = 1, #RECOIL_FUNCS do
+                    local key = RECOIL_FUNCS[i]
+                    if type(env[key]) == "function" then env[key] = function() end killed = true end
+                end
+                for _, key in ipairs({"v3", "v4"}) do
+                    local t = env[key]
+                    if type(t) == "table" then
+                        pcall(function()
+                            if t.p then t.p = Vector3.zero end
+                            if t.v then t.v = Vector3.zero end
+                            if type(t.accelerate) == "function" then t.accelerate = function() end end
+                        end)
+                    end
+                end
+            end
+        end
+        return killed
+    end
+
+    local function setNoRecoil(state)
+        noRecoil.enabled = state == true
+        if noRecoil.loop then pcall(task.cancel, noRecoil.loop) noRecoil.loop = nil end
+        if not noRecoil.enabled then return end
+        killRecoil()
+        noRecoil.loop = task.spawn(function()
+            while noRecoil.enabled do killRecoil() task.wait(2) end
+            noRecoil.loop = nil
+        end)
+        if not noRecoil.charConn then
+            noRecoil.charConn = LP.CharacterAdded:Connect(function(char)
+                if not noRecoil.enabled then return end
+                task.spawn(function()
+                    char:WaitForChild("CharacterHandler", 10)
+                    task.wait(0.3)
+                    if noRecoil.enabled then killRecoil() end
+                end)
+            end)
+        end
+    end
+
+    local Toggle = Tab:CreateToggle({
+        Name = "No Recoil",
+        CurrentValue = false,
+        Flag = "NoRecoil",
+        Callback = function(Value) setNoRecoil(Value) end
+    })
+end
+
 -- ===== AUTO QTE TOGGLE =====
 local autoQTEEnabled = false
 local qteConnections = {}
@@ -852,6 +1083,192 @@ local Toggle = Tab:CreateToggle({
    Callback = function(Value) toggleDodgeChoke(Value) end,
 })
 
+-- ===== INFINITE INVENTORY TOGGLE =====
+local infiniteInventoryEnabled = false
+local infiniteInventoryConn = nil
+local infiniteInventoryCharConn = nil
+
+local function getItemsFolder()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    return char:FindFirstChild("Items")
+end
+
+local function applyInfiniteInventory()
+    local items = getItemsFolder()
+    if not items then return end
+    pcall(function()
+        if items:GetAttribute("Storage") ~= 0 then
+            items:SetAttribute("Storage", 0)
+        end
+    end)
+end
+
+local function startInfiniteInventory()
+    applyInfiniteInventory()
+    if infiniteInventoryConn then infiniteInventoryConn:Disconnect() end
+    infiniteInventoryConn = RunService.RenderStepped:Connect(function()
+        if not infiniteInventoryEnabled then return end
+        applyInfiniteInventory()
+    end)
+    if infiniteInventoryCharConn then infiniteInventoryCharConn:Disconnect() end
+    infiniteInventoryCharConn = LocalPlayer.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        if not infiniteInventoryEnabled then return end
+        local items = char:FindFirstChild("Items")
+        if items then pcall(function() items:SetAttribute("Storage", 0) end) end
+    end)
+end
+
+local function stopInfiniteInventory()
+    if infiniteInventoryConn then infiniteInventoryConn:Disconnect() infiniteInventoryConn = nil end
+    if infiniteInventoryCharConn then infiniteInventoryCharConn:Disconnect() infiniteInventoryCharConn = nil end
+end
+
+local function installInventoryHook()
+    if _G.XCHainInvHook then return end
+    if not (hookmetamethod and getnamecallmethod) then return end
+    local old
+    old = hookmetamethod(game, "__namecall", function(self, ...)
+        if infiniteInventoryEnabled
+            and getnamecallmethod() == "GetAttribute"
+            and typeof(self) == "Instance"
+            and self.Name == "Items"
+            and select(1, ...) == "Storage"
+        then
+            return 0
+        end
+        return old(self, ...)
+    end)
+    _G.XCHainInvHook = old
+end
+
+local Toggle = Tab:CreateToggle({
+   Name = "Infinite Inventory",
+   CurrentValue = false,
+   Flag = "InfiniteInventory",
+   Callback = function(Value)
+      infiniteInventoryEnabled = Value
+      if Value then
+         startInfiniteInventory()
+         installInventoryHook()
+         Rayfield:Notify({Title = "Infinite Inventory", Content = "Infinite Inventory enabled", Duration = 3, Image = 4483362458})
+      else
+         stopInfiniteInventory()
+         Rayfield:Notify({Title = "Infinite Inventory", Content = "Infinite Inventory disabled", Duration = 3, Image = 4483362458})
+      end
+   end,
+})
+
+-- ===== ITEM TAB =====
+local ItemTab = Window:CreateTab("Item", "wrench")
+local Section = ItemTab:CreateSection("Item utilities")
+
+-- ===== INSTANT MEDKIT & SODA =====
+local instantHealEnabled = false
+local instantHealConns = {}
+
+do
+    local RS = game:GetService("ReplicatedStorage")
+    local LP = Players.LocalPlayer
+    local HEAL_ANIMS = {"MedkitHealSelf","MedkitHealOther","SodaDrink","Pills"}
+
+    local function clearConns()
+        for _, c in ipairs(instantHealConns) do pcall(function() c:Disconnect() end) end
+        table.clear(instantHealConns)
+    end
+
+    local function hookHumanoid(humanoid)
+        if not humanoid then return end
+        local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid
+        table.insert(instantHealConns, animator.AnimationPlayed:Connect(function(track)
+            if not instantHealEnabled then return end
+            local id = track.Animation and track.Animation.AnimationId
+            if not id then return end
+            for _, name in ipairs(HEAL_ANIMS) do
+                local item = RS:FindFirstChild("GameStuff")
+                    and RS.GameStuff:FindFirstChild("ItemAnimations")
+                    and RS.GameStuff.ItemAnimations:FindFirstChild(name)
+                if item and item.AnimationId == id then
+                    pcall(function() track:Stop() end)
+                    break
+                end
+            end
+        end))
+    end
+
+    local function hookCharacter(char)
+        if not char then return end
+        local humanoid = char:WaitForChild("Humanoid", 5)
+        if humanoid then hookHumanoid(humanoid) end
+    end
+
+    local Toggle = ItemTab:CreateToggle({
+        Name = "Instant Medkit & Soda",
+        CurrentValue = false,
+        Flag = "InstantHeal",
+        Callback = function(Value)
+            instantHealEnabled = Value
+            clearConns()
+            if not instantHealEnabled then return end
+            local char = LP.Character
+            if char then hookCharacter(char) end
+            table.insert(instantHealConns, LP.CharacterAdded:Connect(function(c)
+                if instantHealEnabled then hookCharacter(c) end
+            end))
+        end
+    })
+end
+
+-- ===== INFINITE COMBAT KNIFE =====
+local infCombatKnifeEnabled = false
+local infCombatKnifeConn = nil
+
+do
+    local LP = Players.LocalPlayer
+    local conn = nil
+
+    local function getEquipped()
+        local char = LP.Character
+        if not char then return nil end
+        local handler = char:FindFirstChild("CharacterHandler")
+        local contents = handler and handler:FindFirstChild("Contents")
+        local remotes = contents and contents:FindFirstChild("Remotes")
+        return remotes and remotes:FindFirstChild("Equipped")
+    end
+
+    local function getGameEvent()
+        return game.ReplicatedStorage:FindFirstChild("GameStuff")
+            and game.ReplicatedStorage.GameStuff:FindFirstChild("Remotes")
+            and game.ReplicatedStorage.GameStuff.Remotes:FindFirstChild("GameEvent")
+    end
+
+    local function setEnabled(state)
+        if conn then conn:Disconnect() conn = nil end
+        if not state then return end
+        conn = RunService.Heartbeat:Connect(function()
+            local eq = getEquipped()
+            if eq then pcall(function() eq:FireServer("CombatKnife") end) end
+            local ev = getGameEvent()
+            if ev then pcall(function() ev:FireServer("CombatKnifeSave") end) end
+        end)
+    end
+
+    local Toggle = ItemTab:CreateToggle({
+        Name = "Infinite Combat Knife",
+        CurrentValue = false,
+        Flag = "InfCombatKnife",
+        Callback = function(Value) setEnabled(Value) end
+    })
+
+    LP.CharacterAdded:Connect(function()
+        if Toggle.Value then task.wait(0.5) setEnabled(true) end
+    end)
+end
+
+local Divider = ItemTab:CreateDivider()
+local Label = ItemTab:CreateLabel("Item tab — utility toggles", "wrench")
+
 -- ===== GUI INTERFACE TAB =====
 local Tab = Window:CreateTab("GUI interface", "square-terminal")
 local Button = Tab:CreateButton({
@@ -1016,6 +1433,243 @@ local Button = Tab:CreateButton({
 
 local Divider = Tab:CreateDivider()
 
+-- ===== AIRDROP ESP =====
+local airdropESPEnabled = false
+local airdropESPObjects = {}
+local airdropESPBin = nil
+local airdropScanConn = nil
+
+do
+    local Workspace = game:GetService("Workspace")
+    local yellow = Color3.fromRGB(255, 200, 0)
+
+    local function createBin()
+        local bin, items = {}, {}
+        function bin:add(i) table.insert(items, i) return self end
+        function bin:destroy()
+            for _, i in ipairs(items) do
+                if type(i) == "function" then pcall(i)
+                elseif typeof(i) == "RBXScriptConnection" then pcall(function() i:Disconnect() end)
+                elseif type(i) == "thread" then pcall(function() task.cancel(i) end)
+                elseif i and i.Destroy then pcall(function() i:Destroy() end) end
+            end
+            items = {}
+        end
+        return bin
+    end
+
+    local function clearAirdropESP()
+        if airdropESPBin then pcall(function() airdropESPBin:destroy() end) airdropESPBin = nil end
+        for _, d in ipairs(airdropESPObjects) do
+            if d.highlight then pcall(function() d.highlight:Destroy() end) end
+            if d.billboard then pcall(function() d.billboard:Destroy() end) end
+            if d.conn then pcall(function() d.conn:Disconnect() end) end
+        end
+        airdropESPObjects = {}
+    end
+
+    local function setupAirdrop(airdrop)
+        if airdropESPEnabled == false then return end
+        if not airdrop or not airdrop.Parent then return end
+
+        local part = airdrop:IsA("BasePart") and airdrop or airdrop:FindFirstChildWhichIsA("BasePart", true)
+        if not part then return end
+
+        local highlight = Instance.new("Highlight")
+        highlight.FillColor = yellow
+        highlight.OutlineColor = yellow
+        highlight.FillTransparency = 0.45
+        highlight.OutlineTransparency = 0
+        highlight.Adornee = airdrop
+        highlight.Parent = airdrop
+
+        local gui = Instance.new("BillboardGui")
+        gui.Size = UDim2.new(0, 180, 0, 35)
+        gui.StudsOffset = Vector3.new(0, 3, 0)
+        gui.AlwaysOnTop = true
+        gui.Adornee = part
+        gui.Parent = airdrop
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = yellow
+        label.TextStrokeTransparency = 0
+        label.TextSize = 13
+        label.Font = Enum.Font.GothamBold
+        label.Text = "AirDrop"
+        label.Parent = gui
+
+        local rec = { highlight = highlight, billboard = gui, airdrop = airdrop, part = part, label = label }
+        table.insert(airdropESPObjects, rec)
+
+        task.spawn(function()
+            while airdropESPEnabled and airdrop.Parent and rec.highlight == highlight do
+                local char = LocalPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                if root and part.Parent then
+                    local dist = math.floor((root.Position - part.Position).Magnitude + 0.5)
+                    label.Text = "AirDrop\n" .. dist .. " studs"
+                end
+                task.wait(0.05)
+            end
+        end)
+
+        local conn
+        conn = airdrop.AncestryChanged:Connect(function()
+            if not airdrop or not airdrop.Parent then
+                pcall(function() highlight:Destroy() end)
+                pcall(function() gui:Destroy() end)
+                if conn then pcall(function() conn:Disconnect() end) end
+            end
+        end)
+        rec.conn = conn
+    end
+
+    local function getAirDropFolder()
+        local gs = Workspace:FindFirstChild("GameStuff")
+        local sec = gs and gs:FindFirstChild("GameSections")
+        local ads = sec and sec:FindFirstChild("AirDrops")
+        return ads and ads:FindFirstChild("AirDropHeli")
+    end
+
+    local Toggle = Tab:CreateToggle({
+        Name = "AirDrop ESP",
+        CurrentValue = false,
+        Flag = "AirDropESP",
+        Callback = function(Value)
+            airdropESPEnabled = Value
+            clearAirdropESP()
+            if airdropScanConn then airdropScanConn:Disconnect() airdropScanConn = nil end
+            if not Value then return end
+            airdropESPBin = createBin()
+            local folder = getAirDropFolder()
+            if folder then setupAirdrop(folder) end
+            airdropScanConn = RunService.Heartbeat:Connect(function()
+                if not airdropESPEnabled then return end
+                local f = getAirDropFolder()
+                if not f then return end
+                local existing = false
+                for _, d in ipairs(airdropESPObjects) do
+                    if d.airdrop == f then existing = true break end
+                end
+                if not existing then setupAirdrop(f) end
+            end)
+        end
+    })
+end
+
+-- ===== TIMER =====
+local timerEnabled = false
+local timerGui, timerLabel, timerConn = nil, nil, nil
+local valuesFolder = workspace:WaitForChild("GameStuff"):WaitForChild("Values")
+
+do
+    local function createTimer()
+        if timerGui then return end
+        timerGui = Instance.new("ScreenGui")
+        timerGui.IgnoreGuiInset = true
+        timerGui.ResetOnSpawn = false
+        timerGui.DisplayOrder = 100
+        timerGui.Parent = game:GetService("CoreGui")
+
+        timerLabel = Instance.new("TextLabel")
+        timerLabel.Size = UDim2.new(0, 100, 0, 40)
+        timerLabel.Position = UDim2.new(0.5, -50, 0, 8)
+        timerLabel.BackgroundTransparency = 1
+        timerLabel.TextColor3 = Color3.fromRGB(235, 235, 235)
+        timerLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        timerLabel.TextStrokeTransparency = 0.25
+        timerLabel.Font = Enum.Font.GothamBold
+        timerLabel.TextSize = 24
+        timerLabel.Text = "--:--"
+        timerLabel.Parent = timerGui
+
+        local function update()
+            if not timerLabel then return end
+            local v = valuesFolder:GetAttribute("RoundTime")
+            if typeof(v) ~= "number" then timerLabel.Text = "--:--" return end
+            v = math.max(0, math.floor(v))
+            timerLabel.Text = string.format("%02d:%02d", math.floor(v / 60), v % 60)
+            timerLabel.TextColor3 = v <= 30 and Color3.fromRGB(255, 90, 90) or Color3.fromRGB(235, 235, 235)
+        end
+        update()
+        timerConn = valuesFolder:GetAttributeChangedSignal("RoundTime"):Connect(update)
+    end
+
+    local function removeTimer()
+        if timerConn then timerConn:Disconnect() timerConn = nil end
+        if timerGui then timerGui:Destroy() timerGui = nil timerLabel = nil end
+    end
+
+    local Toggle = Tab:CreateToggle({
+        Name = "Timer",
+        CurrentValue = false,
+        Flag = "RoundTimer",
+        Callback = function(Value)
+            if Value then createTimer() else removeTimer() end
+        end
+    })
+end
+
+-- ===== POWER =====
+local powerEnabled = false
+local powerGui, powerLabel, powerConn = nil, nil, nil
+
+do
+    local function createPower()
+        if powerGui then return end
+        powerGui = Instance.new("ScreenGui")
+        powerGui.IgnoreGuiInset = true
+        powerGui.ResetOnSpawn = false
+        powerGui.DisplayOrder = 100
+        powerGui.Parent = game:GetService("CoreGui")
+
+        powerLabel = Instance.new("TextLabel")
+        powerLabel.Size = UDim2.new(0, 200, 0, 40)
+        powerLabel.Position = UDim2.new(0.5, -100, 0, 35)
+        powerLabel.BackgroundTransparency = 1
+        powerLabel.TextColor3 = Color3.fromRGB(235, 235, 235)
+        powerLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        powerLabel.TextStrokeTransparency = 0.25
+        powerLabel.Font = Enum.Font.GothamBold
+        powerLabel.TextSize = 24
+        powerLabel.Text = "Power: --"
+        powerLabel.Parent = powerGui
+
+        local function update()
+            if not powerLabel then return end
+            local v = valuesFolder:GetAttribute("Power")
+            if v == nil then powerLabel.Text = "Power: --" return end
+            local n = tonumber(v)
+            if n then
+                local t = math.floor(n * 10) / 10
+                powerLabel.Text = "Power: " .. (t % 1 == 0 and tostring(math.floor(t)) or string.format("%.1f", t))
+            else
+                powerLabel.Text = "Power: " .. tostring(v)
+            end
+        end
+        update()
+        powerConn = valuesFolder:GetAttributeChangedSignal("Power"):Connect(update)
+    end
+
+    local function removePower()
+        if powerConn then powerConn:Disconnect() powerConn = nil end
+        if powerGui then powerGui:Destroy() powerGui = nil powerLabel = nil end
+    end
+
+    local Toggle = Tab:CreateToggle({
+        Name = "Power",
+        CurrentValue = false,
+        Flag = "PowerDisplay",
+        Callback = function(Value)
+            if Value then createPower() else removePower() end
+        end
+    })
+end
+
+local Divider = Tab:CreateDivider()
+
 -- ===== SCRAP ESP =====
 local scrapESPEnabled = false
 local scrapComponents = {}
@@ -1099,19 +1753,10 @@ function LootableComponent:render()
     local camera = workspace.CurrentCamera
     local player = game.Players.LocalPlayer
     local character = player.Character
-    if not camera or not character then
-        self.container.Visible = false
-        return
-    end
+    if not camera or not character then self.container.Visible = false return end
     local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        self.container.Visible = false
-        return
-    end
-    if not self.object or not self.object.Parent then
-        self:destroy()
-        return
-    end
+    if not hrp then self.container.Visible = false return end
+    if not self.object or not self.object.Parent then self:destroy() return end
     local position, visible = camera:WorldToViewportPoint(self.pivotPos.Position)
     if visible and self.isAvailable then
         local scale = 1 / (position.Z * math.tan(math.rad(camera.FieldOfView * 0.5)) * 2) * 1000
@@ -1267,9 +1912,7 @@ end
 local function setupLocationESP()
     clearLocationESP()
     if not locationESPEnabled then return end
-    
     locationESPBin = createBin()
-    
     for _, locationData in ipairs(LOCATIONS) do
         local location = findLocation(locationData.path)
         if location then
@@ -1277,14 +1920,12 @@ local function setupLocationESP()
                 or location:FindFirstChild("Head") 
                 or location:FindFirstChildOfClass("BasePart")
             if not attachPart then attachPart = location end
-            
             local billboard = Instance.new("BillboardGui")
             billboard.Name = "LocationESP_" .. locationData.name
             billboard.Size = UDim2.new(0, 200, 0, 40)
             billboard.StudsOffset = Vector3.new(0, 5, 0)
             billboard.AlwaysOnTop = true
             billboard.Parent = attachPart
-            
             local textLabel = Instance.new("TextLabel")
             textLabel.Size = UDim2.new(1, 0, 1, 0)
             textLabel.BackgroundTransparency = 1
@@ -1295,25 +1936,17 @@ local function setupLocationESP()
             textLabel.TextScaled = true
             textLabel.Font = Enum.Font.GothamBold
             textLabel.Parent = billboard
-            
             local conn
             conn = location.AncestryChanged:Connect(function()
                 if not location or not location.Parent then
                     pcall(function() billboard:Destroy() end)
-                    if conn then 
-                        pcall(function() conn:Disconnect() end)
-                    end
+                    if conn then pcall(function() conn:Disconnect() end) end
                 end
             end)
-            
             table.insert(locationESPObjects, {
-                name = locationData.name,
-                location = location,
-                billboard = billboard,
-                textLabel = textLabel,
-                connection = conn
+                name = locationData.name, location = location, billboard = billboard,
+                textLabel = textLabel, connection = conn
             })
-            
             locationESPBin:add(conn)
         end
     end
@@ -1374,23 +2007,14 @@ local function getChainAngerRequirement()
             chain = chain:FindFirstChild("CHAIN")
         end
     end
-    
-    if not chain then
-        return MAX_ANGER
-    end
-    
+    if not chain then return MAX_ANGER end
     local angerRequirement = chain:GetAttribute("RequirementForAnger")
-    if angerRequirement and angerRequirement > 0 then
-        return angerRequirement
-    end
-    
+    if angerRequirement and angerRequirement > 0 then return angerRequirement end
     return MAX_ANGER
 end
 
 local function calculateHealthFromAnger(anger)
-    if anger <= 0 then
-        return 100
-    end
+    if anger <= 0 then return 100 end
     local healthPercent = 100 - (anger / MAX_ANGER * 100)
     return math.max(0, math.min(100, healthPercent))
 end
@@ -1402,40 +2026,31 @@ local function updateChainStatusDisplay(chain)
         chainStatusBillboard = nil
     end
     chainStatusLabels = {}
-    
     local hrp = chain:FindFirstChild("HumanoidRootPart") or chain:FindFirstChild("Head") or chain:FindFirstChild("Torso")
     if not hrp then return end
-    
     local isClashing = chain:GetAttribute("Clashing") == true
     local isQTEImmune = chain:GetAttribute("QTEImmunity") == true
     local anger = chain:GetAttribute("Anger") or 0
-    
     MAX_ANGER = getChainAngerRequirement()
-    
     local health = calculateHealthFromAnger(anger)
     local healthText = string.format("Health: %.1f%%", health)
-    
     local hasAnyStatus = isClashing or isQTEImmune
-    
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "ChainStatus"
     billboard.Size = UDim2.new(0, 200, 0, hasAnyStatus and 85 or 30)
     billboard.StudsOffset = Vector3.new(0, 3, 0)
     billboard.AlwaysOnTop = true
     billboard.Parent = hrp
-    
     local layout = Instance.new("UIListLayout")
     layout.FillDirection = Enum.FillDirection.Vertical
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     layout.VerticalAlignment = Enum.VerticalAlignment.Top
     layout.Padding = UDim.new(0, 2)
     layout.Parent = billboard
-    
     local healthLabel = Instance.new("TextLabel")
     healthLabel.Size = UDim2.new(1, 0, 0, 25)
     healthLabel.BackgroundTransparency = 1
     healthLabel.Text = healthText
-    
     if health > 50 then
         healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
     elseif health > 25 then
@@ -1443,14 +2058,12 @@ local function updateChainStatusDisplay(chain)
     else
         healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
     end
-    
     healthLabel.TextStrokeTransparency = 0
     healthLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     healthLabel.TextScaled = true
     healthLabel.Font = Enum.Font.GothamBold
     healthLabel.Parent = billboard
     table.insert(chainStatusLabels, healthLabel)
-    
     if isClashing then
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 0, 25)
@@ -1464,7 +2077,6 @@ local function updateChainStatusDisplay(chain)
         label.Parent = billboard
         table.insert(chainStatusLabels, label)
     end
-    
     if isQTEImmune then
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 0, 25)
@@ -1478,7 +2090,6 @@ local function updateChainStatusDisplay(chain)
         label.Parent = billboard
         table.insert(chainStatusLabels, label)
     end
-    
     chainStatusBillboard = billboard
 end
 
@@ -1490,67 +2101,39 @@ local function findChain()
 end
 
 local function updateChainESP()
-    if chainHighlight then
-        pcall(function() chainHighlight:Destroy() end)
-        chainHighlight = nil
-    end
-    if chainConnection then
-        pcall(function() chainConnection:Disconnect() end)
-        chainConnection = nil
-    end
-    if chainStatusBillboard then
-        pcall(function() chainStatusBillboard:Destroy() end)
-        chainStatusBillboard = nil
-    end
+    if chainHighlight then pcall(function() chainHighlight:Destroy() end) chainHighlight = nil end
+    if chainConnection then pcall(function() chainConnection:Disconnect() end) chainConnection = nil end
+    if chainStatusBillboard then pcall(function() chainStatusBillboard:Destroy() end) chainStatusBillboard = nil end
     chainStatusLabels = {}
-    
     if not chainESPEnabled then return end
-    
     local chain = findChain()
     if chain and chain:IsA("Model") then
         MAX_ANGER = getChainAngerRequirement()
         print("[CHAIN] Anger Requirement: " .. MAX_ANGER)
-        
         chainHighlight = Instance.new("Highlight")
         chainHighlight.Parent = chain
         chainHighlight.FillColor = Color3.fromRGB(255, 21, 21)
         chainHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         chainHighlight.FillTransparency = 0.60
         chainHighlight.OutlineTransparency = 0
-        
         updateChainStatusDisplay(chain)
-        
         local function onAttributeChanged()
             if chain and chain.Parent then
                 MAX_ANGER = getChainAngerRequirement()
                 updateChainStatusDisplay(chain)
             end
         end
-        
         local clashingConn = chain:GetAttributeChangedSignal("Clashing"):Connect(onAttributeChanged)
         local qteConn = chain:GetAttributeChangedSignal("QTEImmunity"):Connect(onAttributeChanged)
         local angerConn = chain:GetAttributeChangedSignal("Anger"):Connect(onAttributeChanged)
-        
         chainStatusLabels = {clashingConn, qteConn, angerConn}
-        
         chainConnection = chain.AncestryChanged:Connect(function()
             if not chain or not chain.Parent then
-                if chainHighlight then
-                    pcall(function() chainHighlight:Destroy() end)
-                    chainHighlight = nil
-                end
-                if chainConnection then
-                    pcall(function() chainConnection:Disconnect() end)
-                    chainConnection = nil
-                end
-                if chainStatusBillboard then
-                    pcall(function() chainStatusBillboard:Destroy() end)
-                    chainStatusBillboard = nil
-                end
+                if chainHighlight then pcall(function() chainHighlight:Destroy() end) chainHighlight = nil end
+                if chainConnection then pcall(function() chainConnection:Disconnect() end) chainConnection = nil end
+                if chainStatusBillboard then pcall(function() chainStatusBillboard:Destroy() end) chainStatusBillboard = nil end
                 for _, conn in ipairs(chainStatusLabels) do
-                    if conn then 
-                        pcall(function() conn:Disconnect() end)
-                    end
+                    if conn then pcall(function() conn:Disconnect() end) end
                 end
                 chainStatusLabels = {}
             end
@@ -1574,9 +2157,7 @@ local Toggle = Tab:CreateToggle({
             if chainESPEnabled then
                if not chainHighlight then
                   local chain = findChain()
-                  if chain and chain:IsA("Model") then
-                     updateChainESP()
-                  end
+                  if chain and chain:IsA("Model") then updateChainESP() end
                end
             else
                if chainCheckConnection then
@@ -1586,22 +2167,11 @@ local Toggle = Tab:CreateToggle({
             end
          end)
       else
-         if chainHighlight then
-            pcall(function() chainHighlight:Destroy() end)
-            chainHighlight = nil
-         end
-         if chainConnection then
-            pcall(function() chainConnection:Disconnect() end)
-            chainConnection = nil
-         end
-         if chainStatusBillboard then
-            pcall(function() chainStatusBillboard:Destroy() end)
-            chainStatusBillboard = nil
-         end
+         if chainHighlight then pcall(function() chainHighlight:Destroy() end) chainHighlight = nil end
+         if chainConnection then pcall(function() chainConnection:Disconnect() end) chainConnection = nil end
+         if chainStatusBillboard then pcall(function() chainStatusBillboard:Destroy() end) chainStatusBillboard = nil end
          for _, conn in ipairs(chainStatusLabels) do
-            if conn then 
-               pcall(function() conn:Disconnect() end)
-            end
+            if conn then pcall(function() conn:Disconnect() end) end
          end
          chainStatusLabels = {}
       end
