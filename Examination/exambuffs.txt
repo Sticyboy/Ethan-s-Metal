@@ -1,0 +1,162 @@
+--[[
+    Combined exploit script
+    1. Auto-attributes on spawn/respawn
+       (SquadReloadSpeedMultiplier, StaggerImmune, VoraxBileResistant)
+    2. Infinite stamina (no drain)
+    3. Auto-remove Slasher arm handles + Shielder shields
+]]
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- =====================================================================
+-- 1. AUTO-ATTRIBUTES ON SPAWN / RESPAWN
+-- =====================================================================
+local ATTRS = {
+    SquadReloadSpeedMultiplier = 999,
+    StaggerImmune = true,
+    VoraxBileResistant = true,
+}
+
+local function applyAttributes(character)
+    if not character then return end
+    character:WaitForChild("Humanoid", 5)
+    for name, value in pairs(ATTRS) do
+        character:SetAttribute(name, value)
+    end
+    print("[auto-attrs] applied to", character.Name)
+end
+
+if LocalPlayer.Character then
+    applyAttributes(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(applyAttributes)
+
+-- =====================================================================
+-- 2. INFINITE STAMINA (NO DRAIN)
+-- =====================================================================
+local function applyInfiniteStamina(character)
+    if not character then return end
+
+    local clientHandler = character:FindFirstChild("ClientHandler")
+    if not clientHandler then
+        print("[stamina] ClientHandler not found")
+        return
+    end
+
+    local success, state = pcall(require, clientHandler.State)
+    if not success or not state then
+        print("[stamina] Failed to load State module")
+        return
+    end
+
+    print("[stamina] Applying infinite stamina to: " .. character.Name)
+
+    if state.stamina then
+        state.stamina.current = 999999
+        state.stamina.max = 999999
+        state.stamina.regenDelay = 0
+        state.stamina.fullRegen = false
+    end
+
+    -- Hook stamina to prevent reduction
+    local stamina = state.stamina
+    if stamina then
+        local staminaMT = {}
+
+        staminaMT.__index = function(t, k)
+            if k == "current" then
+                return 999999
+            end
+            return rawget(t, k)
+        end
+
+        staminaMT.__newindex = function(t, k, v)
+            if k == "current" then
+                if v < rawget(t, k) then
+                    return -- Prevent stamina reduction
+                end
+            end
+            rawset(t, k, v)
+        end
+
+        setmetatable(stamina, staminaMT)
+    end
+
+    character:SetAttribute("infiniteStamina", true)
+    print("[stamina] Stamina will not drain")
+end
+
+LocalPlayer.CharacterAdded:Connect(function(character)
+    task.wait(0.5)
+    applyInfiniteStamina(character)
+end)
+
+-- Persistent loop to keep stamina maxed
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local charactersFolder = workspace:FindFirstChild("Characters")
+        if charactersFolder then
+            local character = charactersFolder:FindFirstChild(LocalPlayer.Name)
+            if character then
+                local clientHandler = character:FindFirstChild("ClientHandler")
+                if clientHandler then
+                    local success, state = pcall(require, clientHandler.State)
+                    if success and state and state.stamina then
+                        if state.stamina.current < 999999 then
+                            state.stamina.current = 999999
+                            state.stamina.max = 999999
+                            state.stamina.regenDelay = 0
+                            state.stamina.fullRegen = false
+                        end
+                    end
+                end
+            end
+        end
+        task.wait()
+    end
+end)
+
+-- Apply to current character if it already exists
+local charactersFolder = workspace:FindFirstChild("Characters")
+if charactersFolder then
+    local currentCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name)
+    if currentCharacter then
+        task.wait(0.5)
+        applyInfiniteStamina(currentCharacter)
+    else
+        charactersFolder.ChildAdded:Connect(function(char)
+            if char.Name == LocalPlayer.Name then
+                task.wait(0.5)
+                applyInfiniteStamina(char)
+            end
+        end)
+    end
+end
+
+-- =====================================================================
+-- 3. AUTO-REMOVE SLASHER ARMS + SHIELDER SHIELDS
+-- =====================================================================
+task.spawn(function()
+    while true do
+        for _, c in pairs(workspace.Characters:GetChildren()) do
+            local n = c.Name
+            if n and (n:match("^Slasher%d+$") or n:match("^Shielder%d+$")) then
+                local arm = c:FindFirstChild("Right Arm")
+                if arm then
+                    if n:match("^Slasher") then
+                        local h = arm:FindFirstChild("Handle")
+                        if h then h:Destroy() end
+                    elseif n:match("^Shielder") then
+                        local s = arm:FindFirstChild("Shield")
+                        if s then s:Destroy() end
+                    end
+                end
+            end
+        end
+        task.wait()
+    end
+end)
+
+print("[combined] All exploits running")
