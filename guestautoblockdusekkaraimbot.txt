@@ -1977,7 +1977,8 @@ function getAzureForm()
                     elseif t == "Burrowing" then return "Beast" end
                 end
             end
-        end    end
+        end
+    end
     return nil
 end
 
@@ -3675,15 +3676,82 @@ function stopNosferatuTracking()
     nosferatuHunterFeastTracked = {}
 end
 
--- ===== SURVIVOR COOLDOWN DISPLAY =====
+-- ===== SURVIVOR COOLDOWN DISPLAY (HASTE-AWARE) =====
+-- Timer text is YELLOW while the survivor is inside a Helperbot Inspire zone.
+-- Timer text is WHITE otherwise.
+
+-- ===== Helperbot Inspire zone watcher =====
+local ActiveInspireZones = {}   -- [zonePart] = true
+
+local function watchInspireZones()
+    local map = workspace:FindFirstChild("Map")
+    if not map then
+        task.delay(1, watchInspireZones)
+        return
+    end
+
+    for _, c in ipairs(map:GetChildren()) do
+        if string.find(c.Name, "^HelperbotInspireZone", 1) then
+            ActiveInspireZones[c] = true
+        end
+    end
+
+    map.ChildAdded:Connect(function(c)
+        if string.find(c.Name, "^HelperbotInspireZone", 1) then
+            ActiveInspireZones[c] = true
+        end
+    end)
+
+    map.ChildRemoved:Connect(function(c)
+        if ActiveInspireZones[c] then
+            ActiveInspireZones[c] = nil
+        end
+    end)
+end
+
+local function pruneInspireZones()
+    for zone in pairs(ActiveInspireZones) do
+        if not zone or not zone.Parent then
+            ActiveInspireZones[zone] = nil
+        end
+    end
+end
+
+local function isInsideInspireZone(character)
+    if not character then return false end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    for zone in pairs(ActiveInspireZones) do
+        if zone and zone.Parent then
+            local radius = zone.Size.X / 2
+            if radius < 1 then radius = 10 end
+            if (hrp.Position - zone.Position).Magnitude <= radius then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+watchInspireZones()
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        pruneInspireZones()
+    end
+end)
+
+-- ===== Cooldown display =====
+
+local function formatCD(s)
+    if s <= 0 then return "0.0"
+    elseif s < 10 then return string.format("%.1f", s)
+    else return tostring(math.floor(s)) end
+end
+
 local SURVIVOR_ABILITY_OFFSETS = {
-    ["Sword"] = 3,
-    ["Dagger"] = 3,
-    ["Gun"] = 3,
-    ["Hatchet"] = 3,
-    ["Pizza"] = 3,
-    ["Block"] = 3,
-    ["Clone"] = 3,
+    ["Sword"] = 3, ["Dagger"] = 3, ["Gun"] = 3, ["Hatchet"] = 3,
+    ["Pizza"] = 3, ["Block"] = 3, ["Clone"] = 3,
 }
 
 local function createSurvivorCooldownDisplay(survivor, endTime, ability)
@@ -3707,11 +3775,12 @@ local function createSurvivorCooldownDisplay(survivor, endTime, ability)
     local tl = Instance.new("TextLabel")
     tl.Size = UDim2.new(1, 0, 1, 0)
     tl.BackgroundTransparency = 1
-    tl.Text = ability .. ": " .. formatKillerCooldownTime(endTime - tick())
+    tl.Text = ability .. ": " .. formatCD(endTime - tick())
     tl.TextStrokeTransparency = 0
     tl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     tl.TextScaled = true
     tl.Font = Enum.Font.GothamBold
+    tl.TextColor3 = Color3.fromRGB(255, 255, 255) -- default white
     tl.Parent = bb
     local td = { endTime = endTime, billboard = bb, textLabel = tl, abilityName = ability, connection = nil }
     local conn
@@ -3728,10 +3797,13 @@ local function createSurvivorCooldownDisplay(survivor, endTime, ability)
             if bb then pcall(function() bb:Destroy() end) end
             if activeCooldownTimers[survivor] then activeCooldownTimers[survivor][ability] = nil end
         else
-            tl.Text = ability .. ": " .. formatKillerCooldownTime(rem)
-            if rem < 5 then tl.TextColor3 = Color3.fromRGB(255, 0, 0)
-            elseif rem < 10 then tl.TextColor3 = Color3.fromRGB(255, 165, 0)
-            else tl.TextColor3 = Color3.fromRGB(255, 255, 255) end
+            tl.Text = ability .. ": " .. formatCD(rem)
+            -- Yellow if Hasted by Helperbot Inspire, white otherwise
+            if isInsideInspireZone(survivor) then
+                tl.TextColor3 = Color3.fromRGB(255, 220, 0)
+            else
+                tl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
         end
     end)
     td.connection = conn
@@ -3759,7 +3831,8 @@ local function listenForSurvivorAbilities(survivor)
     local hum = survivor:FindFirstChildOfClass("Humanoid")
     if not hum then
         hum = survivor:WaitForChild("Humanoid", 5)
-        if not hum then return end    end
+        if not hum then return end
+    end
     local function setupAnim(anim)
         if not anim then return end
         anim.AnimationPlayed:Connect(function(track)
@@ -3894,6 +3967,7 @@ function createNoobCooldownDisplay(noob, endTime, ability)
     tl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     tl.TextScaled = true
     tl.Font = Enum.Font.GothamBold
+    tl.TextColor3 = Color3.fromRGB(255, 255, 255)
     tl.Parent = bb
     local td = { endTime = endTime, billboard = bb, textLabel = tl, abilityName = ability }
     local conn
@@ -3909,9 +3983,12 @@ function createNoobCooldownDisplay(noob, endTime, ability)
             if noobActiveCooldownTimers[noob] then noobActiveCooldownTimers[noob][ability] = nil end
         else
             tl.Text = ability .. ": " .. formatNoobCooldownTime(rem)
-            if rem < 5 then tl.TextColor3 = Color3.fromRGB(255, 0, 0)
-            elseif rem < 10 then tl.TextColor3 = Color3.fromRGB(255, 165, 0)
-            else tl.TextColor3 = Color3.fromRGB(255, 255, 255) end
+            -- Yellow if inside Helperbot Inspire, white otherwise
+            if isInsideInspireZone(noob) then
+                tl.TextColor3 = Color3.fromRGB(255, 220, 0)
+            else
+                tl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
         end
     end)
     td.connection = conn
