@@ -3709,11 +3709,11 @@ function stopNosferatuTracking()
 end
 
 -- ===== SURVIVOR COOLDOWN DISPLAY (HASTE-AWARE) =====
--- Timer text is YELLOW while the survivor is inside a Helperbot Inspire zone.
--- Timer text is WHITE otherwise.
+-- Haste changes the cooldown *rate* (1 + 0.1 * level * classMultiplier), so the
+-- remaining time must be advanced by that rate while Haste is active.
 
 -- ===== Helperbot Inspire zone watcher =====
-local ActiveInspireZones = {}   -- [zonePart] = true
+local ActiveInspireZones = {} -- [zonePart] = true
 
 local function watchInspireZones()
     local map = workspace:FindFirstChild("Map")
@@ -3749,22 +3749,6 @@ local function pruneInspireZones()
     end
 end
 
-local function isInsideInspireZone(character)
-    if not character then return false end
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    for zone in pairs(ActiveInspireZones) do
-        if zone and zone.Parent then
-            local radius = zone.Size.X / 2
-            if radius < 1 then radius = 10 end
-            if (hrp.Position - zone.Position).Magnitude <= radius then
-                return true
-            end
-        end
-    end
-    return false
-end
-
 watchInspireZones()
 task.spawn(function()
     while true do
@@ -3773,12 +3757,127 @@ task.spawn(function()
     end
 end)
 
+-- ===== Haste helpers =====
+
+-- Helperbot Inspiration charge levels 1-4 apply Haste levels 5-8.
+-- Its zone radius is {14, 18, 22, 26}.
+local function hasteLevelFromRadius(radius)
+    if radius >= 24 then
+        return 8
+    elseif radius >= 20 then
+        return 7
+    elseif radius >= 16 then
+        return 6
+    end
+    return 5
+end
+
+-- Exact Haste status data is only replicated for the local player.
+-- For other survivors the nearest observable signal is the Inspire zone.
+local function getInspireHasteLevel(character)
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        return nil
+    end
+    local best = nil
+    for zone in pairs(ActiveInspireZones) do
+        if zone and zone.Parent then
+            local radius = zone.Size.X / 2
+            if radius < 1 then
+                radius = 10
+            end
+            if (hrp.Position - zone.Position).Magnitude <= radius then
+                local level = hasteLevelFromRadius(radius)
+                if not best or level > best then
+                    best = level
+                end
+            end
+        end
+    end
+    return best
+end
+
+local classCache = {}
+local function getCharacterClass(character)
+    local name = character and character.Name
+    if not name then
+        return nil
+    end
+    local cached = classCache[name]
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    local assets = ReplicatedStorage:FindFirstChild("Assets")
+    local survivors = assets and assets:FindFirstChild("Survivors")
+    local root = survivors and survivors:FindFirstChild(name)
+    local config = root and root:FindFirstChild("Config")
+    if config and config:IsA("ModuleScript") then
+        local ok, data = pcall(require, config)
+        if ok and type(data) == "table" and data.Class then
+            classCache[name] = data.Class
+            return data.Class
+        end
+    end
+
+    classCache[name] = false
+    return nil
+end
+
+local StatusesModule = nil
+local function getStatuses()
+    if StatusesModule ~= nil then
+        return StatusesModule or nil
+    end
+    local ok, mod = pcall(function()
+        return require(ReplicatedStorage.Modules.Gameplay.Statuses)
+    end)
+    StatusesModule = ok and mod or false
+    return StatusesModule or nil
+end
+
+-- Returns cooldownSpeed, hasteLevel, isHasted.
+local function getCooldownSpeed(character)
+    local class = getCharacterClass(character)
+    local classMultiplier = if class == "Support" then 0.5 else 1
+
+    local player = character and Players:GetPlayerFromCharacter(character)
+    if player and player == lp then
+        local statuses = getStatuses()
+        if statuses then
+            local ok, status = pcall(function()
+                return statuses:PlayerHasStatus(player, "Haste")
+            end)
+            if ok and status then
+                local level = status.Level or 1
+                return 1 + (0.1 * level * classMultiplier), level, true
+            end
+        end
+    end
+
+    local level = getInspireHasteLevel(character)
+    if level then
+        return 1 + (0.1 * level * classMultiplier), level, true
+    end
+
+    return 1, nil, false
+end
+
+-- Back-compat shim: the pre-patch survivor section exposed this name.
+local function isInsideInspireZone(character)
+    return getInspireHasteLevel(character) ~= nil
+end
+
 -- ===== Cooldown display =====
 
 local function formatCD(s)
-    if s <= 0 then return "0.0"
-    elseif s < 10 then return string.format("%.1f", s)
-    else return tostring(math.floor(s)) end
+    if s <= 0 then
+        return "0.0"
+    elseif s < 10 then
+        return string.format("%.1f", s)
+    else
+        return tostring(math.floor(s))
+    end
 end
 
 local SURVIVOR_ABILITY_OFFSETS = {
@@ -3787,16 +3886,26 @@ local SURVIVOR_ABILITY_OFFSETS = {
 }
 
 local function createSurvivorCooldownDisplay(survivor, endTime, ability)
-    if not survivor or isLocalPlayer(survivor) then return end
-    if not activeCooldownTimers[survivor] then activeCooldownTimers[survivor] = {} end
+    if not survivor or isLocalPlayer(survivor) then
+        return
+    end
+    if not activeCooldownTimers[survivor] then
+        activeCooldownTimers[survivor] = {}
+    end
     if activeCooldownTimers[survivor][ability] then
         local ex = activeCooldownTimers[survivor][ability]
         if ex.billboard then pcall(function() ex.billboard:Destroy() end) end
         if ex.connection then ex.connection:Disconnect() end
         activeCooldownTimers[survivor][ability] = nil
     end
-    local hrp = survivor:FindFirstChild("HumanoidRootPart") or survivor:FindFirstChild("Head") or survivor:FindFirstChild("Torso")
-    if not hrp then return end
+
+    local hrp = survivor:FindFirstChild("HumanoidRootPart")
+        or survivor:FindFirstChild("Head")
+        or survivor:FindFirstChild("Torso")
+    if not hrp then
+        return
+    end
+
     local oy = SURVIVOR_ABILITY_OFFSETS[ability] or 3
     local bb = Instance.new("BillboardGui")
     bb.Name = "SurvivorCooldown_" .. ability
@@ -3804,41 +3913,66 @@ local function createSurvivorCooldownDisplay(survivor, endTime, ability)
     bb.StudsOffset = Vector3.new(0, oy, 0)
     bb.AlwaysOnTop = true
     bb.Parent = hrp
+
     local tl = Instance.new("TextLabel")
     tl.Size = UDim2.new(1, 0, 1, 0)
     tl.BackgroundTransparency = 1
-    tl.Text = ability .. ": " .. formatCD(endTime - tick())
+    tl.Text = ability .. ": " .. formatCD(math.max(0, endTime - tick()))
     tl.TextStrokeTransparency = 0
     tl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     tl.TextScaled = true
     tl.Font = Enum.Font.GothamBold
-    tl.TextColor3 = Color3.fromRGB(255, 255, 255) -- default white
+    tl.TextColor3 = Color3.fromRGB(255, 255, 255)
     tl.Parent = bb
-    local td = { endTime = endTime, billboard = bb, textLabel = tl, abilityName = ability, connection = nil }
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
+
+    local td = {
+        remaining = math.max(0, endTime - tick()),
+        lastTick = tick(),
+        billboard = bb,
+        textLabel = tl,
+        abilityName = ability,
+        connection = nil,
+    }
+
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
         if not survivor or not survivor.Parent then
-            if conn then conn:Disconnect() end
+            if connection then connection:Disconnect() end
             if bb then pcall(function() bb:Destroy() end) end
-            if activeCooldownTimers[survivor] then activeCooldownTimers[survivor][ability] = nil end
+            if activeCooldownTimers[survivor] then
+                activeCooldownTimers[survivor][ability] = nil
+            end
             return
         end
-        local rem = td.endTime - tick()
-        if rem <= 0.1 then
-            if conn then conn:Disconnect() end
+
+        local now = tick()
+        local dt = now - td.lastTick
+        td.lastTick = now
+        if dt < 0 then
+            dt = 0
+        end
+
+        local speed, _, hasted = getCooldownSpeed(survivor)
+        td.remaining = td.remaining - (dt * speed)
+
+        if td.remaining <= 0.05 then
+            if connection then connection:Disconnect() end
             if bb then pcall(function() bb:Destroy() end) end
-            if activeCooldownTimers[survivor] then activeCooldownTimers[survivor][ability] = nil end
-        else
-            tl.Text = ability .. ": " .. formatCD(rem)
-            -- Yellow if Hasted by Helperbot Inspire, white otherwise
-            if isInsideInspireZone(survivor) then
-                tl.TextColor3 = Color3.fromRGB(255, 220, 0)
-            else
-                tl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            if activeCooldownTimers[survivor] then
+                activeCooldownTimers[survivor][ability] = nil
             end
+            return
+        end
+
+        tl.Text = ability .. ": " .. formatCD(td.remaining)
+        if hasted then
+            tl.TextColor3 = Color3.fromRGB(255, 220, 0)
+        else
+            tl.TextColor3 = Color3.fromRGB(255, 255, 255)
         end
     end)
-    td.connection = conn
+
+    td.connection = connection
     activeCooldownTimers[survivor][ability] = td
 end
 
@@ -4015,7 +4149,6 @@ function createNoobCooldownDisplay(noob, endTime, ability)
             if noobActiveCooldownTimers[noob] then noobActiveCooldownTimers[noob][ability] = nil end
         else
             tl.Text = ability .. ": " .. formatNoobCooldownTime(rem)
-            -- Yellow if inside Helperbot Inspire, white otherwise
             if isInsideInspireZone(noob) then
                 tl.TextColor3 = Color3.fromRGB(255, 220, 0)
             else
@@ -5338,7 +5471,6 @@ VisualsTab:CreateButton({
 
 VisualsTab:CreateToggle({ Name = "Inventory ESP - Shows items below survivors", CurrentValue = false, Flag = "InventoryEspToggle", Callback = function(Value) inventoryEspEnabled = Value; if Value then updateInventoryESP(); if not inventoryEspConnection then inventoryEspConnection = RunService.Heartbeat:Connect(function() updateInventoryESP() end) end; SendNotif("Inventory ESP", "Enabled", 2) else for _, bb in pairs(inventoryEspBillboards) do pcall(function() bb:Destroy() end) end; inventoryEspBillboards = {}; if inventoryEspConnection then inventoryEspConnection:Disconnect(); inventoryEspConnection = nil end; SendNotif("Inventory ESP", "Disabled", 1) end end })
 
--- ===== INDICATORS TOGGLE =====
 VisualsTab:CreateToggle({
     Name = "Enable Indicators",
     CurrentValue = false,
