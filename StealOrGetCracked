@@ -1,262 +1,29 @@
--- ============================================================
--- Loot Highlighter + Infinite Stamina + All-Player Highlight
---   workspace.LootItems  -> blue Highlight only (no filter)
---   workspace.MyLoot     -> blue Highlight + BillboardGui with
---                           Rarity / Value / Weight, FILTERED:
---                             skip Rarity == "Common" or "Uncommon"
---                             skip Value < 180
---                             ALWAYS show:
---                               - name == "Candy"
---                               - name contains "harddrive" (any case)
---                               - Weight <= 0.5 AND Value >= 100
---   SprintStamina        -> forced full stamina every frame
---   Player Highlight     -> every player, blue, with name billboard
--- ============================================================
-
-local Workspace = game:GetService("Workspace")
-local Players   = game:GetService("Players")
-
 -- ------------------------------------------------------------
--- LOOT HIGHLIGHTER
+-- INFINITE STAMINA (toggleable with =)
 -- ------------------------------------------------------------
-local HIGHLIGHT_COLOR = Color3.fromRGB(0, 140, 255)
-local HIGHLIGHT_FILL_TRANSPARENCY = 0.6
-local HIGHLIGHT_OUTLINE_TRANSPARENCY = 0
-
-local MIN_VALUE = 180
-local IGNORED_RARITIES = {
-    ["common"] = true,
-    ["uncommon"] = true,
-}
-
-local LIGHT_WEIGHT_THRESHOLD = 0.5
-local LIGHT_WEIGHT_MIN_VALUE = 100
-
-local lootItemsTracked = {}
-local myLootTracked = {}
-local myLootSkipped = {}
-
-local function isAlwaysShown(obj)
-    if not obj then return false end
-    local name = obj.Name or ""
-
-    if name == "Candy" then return true end
-    if string.find(string.lower(name), "harddrive", 1, true) then return true end
-
-    local weight = obj:GetAttribute("Weight")
-    local value = obj:GetAttribute("Value")
-    if type(weight) == "number" and type(value) == "number" then
-        if weight <= LIGHT_WEIGHT_THRESHOLD and value >= LIGHT_WEIGHT_MIN_VALUE then
-            return true
-        end
-    end
-
-    return false
-end
-
-local function isIgnored(obj)
-    if isAlwaysShown(obj) then return false end
-
-    local rarity = obj:GetAttribute("Rarity")
-    if type(rarity) == "string" then
-        if IGNORED_RARITIES[string.lower(rarity)] then
-            return true
-        end
-    end
-    local value = obj:GetAttribute("Value")
-    if type(value) == "number" and value < MIN_VALUE then
-        return true
-    end
-    return false
-end
-
-local function addLootItemsHighlight(obj)
-    if not obj or not obj.Parent then return end
-    if lootItemsTracked[obj] then return end
-    if obj:FindFirstChild("LootHighlight") then
-        lootItemsTracked[obj] = true
-        return
-    end
-
-    local hl = Instance.new("Highlight")
-    hl.Name = "LootHighlight"
-    hl.FillColor = HIGHLIGHT_COLOR
-    hl.OutlineColor = HIGHLIGHT_COLOR
-    hl.FillTransparency = HIGHLIGHT_FILL_TRANSPARENCY
-    hl.OutlineTransparency = HIGHLIGHT_OUTLINE_TRANSPARENCY
-    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Adornee = obj
-    hl.Parent = obj
-
-    lootItemsTracked[obj] = true
-end
-
-local function formatStat(v)
-    if v == nil then return "?" end
-    local t = type(v)
-    if t == "number" then
-        if v == math.floor(v) then
-            return tostring(v)
-        end
-        return string.format("%.2f", v)
-    end
-    return tostring(v)
-end
-
-local function getAnchorPart(obj)
-    if obj:IsA("BasePart") then return obj end
-    return obj:FindFirstChild("Handle")
-        or obj:FindFirstChild("HumanoidRootPart")
-        or obj:FindFirstChild("Head")
-        or obj.PrimaryPart
-        or obj:FindFirstChildWhichIsA("BasePart", true)
-end
-
-local function makeBillboardText(obj)
-    return string.format(
-        "Rarity: %s\nValue: %s\nWeight: %s",
-        formatStat(obj:GetAttribute("Rarity")),
-        formatStat(obj:GetAttribute("Value")),
-        formatStat(obj:GetAttribute("Weight"))
-    )
-end
-
-local function refreshBillboardText(entry)
-    if not entry or not entry.billboard or not entry.billboard.Parent then return end
-    local label = entry.billboard:FindFirstChild("StatsLabel")
-    if not label then return end
-    label.Text = makeBillboardText(entry.object)
-end
-
-local function removeMyLootDisplay(obj)
-    local entry = myLootTracked[obj]
-    if not entry then return end
-    if entry.highlight and entry.highlight.Parent then entry.highlight:Destroy() end
-    if entry.billboard and entry.billboard.Parent then entry.billboard:Destroy() end
-    myLootTracked[obj] = nil
-end
-
-local function addMyLootDisplay(obj)
-    if not obj or not obj.Parent then return end
-    if myLootTracked[obj] then return end
-
-    if obj:FindFirstChild("LootHighlight") and obj:FindFirstChild("LootStatsBillboard") then
-        myLootTracked[obj] = {
-            object = obj,
-            highlight = obj:FindFirstChild("LootHighlight"),
-            billboard = obj:FindFirstChild("LootStatsBillboard"),
-        }
-        refreshBillboardText(myLootTracked[obj])
-        return
-    end
-
-    if isIgnored(obj) then
-        myLootSkipped[obj] = true
-        return
-    end
-
-    local anchor = getAnchorPart(obj)
-    if not anchor then return end
-
-    local hl = obj:FindFirstChild("LootHighlight")
-    if not hl then
-        hl = Instance.new("Highlight")
-        hl.Name = "LootHighlight"
-        hl.FillColor = HIGHLIGHT_COLOR
-        hl.OutlineColor = HIGHLIGHT_COLOR
-        hl.FillTransparency = HIGHLIGHT_FILL_TRANSPARENCY
-        hl.OutlineTransparency = HIGHLIGHT_OUTLINE_TRANSPARENCY
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.Adornee = obj
-        hl.Parent = obj
-    end
-
-    local bb = anchor:FindFirstChild("LootStatsBillboard")
-    if not bb then
-        bb = Instance.new("BillboardGui")
-        bb.Name = "LootStatsBillboard"
-        bb.Size = UDim2.new(0, 180, 0, 70)
-        bb.StudsOffset = Vector3.new(0, 2.5, 0)
-        bb.AlwaysOnTop = true
-        bb.LightInfluence = 0
-        bb.MaxDistance = 250
-        bb.Parent = anchor
-
-        local label = Instance.new("TextLabel")
-        label.Name = "StatsLabel"
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.Text = makeBillboardText(obj)
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextStrokeTransparency = 0
-        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        label.TextScaled = false
-        label.TextSize = 16
-        label.Font = Enum.Font.GothamBold
-        label.TextWrapped = true
-        label.TextYAlignment = Enum.TextYAlignment.Top
-        label.Parent = bb
-    end
-
-    local entry = { object = obj, highlight = hl, billboard = bb }
-    myLootTracked[obj] = entry
-
-    obj.AttributeChanged:Connect(function()
-        if myLootTracked[obj] then
-            if isIgnored(obj) then
-                removeMyLootDisplay(obj)
-                myLootSkipped[obj] = true
-            else
-                refreshBillboardText(entry)
-            end
-        elseif myLootSkipped[obj] then
-            if not isIgnored(obj) then
-                myLootSkipped[obj] = nil
-                addMyLootDisplay(obj)
-            end
-        end
-    end)
-end
-
-local function onLootItemRemoved(obj)
-    lootItemsTracked[obj] = nil
-end
-
-local function onMyLootRemoved(obj)
-    removeMyLootDisplay(obj)
-    myLootSkipped[obj] = nil
-end
-
-local function watchFolder(folder, addFn, removeFn)
-    if not folder then return end
-    for _, child in ipairs(folder:GetChildren()) do
-        addFn(child)
-    end
-    folder.ChildAdded:Connect(addFn)
-    folder.ChildRemoved:Connect(removeFn)
-end
-
-local lootItems = Workspace:WaitForChild("LootItems", 10)
-local myLoot = Workspace:WaitForChild("MyLoot", 10)
-
-if lootItems then
-    watchFolder(lootItems, addLootItemsHighlight, onLootItemRemoved)
-else
-    warn("[LootHighlighter] workspace.LootItems not found")
-end
-
-if myLoot then
-    watchFolder(myLoot, addMyLootDisplay, onMyLootRemoved)
-else
-    warn("[LootHighlighter] workspace.MyLoot not found")
-end
-
-print("[LootHighlighter] loaded")
-
--- ------------------------------------------------------------
--- INFINITE STAMINA
--- ------------------------------------------------------------
+local UserInputService = game:GetService("UserInputService")
 local lp = Players.LocalPlayer
+
+local infStaminaEnabled = false
+
+local function setInfStamina(on)
+    infStaminaEnabled = on
+    if lp then
+        if on then
+            lp:SetAttribute("AdminInfStamina", true)
+        else
+            lp:SetAttribute("AdminInfStamina", nil)
+        end
+    end
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Infinite Stamina",
+            Text = on and "Enabled" or "Disabled",
+            Duration = 1.5,
+        })
+    end)
+    print("[InfiniteStamina] " .. (on and "enabled" or "disabled"))
+end
 
 local ok, mod = pcall(function()
     return require(lp.PlayerScripts:WaitForChild("SprintStamina", 10))
@@ -267,158 +34,33 @@ if ok and mod then
     local realGet = mod.get
 
     mod.update = function(dt, ...)
-        lp:SetAttribute("AdminInfStamina", true)
-        local speed = realUpdate(dt, ...)
-        return speed
+        if infStaminaEnabled then
+            lp:SetAttribute("AdminInfStamina", true)
+        end
+        return realUpdate(dt, ...)
     end
 
     mod.get = function(...)
-        lp:SetAttribute("AdminInfStamina", true)
-        local state = realGet(...)
-        state.stamina = state.staminaMax
-        state.fraction = 1
-        state.exhausted = false
-        state.recoverAt = 0
-        return state
+        if infStaminaEnabled then
+            lp:SetAttribute("AdminInfStamina", true)
+            local state = realGet(...)
+            state.stamina = state.staminaMax
+            state.fraction = 1
+            state.exhausted = false
+            state.recoverAt = 0
+            return state
+        end
+        return realGet(...)
     end
 
-    print("[InfiniteStamina] hooked SprintStamina")
+    print("[InfiniteStamina] hooked SprintStamina (toggle with =)")
 else
     warn("[InfiniteStamina] could not require SprintStamina — is it in PlayerScripts?")
 end
 
--- ------------------------------------------------------------
--- ALL-PLAYER HIGHLIGHT (blue + name)
--- ------------------------------------------------------------
-local PLAYER_COLOR = Color3.fromRGB(0, 140, 255)  -- blue
-local HIGHLIGHT_FILL_TRANSPARENCY_PLAYER = 0.35
-
-local playerHighlights = {}    -- [characterModel] = { highlight, billboard, hrp }
-local playerConnections = {}   -- [characterModel] = { conns... }
-
-local function detachPlayerCharacter(character)
-    if not character then return end
-    local entry = playerHighlights[character]
-    if entry then
-        if entry.highlight and entry.highlight.Parent then entry.highlight:Destroy() end
-        if entry.billboard and entry.billboard.Parent then entry.billboard:Destroy() end
-        playerHighlights[character] = nil
-    end
-    local conns = playerConnections[character]
-    if conns then
-        for _, c in ipairs(conns) do
-            if c.Connected then c:Disconnect() end
-        end
-        playerConnections[character] = nil
-    end
-end
-
-local function updatePlayerName(entry, character)
-    if not entry or not entry.billboard then return end
-    local label = entry.billboard:FindFirstChild("NameLabel")
-    if not label then return end
-    local player = Players:GetPlayerFromCharacter(character)
-    label.Text = player and player.Name or character.Name
-end
-
-local function attachPlayerCharacter(character)
-    if not character or not character:IsA("Model") then return end
-    if playerHighlights[character] then return end
-
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        hrp = character:WaitForChild("HumanoidRootPart", 5)
-        if not hrp then return end
-    end
-
-    local hl = Instance.new("Highlight")
-    hl.Name = "PlayerHighlight"
-    hl.FillColor = PLAYER_COLOR
-    hl.OutlineColor = PLAYER_COLOR
-    hl.FillTransparency = HIGHLIGHT_FILL_TRANSPARENCY_PLAYER
-    hl.OutlineTransparency = 0
-    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Adornee = character
-    hl.Parent = character
-
-    local head = character:FindFirstChild("Head") or hrp
-    local bb = head:FindFirstChild("PlayerNameBillboard")
-    if not bb then
-        bb = Instance.new("BillboardGui")
-        bb.Name = "PlayerNameBillboard"
-        bb.Size = UDim2.new(0, 140, 0, 24)
-        bb.StudsOffset = Vector3.new(0, 2.5, 0)
-        bb.AlwaysOnTop = true
-        bb.LightInfluence = 0
-        bb.MaxDistance = 250
-        bb.Parent = head
-
-        local label = Instance.new("TextLabel")
-        label.Name = "NameLabel"
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.Text = ""
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextStrokeTransparency = 0
-        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        label.TextScaled = true
-        label.Font = Enum.Font.GothamBold
-        label.Parent = bb
-    end
-
-    local entry = { highlight = hl, billboard = bb, hrp = hrp }
-    updatePlayerName(entry, character)
-
-    playerHighlights[character] = entry
-
-    local conns = {}
-
-    table.insert(conns, character:GetPropertyChangedSignal("Name"):Connect(function()
-        local e = playerHighlights[character]
-        if e then updatePlayerName(e, character) end
-    end))
-
-    table.insert(conns, character.ChildAdded:Connect(function(child)
-        if child.Name == "HumanoidRootPart" and child ~= hrp then
-            hrp = child
-            local e = playerHighlights[character]
-            if e then e.hrp = hrp end
-        end
-    end))
-
-    table.insert(conns, character.AncestryChanged:Connect(function()
-        if not character.Parent then
-            detachPlayerCharacter(character)
-        end
-    end))
-
-    playerConnections[character] = conns
-end
-
-local function watchPlayerForHighlight(player)
-    if not player then return end
-
-    if player.Character then
-        attachPlayerCharacter(player.Character)
-    end
-
-    player.CharacterAdded:Connect(function(char)
-        attachPlayerCharacter(char)
-    end)
-
-    player.CharacterRemoving:Connect(function(char)
-        detachPlayerCharacter(char)
-    end)
-end
-
-for _, player in ipairs(Players:GetPlayers()) do
-    watchPlayerForHighlight(player)
-end
-Players.PlayerAdded:Connect(watchPlayerForHighlight)
-Players.PlayerRemoving:Connect(function(player)
-    if player.Character then
-        detachPlayerCharacter(player.Character)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Equals then
+        setInfStamina(not infStaminaEnabled)
     end
 end)
-
-print("[PlayerHighlight] loaded")
