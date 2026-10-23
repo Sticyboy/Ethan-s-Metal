@@ -18,6 +18,7 @@
 --                             Mythic     -> red
 --   SprintStamina        -> infinite stamina, toggled with =
 --   Player Highlight     -> every player, blue, with name billboard
+--   The Hollow           -> blue Highlight + "Bot" billboard
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -40,13 +41,12 @@ local IGNORED_RARITIES = {
 local LIGHT_WEIGHT_THRESHOLD = 0.5
 local LIGHT_WEIGHT_MIN_VALUE = 100
 
--- Rarity -> text colour
 local RARITY_COLORS = {
-    ["common"]    = Color3.fromRGB(255, 255, 255),  -- white
-    ["uncommon"]  = Color3.fromRGB(144, 238, 144),  -- light green
-    ["rare"]      = Color3.fromRGB(170, 0, 255),    -- purple
-    ["legendary"] = Color3.fromRGB(255, 215, 0),    -- yellow
-    ["mythic"]    = Color3.fromRGB(255, 0, 0),      -- red
+    ["common"]    = Color3.fromRGB(255, 255, 255),
+    ["uncommon"]  = Color3.fromRGB(144, 238, 144),
+    ["rare"]      = Color3.fromRGB(170, 0, 255),
+    ["legendary"] = Color3.fromRGB(255, 215, 0),
+    ["mythic"]    = Color3.fromRGB(255, 0, 0),
 }
 local DEFAULT_RARITY_COLOR = Color3.fromRGB(255, 255, 255)
 
@@ -483,3 +483,104 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 print("[PlayerHighlight] loaded")
+
+-- ------------------------------------------------------------
+-- THE HOLLOW ("Bot" replacement entity)
+-- ------------------------------------------------------------
+local HOLLOW_NAME = "The Hollow"
+local HOLLOW_COLOR = Color3.fromRGB(0, 140, 255)  -- blue
+local HOLLOW_LABEL = "Bot"
+
+local hollowEntry = nil  -- { model, highlight, billboard }
+
+local function detachHollow()
+    if not hollowEntry then return end
+    if hollowEntry.highlight and hollowEntry.highlight.Parent then
+        hollowEntry.highlight:Destroy()
+    end
+    if hollowEntry.billboard and hollowEntry.billboard.Parent then
+        hollowEntry.billboard:Destroy()
+    end
+    hollowEntry = nil
+end
+
+local function attachHollow(model)
+    if not model or not model:IsA("Model") then return end
+    if hollowEntry and hollowEntry.model == model then return end
+    detachHollow()
+
+    local hrp = model:FindFirstChild("HumanoidRootPart")
+        or model:WaitForChild("HumanoidRootPart", 5)
+    local anchor = hrp
+        or model:FindFirstChild("Head")
+        or model.PrimaryPart
+        or model:FindFirstChildWhichIsA("BasePart", true)
+
+    local hl = Instance.new("Highlight")
+    hl.Name = "HollowHighlight"
+    hl.FillColor = HOLLOW_COLOR
+    hl.OutlineColor = HOLLOW_COLOR
+    hl.FillTransparency = 0.35
+    hl.OutlineTransparency = 0
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Adornee = model
+    hl.Parent = model
+
+    local bb
+    if anchor then
+        bb = Instance.new("BillboardGui")
+        bb.Name = "HollowBillboard"
+        bb.Size = UDim2.new(0, 120, 0, 24)
+        bb.StudsOffset = Vector3.new(0, 2.5, 0)
+        bb.AlwaysOnTop = true
+        bb.LightInfluence = 0
+        bb.MaxDistance = 300
+        bb.Parent = anchor
+
+        local label = Instance.new("TextLabel")
+        label.Name = "BotLabel"
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = HOLLOW_LABEL
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.TextScaled = true
+        label.Font = Enum.Font.GothamBold
+        label.Parent = bb
+    end
+
+    hollowEntry = { model = model, highlight = hl, billboard = bb }
+
+    -- Cleanup if the model leaves
+    model.AncestryChanged:Connect(function()
+        if not model.Parent then
+            if hollowEntry and hollowEntry.model == model then
+                detachHollow()
+            end
+        end
+    end)
+end
+
+local function onHollowAdded(child)
+    if child.Name == HOLLOW_NAME and child:IsA("Model") then
+        attachHollow(child)
+    end
+end
+
+-- Check if it's already there
+do
+    local existing = Workspace:FindFirstChild(HOLLOW_NAME)
+    if existing and existing:IsA("Model") then
+        attachHollow(existing)
+    end
+end
+
+Workspace.ChildAdded:Connect(onHollowAdded)
+Workspace.ChildRemoved:Connect(function(child)
+    if hollowEntry and hollowEntry.model == child then
+        detachHollow()
+    end
+end)
+
+print("[TheHollow] loaded")
