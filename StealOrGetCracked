@@ -18,7 +18,8 @@
 --                             Mythic     -> red
 --   SprintStamina        -> infinite stamina, toggled with =
 --   Player Highlight     -> every player, blue, with name billboard
---   The Hollow           -> blue Highlight + "Bot" billboard
+--   Bot ESP              -> any Model with Humanoid.MaxHealth == inf,
+--                           blue Highlight + "Bot" billboard
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -485,63 +486,63 @@ end)
 print("[PlayerHighlight] loaded")
 
 -- ------------------------------------------------------------
--- THE HOLLOW ("Bot" replacement entity)
+-- BOT ESP (any Model with Humanoid.MaxHealth == inf)
+--   Detects "The Hollow", "The Maternal Wraith", etc. — anything
+--   the game spawns to replace a player who left while an entity.
 -- ------------------------------------------------------------
-local HOLLOW_NAME = "The Hollow"
-local HOLLOW_COLOR = Color3.fromRGB(0, 140, 255)  -- blue
-local HOLLOW_LABEL = "Bot"
+local BOT_COLOR = Color3.fromRGB(0, 140, 255)  -- blue
+local BOT_LABEL = "Bot"
+local BOT_POLL_INTERVAL = 0.5
 
-local hollowEntry = nil  -- { model, highlight, billboard }
+local botTracked = {}  -- [model] = { highlight, billboard }
 
-local function detachHollow()
-    if not hollowEntry then return end
-    if hollowEntry.highlight and hollowEntry.highlight.Parent then
-        hollowEntry.highlight:Destroy()
-    end
-    if hollowEntry.billboard and hollowEntry.billboard.Parent then
-        hollowEntry.billboard:Destroy()
-    end
-    hollowEntry = nil
+local function hasInfiniteHealth(model)
+    if not model or not model:IsA("Model") then return false end
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    local mh = hum.MaxHealth
+    -- math.huge, or a very large finite fallback for games that use 1e20
+    return mh == math.huge or (type(mh) == "number" and mh >= 1e15)
 end
 
-local function attachHollow(model)
-    if not model or not model:IsA("Model") then return end
-    if hollowEntry and hollowEntry.model == model then return end
-    detachHollow()
-
-    local hrp = model:FindFirstChild("HumanoidRootPart")
-        or model:WaitForChild("HumanoidRootPart", 5)
-    local anchor = hrp
+local function getBotAnchor(model)
+    return model:FindFirstChild("HumanoidRootPart")
         or model:FindFirstChild("Head")
         or model.PrimaryPart
         or model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function attachBot(model)
+    if botTracked[model] then return end
+
+    local anchor = getBotAnchor(model)
 
     local hl = Instance.new("Highlight")
-    hl.Name = "HollowHighlight"
-    hl.FillColor = HOLLOW_COLOR
-    hl.OutlineColor = HOLLOW_COLOR
+    hl.Name = "BotESP_Highlight"
+    hl.FillColor = BOT_COLOR
+    hl.OutlineColor = BOT_COLOR
     hl.FillTransparency = 0.35
     hl.OutlineTransparency = 0
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     hl.Adornee = model
     hl.Parent = model
 
-    local bb
+    local bb = nil
     if anchor then
         bb = Instance.new("BillboardGui")
-        bb.Name = "HollowBillboard"
+        bb.Name = "BotESP_Billboard"
         bb.Size = UDim2.new(0, 120, 0, 24)
         bb.StudsOffset = Vector3.new(0, 2.5, 0)
         bb.AlwaysOnTop = true
         bb.LightInfluence = 0
-        bb.MaxDistance = 300
+        bb.MaxDistance = 500
         bb.Parent = anchor
 
         local label = Instance.new("TextLabel")
         label.Name = "BotLabel"
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
-        label.Text = HOLLOW_LABEL
+        label.Text = BOT_LABEL
         label.TextColor3 = Color3.fromRGB(255, 255, 255)
         label.TextStrokeTransparency = 0
         label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -550,37 +551,41 @@ local function attachHollow(model)
         label.Parent = bb
     end
 
-    hollowEntry = { model = model, highlight = hl, billboard = bb }
+    botTracked[model] = { highlight = hl, billboard = bb }
+    print("[BotESP] attached to:", model.Name)
+end
 
-    -- Cleanup if the model leaves
-    model.AncestryChanged:Connect(function()
-        if not model.Parent then
-            if hollowEntry and hollowEntry.model == model then
-                detachHollow()
+local function detachBot(model)
+    local entry = botTracked[model]
+    if not entry then return end
+    if entry.highlight and entry.highlight.Parent then entry.highlight:Destroy() end
+    if entry.billboard and entry.billboard.Parent then entry.billboard:Destroy() end
+    botTracked[model] = nil
+end
+
+task.spawn(function()
+    print("[BotESP] poll loop started")
+    while true do
+        local ok2, err = pcall(function()
+            -- Cleanup pass
+            for model, _ in pairs(botTracked) do
+                if not model or not model.Parent or not hasInfiniteHealth(model) then
+                    detachBot(model)
+                end
             end
+
+            -- Scan pass: direct children of Workspace
+            for _, child in ipairs(Workspace:GetChildren()) do
+                if child:IsA("Model") and not botTracked[child] and hasInfiniteHealth(child) then
+                    attachBot(child)
+                end
+            end
+        end)
+        if not ok2 then
+            warn("[BotESP] poll error:", err)
         end
-    end)
-end
-
-local function onHollowAdded(child)
-    if child.Name == HOLLOW_NAME and child:IsA("Model") then
-        attachHollow(child)
-    end
-end
-
--- Check if it's already there
-do
-    local existing = Workspace:FindFirstChild(HOLLOW_NAME)
-    if existing and existing:IsA("Model") then
-        attachHollow(existing)
-    end
-end
-
-Workspace.ChildAdded:Connect(onHollowAdded)
-Workspace.ChildRemoved:Connect(function(child)
-    if hollowEntry and hollowEntry.model == child then
-        detachHollow()
+        task.wait(BOT_POLL_INTERVAL)
     end
 end)
 
-print("[TheHollow] loaded")
+print("[BotESP] loaded")
