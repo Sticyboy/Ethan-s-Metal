@@ -7,6 +7,7 @@
 --                             skip Value < 180
 --                             ALWAYS show:
 --                               - name == "Candy"
+--                               - name == "GoldBar"
 --                               - name contains "harddrive" (any case)
 --                               - Weight <= 0.5 AND Value >= 100
 --                           Text colour by Rarity:
@@ -67,6 +68,7 @@ local function isAlwaysShown(obj)
     local name = obj.Name or ""
 
     if name == "Candy" then return true end
+    if name == "GoldBar" then return true end
     if string.find(string.lower(name), "harddrive", 1, true) then return true end
 
     local weight = obj:GetAttribute("Weight")
