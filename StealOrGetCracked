@@ -9,6 +9,12 @@
 --                               - name == "Candy"
 --                               - name contains "harddrive" (any case)
 --                               - Weight <= 0.5 AND Value >= 100
+--                           Text colour by Rarity:
+--                             Common     -> white
+--                             Uncommon   -> light green
+--                             Rare       -> purple
+--                             Legendary  -> yellow
+--                             Mythic     -> red
 --   SprintStamina        -> infinite stamina, toggled with =
 --   Player Highlight     -> every player, blue, with name billboard
 -- ============================================================
@@ -32,6 +38,25 @@ local IGNORED_RARITIES = {
 
 local LIGHT_WEIGHT_THRESHOLD = 0.5
 local LIGHT_WEIGHT_MIN_VALUE = 100
+
+-- Rarity -> text colour
+local RARITY_COLORS = {
+    ["common"]    = Color3.fromRGB(255, 255, 255),  -- white
+    ["uncommon"]  = Color3.fromRGB(144, 238, 144),  -- light green
+    ["rare"]      = Color3.fromRGB(170, 0, 255),    -- purple
+    ["legendary"] = Color3.fromRGB(255, 215, 0),    -- yellow
+    ["mythic"]    = Color3.fromRGB(255, 0, 0),      -- red
+}
+local DEFAULT_RARITY_COLOR = Color3.fromRGB(255, 255, 255)
+
+local function getRarityColor(obj)
+    local rarity = obj:GetAttribute("Rarity")
+    if type(rarity) == "string" then
+        local c = RARITY_COLORS[string.lower(rarity)]
+        if c then return c end
+    end
+    return DEFAULT_RARITY_COLOR
+end
 
 local lootItemsTracked = {}
 local myLootTracked = {}
@@ -127,6 +152,7 @@ local function refreshBillboardText(entry)
     local label = entry.billboard:FindFirstChild("StatsLabel")
     if not label then return end
     label.Text = makeBillboardText(entry.object)
+    label.TextColor3 = getRarityColor(entry.object)
 end
 
 local function removeMyLootDisplay(obj)
@@ -188,7 +214,7 @@ local function addMyLootDisplay(obj)
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
         label.Text = makeBillboardText(obj)
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextColor3 = getRarityColor(obj)
         label.TextStrokeTransparency = 0
         label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
         label.TextScaled = false
