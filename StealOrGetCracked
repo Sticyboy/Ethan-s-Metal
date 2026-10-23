@@ -1,5 +1,5 @@
 -- ============================================================
--- Loot Highlighter + Infinite Stamina + Entity Highlight
+-- Loot Highlighter + Infinite Stamina + All-Player Highlight
 --   workspace.LootItems  -> blue Highlight only (no filter)
 --   workspace.MyLoot     -> blue Highlight + BillboardGui with
 --                           Rarity / Value / Weight, FILTERED:
@@ -10,16 +10,16 @@
 --                               - name contains "harddrive" (any case)
 --                               - Weight <= 0.5 AND Value >= 100
 --   SprintStamina        -> forced full stamina every frame
---   Entity Highlight     -> watch target players' HumanoidRootPart
---                           CollisionGroup:
---                             "Entity"        -> RED highlight
---                             anything else   -> GREEN highlight
+--   Player Highlight     -> every player, blue, with name billboard
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
+local Players   = game:GetService("Players")
 
-local HIGHLIGHT_COLOR = Color3.fromRGB(0, 140, 255)   -- blue
+-- ------------------------------------------------------------
+-- LOOT HIGHLIGHTER
+-- ------------------------------------------------------------
+local HIGHLIGHT_COLOR = Color3.fromRGB(0, 140, 255)
 local HIGHLIGHT_FILL_TRANSPARENCY = 0.6
 local HIGHLIGHT_OUTLINE_TRANSPARENCY = 0
 
@@ -32,13 +32,10 @@ local IGNORED_RARITIES = {
 local LIGHT_WEIGHT_THRESHOLD = 0.5
 local LIGHT_WEIGHT_MIN_VALUE = 100
 
-local lootItemsTracked = {}   -- [instance] = true
-local myLootTracked = {}      -- [instance] = { highlight, billboard, ... }
-local myLootSkipped = {}      -- [instance] = true  (filtered out; re-check if attrs change)
+local lootItemsTracked = {}
+local myLootTracked = {}
+local myLootSkipped = {}
 
--- ------------------------------------------------------------
--- Filtering
--- ------------------------------------------------------------
 local function isAlwaysShown(obj)
     if not obj then return false end
     local name = obj.Name or ""
@@ -73,9 +70,6 @@ local function isIgnored(obj)
     return false
 end
 
--- ------------------------------------------------------------
--- LootItems: blue highlight only
--- ------------------------------------------------------------
 local function addLootItemsHighlight(obj)
     if not obj or not obj.Parent then return end
     if lootItemsTracked[obj] then return end
@@ -97,9 +91,6 @@ local function addLootItemsHighlight(obj)
     lootItemsTracked[obj] = true
 end
 
--- ------------------------------------------------------------
--- MyLoot: highlight + billboard, filtered
--- ------------------------------------------------------------
 local function formatStat(v)
     if v == nil then return "?" end
     local t = type(v)
@@ -227,9 +218,6 @@ local function addMyLootDisplay(obj)
     end)
 end
 
--- ------------------------------------------------------------
--- Cleanup
--- ------------------------------------------------------------
 local function onLootItemRemoved(obj)
     lootItemsTracked[obj] = nil
 end
@@ -239,9 +227,6 @@ local function onMyLootRemoved(obj)
     myLootSkipped[obj] = nil
 end
 
--- ------------------------------------------------------------
--- Watchers
--- ------------------------------------------------------------
 local function watchFolder(folder, addFn, removeFn)
     if not folder then return end
     for _, child in ipairs(folder:GetChildren()) do
@@ -268,9 +253,9 @@ end
 
 print("[LootHighlighter] loaded")
 
--- ============================================================
--- Infinite Stamina (SprintStamina hook)
--- ============================================================
+-- ------------------------------------------------------------
+-- INFINITE STAMINA
+-- ------------------------------------------------------------
 local lp = Players.LocalPlayer
 
 local ok, mod = pcall(function()
@@ -302,120 +287,138 @@ else
     warn("[InfiniteStamina] could not require SprintStamina — is it in PlayerScripts?")
 end
 
--- ============================================================
--- Entity Highlight (target usernames)
--- ============================================================
--- Add usernames here to highlight more players.
--- The check uses the HumanoidRootPart's CollisionGroup:
---   "Entity"        -> RED
---   anything else   -> GREEN
-local TARGET_USERNAMES = {
-    ["zick_sadly"] = true,
-    -- add more usernames here
-}
+-- ------------------------------------------------------------
+-- ALL-PLAYER HIGHLIGHT (blue + name)
+-- ------------------------------------------------------------
+local PLAYER_COLOR = Color3.fromRGB(0, 140, 255)  -- blue
+local HIGHLIGHT_FILL_TRANSPARENCY_PLAYER = 0.35
 
-local ENTITY_COLOR = Color3.fromRGB(255, 0, 0)   -- red
-local OTHER_COLOR  = Color3.fromRGB(0, 255, 0)   -- green
+local playerHighlights = {}    -- [characterModel] = { highlight, billboard, hrp }
+local playerConnections = {}   -- [characterModel] = { conns... }
 
-local entityHighlights = {}   -- [humanoidRootPart] = Highlight
-local entityConnections = {}  -- [humanoidRootPart] = { conn1, conn2, ... }
-
-local function desiredColor(hrp)
-    if hrp.CollisionGroup == "Entity" then
-        return ENTITY_COLOR
-    end
-    return OTHER_COLOR
-end
-
-local function applyColor(hl, hrp)
-    local c = desiredColor(hrp)
-    hl.FillColor = c
-    hl.OutlineColor = c
-end
-
-local function attachToCharacter(character)
+local function detachPlayerCharacter(character)
     if not character then return end
+    local entry = playerHighlights[character]
+    if entry then
+        if entry.highlight and entry.highlight.Parent then entry.highlight:Destroy() end
+        if entry.billboard and entry.billboard.Parent then entry.billboard:Destroy() end
+        playerHighlights[character] = nil
+    end
+    local conns = playerConnections[character]
+    if conns then
+        for _, c in ipairs(conns) do
+            if c.Connected then c:Disconnect() end
+        end
+        playerConnections[character] = nil
+    end
+end
+
+local function updatePlayerName(entry, character)
+    if not entry or not entry.billboard then return end
+    local label = entry.billboard:FindFirstChild("NameLabel")
+    if not label then return end
+    local player = Players:GetPlayerFromCharacter(character)
+    label.Text = player and player.Name or character.Name
+end
+
+local function attachPlayerCharacter(character)
+    if not character or not character:IsA("Model") then return end
+    if playerHighlights[character] then return end
+
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then
-        -- Character may still be loading its parts
         hrp = character:WaitForChild("HumanoidRootPart", 5)
         if not hrp then return end
     end
-    if entityHighlights[hrp] then return end
 
     local hl = Instance.new("Highlight")
-    hl.Name = "EntityHighlight"
-    hl.FillTransparency = 0.35
+    hl.Name = "PlayerHighlight"
+    hl.FillColor = PLAYER_COLOR
+    hl.OutlineColor = PLAYER_COLOR
+    hl.FillTransparency = HIGHLIGHT_FILL_TRANSPARENCY_PLAYER
     hl.OutlineTransparency = 0
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Adornee = hrp
-    applyColor(hl, hrp)
-    hl.Parent = hrp
+    hl.Adornee = character
+    hl.Parent = character
 
-    entityHighlights[hrp] = hl
+    local head = character:FindFirstChild("Head") or hrp
+    local bb = head:FindFirstChild("PlayerNameBillboard")
+    if not bb then
+        bb = Instance.new("BillboardGui")
+        bb.Name = "PlayerNameBillboard"
+        bb.Size = UDim2.new(0, 140, 0, 24)
+        bb.StudsOffset = Vector3.new(0, 2.5, 0)
+        bb.AlwaysOnTop = true
+        bb.LightInfluence = 0
+        bb.MaxDistance = 250
+        bb.Parent = head
 
-    -- Re-evaluate when CollisionGroup changes (e.g. player becomes an entity)
-    local conn1 = hrp:GetPropertyChangedSignal("CollisionGroup"):Connect(function()
-        if entityHighlights[hrp] then
-            applyColor(entityHighlights[hrp], hrp)
-        end
-    end)
-
-    -- Cleanup if the part is removed
-    local conn2
-    conn2 = hrp.AncestryChanged:Connect(function()
-        if not hrp.Parent then
-            if entityHighlights[hrp] then
-                entityHighlights[hrp]:Destroy()
-                entityHighlights[hrp] = nil
-            end
-            local conns = entityConnections[hrp]
-            if conns then
-                for _, c in ipairs(conns) do
-                    if c.Connected then c:Disconnect() end
-                end
-                entityConnections[hrp] = nil
-            end
-            if conn1 then conn1:Disconnect() end
-            if conn2 then conn2:Disconnect() end
-        end
-    end)
-
-    entityConnections[hrp] = { conn1, conn2 }
-end
-
-local function watchPlayer(player)
-    if not player or not TARGET_USERNAMES[player.Name] then return end
-
-    -- Attach to current character if it exists
-    if player.Character then
-        attachToCharacter(player.Character)
+        local label = Instance.new("TextLabel")
+        label.Name = "NameLabel"
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = ""
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.TextScaled = true
+        label.Font = Enum.Font.GothamBold
+        label.Parent = bb
     end
 
-    -- Re-attach on every respawn
+    local entry = { highlight = hl, billboard = bb, hrp = hrp }
+    updatePlayerName(entry, character)
+
+    playerHighlights[character] = entry
+
+    local conns = {}
+
+    table.insert(conns, character:GetPropertyChangedSignal("Name"):Connect(function()
+        local e = playerHighlights[character]
+        if e then updatePlayerName(e, character) end
+    end))
+
+    table.insert(conns, character.ChildAdded:Connect(function(child)
+        if child.Name == "HumanoidRootPart" and child ~= hrp then
+            hrp = child
+            local e = playerHighlights[character]
+            if e then e.hrp = hrp end
+        end
+    end))
+
+    table.insert(conns, character.AncestryChanged:Connect(function()
+        if not character.Parent then
+            detachPlayerCharacter(character)
+        end
+    end))
+
+    playerConnections[character] = conns
+end
+
+local function watchPlayerForHighlight(player)
+    if not player then return end
+
+    if player.Character then
+        attachPlayerCharacter(player.Character)
+    end
+
     player.CharacterAdded:Connect(function(char)
-        attachToCharacter(char)
+        attachPlayerCharacter(char)
     end)
 
     player.CharacterRemoving:Connect(function(char)
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp and entityHighlights[hrp] then
-            entityHighlights[hrp]:Destroy()
-            entityHighlights[hrp] = nil
-        end
+        detachPlayerCharacter(char)
     end)
 end
 
 for _, player in ipairs(Players:GetPlayers()) do
-    watchPlayer(player)
+    watchPlayerForHighlight(player)
 end
-Players.PlayerAdded:Connect(watchPlayer)
-
--- In case the player was already in-game before this script ran
-for _, player in ipairs(Players:GetPlayers()) do
-    if TARGET_USERNAMES[player.Name] and player.Character then
-        attachToCharacter(player.Character)
+Players.PlayerAdded:Connect(watchPlayerForHighlight)
+Players.PlayerRemoving:Connect(function(player)
+    if player.Character then
+        detachPlayerCharacter(player.Character)
     end
-end
+end)
 
-print("[EntityHighlight] loaded")
+print("[PlayerHighlight] loaded")
