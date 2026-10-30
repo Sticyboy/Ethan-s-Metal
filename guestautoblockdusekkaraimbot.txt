@@ -464,6 +464,7 @@ noobActiveCooldownTimers = {}
 noobSlateskinActive = false
 noobSlateskinWasActive = false
 noobSlateskinTimerRunning = false
+-- Per-noob: noobLastTriggerTime[noob][channel] = tick()
 noobLastTriggerTime = {}
 noobSlateskinConnection = nil
 noobUpdateConnection = nil
@@ -472,10 +473,22 @@ noobTrackerEnabled = false
 
 cooldownTrackerEnabled = false
 activeCooldownTimers = {}
+-- Per-guest anti-spam: lastGuest1337Trigger[survivor]["anim"|"sound"] = tick()
 lastGuest1337Trigger = {}
+-- Per-guest anti-spam: lastChanceTrigger[survivor]["anim"|"sound"] = tick()
 lastChanceTrigger = {}
 GUEST1337_ANTI_SPAM_TIME = 3
 CHANCE_ANTI_SPAM_TIME = 3
+
+local function debouncePass(store, survivor, channel, window)
+    local now = tick()
+    local per = store[survivor]
+    if not per then per = {}; store[survivor] = per end
+    local last = per[channel]
+    if last and (now - last) < window then return false end
+    per[channel] = now
+    return true
+end
 
 dusekkarEnabled = false
 dusekkarTargetMode = "Survivors"
@@ -2177,6 +2190,10 @@ function cleanupCharacterTimers(character)
     if johnDoeWarningBillboards[character] then pcall(function() johnDoeWarningBillboards[character]:Destroy() end); johnDoeWarningBillboards[character] = nil end
     if johnDoeWarningPulseConnections[character] then johnDoeWarningPulseConnections[character]:Disconnect(); johnDoeWarningPulseConnections[character] = nil end
     cleanupM1Warning(character)
+    -- Per-guest anti-spam cleanup
+    if lastGuest1337Trigger[character] then lastGuest1337Trigger[character] = nil end
+    if lastChanceTrigger[character] then lastChanceTrigger[character] = nil end
+    if noobLastTriggerTime[character] then noobLastTriggerTime[character] = nil end
 end
 
 function watchCharacterRemoval(folder)
@@ -4009,8 +4026,7 @@ local function listenForSurvivorAbilities(survivor)
             local name = survivor.Name
             if name == "Chance" then
                 if chanceAnimIds[id] then
-                    if not lastChanceTrigger["anim"] or now - lastChanceTrigger["anim"] >= CHANCE_ANTI_SPAM_TIME then
-                        lastChanceTrigger["anim"] = now
+                    if debouncePass(lastChanceTrigger, survivor, "anim", CHANCE_ANTI_SPAM_TIME) then
                         createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Gun")
                     end
                     return
@@ -4022,8 +4038,7 @@ local function listenForSurvivorAbilities(survivor)
                 end
             elseif name == "Guest1337" then
                 if guest1337AllAnims[id] then
-                    if not lastGuest1337Trigger["anim"] or now - lastGuest1337Trigger["anim"] >= GUEST1337_ANTI_SPAM_TIME then
-                        lastGuest1337Trigger["anim"] = now
+                    if debouncePass(lastGuest1337Trigger, survivor, "anim", GUEST1337_ANTI_SPAM_TIME) then
                         createSurvivorCooldownDisplay(survivor, now + GUEST1337_COOLDOWN, "Block")
                     end
                     return
@@ -4050,8 +4065,7 @@ local function listenForSurvivorAbilities(survivor)
                 end
             elseif name == "Chance" then
                 if hasAnySoundMatch(survivor, chanceSounds) then
-                    if not lastChanceTrigger["sound"] or now - lastChanceTrigger["sound"] >= CHANCE_ANTI_SPAM_TIME then
-                        lastChanceTrigger["sound"] = now
+                    if debouncePass(lastChanceTrigger, survivor, "sound", CHANCE_ANTI_SPAM_TIME) then
                         createSurvivorCooldownDisplay(survivor, now + CHANCE_COOLDOWN, "Gun")
                     end
                 end
@@ -4183,10 +4197,8 @@ function startNoobSlateskinCooldown(noob)
         noobActiveCooldownTimers[noob]["Slateskin Active"] = nil
     end
     noobSlateskinTimerRunning = false
-    local now = tick()
-    if not noobLastTriggerTime["SlateskinPotion"] or now - noobLastTriggerTime["SlateskinPotion"] >= NOOB_ANTI_SPAM_TIME then
-        noobLastTriggerTime["SlateskinPotion"] = now
-        createNoobCooldownDisplay(noob, now + NOOB_SLATESKIN_COOLDOWN, "Slateskin Potion")
+    if debouncePass(noobLastTriggerTime, noob, "SlateskinPotion", NOOB_ANTI_SPAM_TIME) then
+        createNoobCooldownDisplay(noob, tick() + NOOB_SLATESKIN_COOLDOWN, "Slateskin Potion")
     end
 end
 
@@ -4226,8 +4238,7 @@ function listenForNoobAbilities(noob)
             local now = tick()
             for _, i in ipairs(NOOB_BLOXYCOLA_ANIMATIONS) do
                 if id == i then
-                    if not noobLastTriggerTime["BloxyCola"] or now - noobLastTriggerTime["BloxyCola"] >= NOOB_ANTI_SPAM_TIME then
-                        noobLastTriggerTime["BloxyCola"] = now
+                    if debouncePass(noobLastTriggerTime, noob, "BloxyCola", NOOB_ANTI_SPAM_TIME) then
                         createNoobCooldownDisplay(noob, now + NOOB_BLOXYCOLA_COOLDOWN, "Bloxy Cola")
                     end
                     return
@@ -4245,8 +4256,7 @@ function listenForNoobAbilities(noob)
             end
             for _, i in ipairs(NOOB_GHOSTBURGER_ANIMATIONS) do
                 if id == i then
-                    if not noobLastTriggerTime["Ghostburger"] or now - noobLastTriggerTime["Ghostburger"] >= NOOB_ANTI_SPAM_TIME then
-                        noobLastTriggerTime["Ghostburger"] = now
+                    if debouncePass(noobLastTriggerTime, noob, "Ghostburger", NOOB_ANTI_SPAM_TIME) then
                         createNoobCooldownDisplay(noob, now + NOOB_GHOSTBURGER_COOLDOWN, "Ghostburger")
                     end
                     return
@@ -4257,19 +4267,6 @@ function listenForNoobAbilities(noob)
     local a = hum:FindFirstChildOfClass("Animator")
     if a then setupAnim(a)
     else hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end) end
-end
-
-function scanForAllNoobs()
-    local noob = getNoobCharacter()
-    if noob and not isLocalPlayer(noob) and not noob:GetAttribute("NoobListener") then
-        listenForNoobAbilities(noob)
-        local torso = noob:FindFirstChild("Torso")
-        if torso then
-            noobSlateskinActive = (torso.BrickColor == BrickColor.new("Dark stone grey"))
-            noobSlateskinWasActive = noobSlateskinActive
-            if noobSlateskinActive then startNoobSlateskinActiveTimer(noob) end
-        end
-    end
 end
 
 function watchForNewNoobs()
@@ -4310,6 +4307,19 @@ end
 
 function stopNoobSlateskinLoop()
     if noobSlateskinConnection then noobSlateskinConnection:Disconnect(); noobSlateskinConnection = nil end
+end
+
+function scanForAllNoobs()
+    local noob = getNoobCharacter()
+    if noob and not isLocalPlayer(noob) and not noob:GetAttribute("NoobListener") then
+        listenForNoobAbilities(noob)
+        local torso = noob:FindFirstChild("Torso")
+        if torso then
+            noobSlateskinActive = (torso.BrickColor == BrickColor.new("Dark stone grey"))
+            noobSlateskinWasActive = noobSlateskinActive
+            if noobSlateskinActive then startNoobSlateskinActiveTimer(noob) end
+        end
+    end
 end
 
 function startNoobTracking()
