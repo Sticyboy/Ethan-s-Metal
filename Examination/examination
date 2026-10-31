@@ -4,7 +4,7 @@
 --  - Green highlight for other players
 --  - Names above characters (green for players, red for enemies)
 --  - Health text below name (color coded by %)
---  - Aimbot (hold right click to aim at closest NPC ONLY)
+--  - Aimbot (hold right click to aim at closest target)
 --  - Wall check (transparent objects ignored)
 -- ============================================================
 
@@ -37,6 +37,7 @@ local lp = Players.LocalPlayer
 local highlightingEnabled = false
 local aimbotEnabled = false
 local wallCheckEnabled = true
+local aimbotTargetPlayers = false -- NEW: whether aimbot also targets players
 local highlightData = {}
 local scanConnection = nil
 local cleanupConnection = nil
@@ -533,7 +534,7 @@ local function stopHealthUpdater()
     end
 end
 
--- ===== AIMBOT FUNCTIONS (NPC ONLY) =====
+-- ===== AIMBOT FUNCTIONS =====
 local function getValidTargets()
     local targets = {}
     local charsFolder = getCharactersFolder()
@@ -544,7 +545,8 @@ local function getValidTargets()
     for _, character in ipairs(charsFolder:GetChildren()) do
         if character:IsA("Model") then
             if isLocalPlayerCharacter(character) then continue end
-            if isPlayerCharacter(character) then continue end
+            -- CHANGED: only skip players if the "target players" toggle is off
+            if not aimbotTargetPlayers and isPlayerCharacter(character) then continue end
             if not isCharacterAlive(character) then continue end
 
             local head = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
@@ -569,7 +571,14 @@ local function getValidTargets()
         end
     end
 
+    -- Closest-to-cursor first. If players are enabled, prefer players over NPCs
+    -- when both are in range (remove the first two lines to target purely by distance).
     table.sort(targets, function(a, b)
+        local aIsPlayer = isPlayerCharacter(a.character)
+        local bIsPlayer = isPlayerCharacter(b.character)
+        if aIsPlayer ~= bIsPlayer then
+            return aIsPlayer -- players take priority
+        end
         return a.distance < b.distance
     end)
 
@@ -749,7 +758,7 @@ local TransparencySlider = MainTab:CreateSlider({
     end
 })
 
-MainTab:CreateSection("Aimbot (NPCs ONLY)")
+MainTab:CreateSection("Aimbot")
 
 local AimbotToggle = MainTab:CreateToggle({
     Name = "Enable Aimbot",
@@ -761,7 +770,7 @@ local AimbotToggle = MainTab:CreateToggle({
             startAimbot()
             Rayfield:Notify({
                 Title = "Aimbot",
-                Content = "Enabled - Hold Right Click to aim at closest NPC (players excluded) | Transparent objects ignored",
+                Content = "Enabled - Hold Right Click to aim at closest target | Transparent objects ignored",
                 Duration = 3,
             })
         else
@@ -772,6 +781,21 @@ local AimbotToggle = MainTab:CreateToggle({
                 Duration = 2,
             })
         end
+    end
+})
+
+-- NEW: toggle to also aim at players (not just NPCs)
+local AimbotPlayersToggle = MainTab:CreateToggle({
+    Name = "Aimbot Players Too (not just NPCs)",
+    CurrentValue = false,
+    Flag = "AimbotPlayersToggle",
+    Callback = function(Value)
+        aimbotTargetPlayers = Value
+        Rayfield:Notify({
+            Title = "Aimbot",
+            Content = Value and "Targets players + NPCs" or "Targets NPCs only",
+            Duration = 2,
+        })
     end
 })
 
@@ -855,7 +879,8 @@ MainTab:CreateParagraph({
               "  Green = healthy (>60%)\n" ..
               "  Yellow = hurt (30-60%)\n" ..
               "  Red = critical (<30%)\n" ..
-              "Aimbot targets NPCs ONLY (players excluded)\n" ..
+              "Aimbot targets NPCs by default (players excluded)\n" ..
+              "Enable 'Aimbot Players Too' to include players\n" ..
               "Yourself is not highlighted\n" ..
               "Wall check ignores fully transparent objects"
 })
@@ -868,3 +893,4 @@ Rayfield:LoadConfiguration()
 
 print("✅ Highlighter loaded - NPCs red, Players green, color-coded health text")
 print("✅ Wall check ignores fully transparent objects")
+print("✅ Aimbot can target players via the 'Aimbot Players Too' toggle")
