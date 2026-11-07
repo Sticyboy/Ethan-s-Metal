@@ -3011,34 +3011,69 @@ local function startNoliVoidstarWatcher()
     local ingame = map:FindFirstChild("Ingame")
     if not ingame then return nil end
 
-    local ignored = {}
-    for _, v in ipairs(ingame:GetChildren()) do
-        if v.Name == "Voidstar" then ignored[v] = true end
-    end
+    -- track instances we've ever registered; on reuse, re-register
+    local tracked = setmetatable({}, {__mode = "k"}) -- weak keys
+    local entries = {} -- [instance] = { owner = model, consumed = false }
+    noliVoidstarOwnerMap = entries -- reuse the existing map name
 
-    local watcher = ingame.ChildAdded:Connect(function(child)
-        if not noliTrackerEnabled then return end
-        if child.Name ~= "Voidstar" then return end
-        if ignored[child] then return end
-
-        local owner = findNearestNoliToPosition(child.Position)
+    local function register(v)
+        if not v or v.Name ~= "Voidstar" then return end
+        local e = entries[v]
+        if e and not e.consumed then return end -- already have a live cast
+        local owner = findNearestNoliToPosition(v.Position)
         if not owner then return end
-
-        noliVoidstarOwnerMap[child] = owner
-
+        entries[v] = { owner = owner, consumed = false }
+        tracked[v] = true
         local conn
-        conn = child.AncestryChanged:Connect(function()
-            if not child or not child.Parent then
-                if conn then conn:Disconnect() end
-                local resolvedOwner = noliVoidstarOwnerMap[child]
-                noliVoidstarOwnerMap[child] = nil
-                if resolvedOwner and resolvedOwner.Parent then
-                    createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS, resolvedOwner, tick() + NOVA_COOLDOWN, "Nova")
+        conn = v.AncestryChanged:Connect(function()
+            if v and v.Parent then return end
+            if conn then conn:Disconnect() end
+            local ent = entries[v]
+            if ent and not ent.consumed then
+                ent.consumed = true
+                if ent.owner and ent.owner.Parent then
+                    createKillerCooldownDisplay(noliActiveCooldownTimers, NOLI_ABILITY_OFFSETS,
+                        ent.owner, tick() + NOVA_COOLDOWN, "Nova")
                 end
             end
+            entries[v] = nil -- allow re-register on reuse
         end)
+    end
+
+    -- initial pass
+    for _, v in ipairs(ingame:GetChildren()) do
+        if v.Name == "Voidstar" then register(v) end
+    end
+
+    local added = ingame.ChildAdded:Connect(function(c)
+        if c.Name == "Voidstar" then register(c) end
     end)
-    return watcher
+
+    -- poll because the game reuses the same instance without firing ChildAdded
+    local pollToken = true
+    task.spawn(function()
+        while pollToken and noliTrackerEnabled do
+            task.wait(0.05)
+            local ig = workspace.Map and workspace.Map:FindFirstChild("Ingame")
+            if ig then
+                for _, v in ipairs(ig:GetChildren()) do
+                    if v.Name == "Voidstar" then
+                        local e = entries[v]
+                        if not e or e.consumed then
+                            register(v)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    return {
+        Disconnect = function()
+            pollToken = false
+            if added then added:Disconnect() end
+        end,
+    }
 end
 
 function startNoliTracking()
@@ -3620,34 +3655,65 @@ local function startNosferatuBatsWatcher()
     local ingame = map:FindFirstChild("Ingame")
     if not ingame then return nil end
 
-    local ignored = {}
-    for _, v in ipairs(ingame:GetChildren()) do
-        if v.Name == "Bats" then ignored[v] = true end
-    end
+    local tracked = setmetatable({}, {__mode = "k"})
+    local entries = {}
+    nosferatuHunterFeastTracked = entries
 
-    local watcher = ingame.ChildAdded:Connect(function(child)
-        if not nosferatuTrackerEnabled then return end
-        if child.Name ~= "Bats" then return end
-        if ignored[child] then return end
-
-        local owner = findNearestNosferatuToPosition(child.Position)
+    local function register(v)
+        if not v or v.Name ~= "Bats" then return end
+        local e = entries[v]
+        if e and not e.consumed then return end
+        local owner = findNearestNosferatuToPosition(v.Position)
         if not owner then return end
-
-        nosferatuHunterFeastTracked[child] = owner
-
+        entries[v] = { owner = owner, consumed = false }
+        tracked[v] = true
         local conn
-        conn = child.AncestryChanged:Connect(function()
-            if not child or not child.Parent then
-                if conn then conn:Disconnect() end
-                local resolvedOwner = nosferatuHunterFeastTracked[child]
-                nosferatuHunterFeastTracked[child] = nil
-                if resolvedOwner and resolvedOwner.Parent then
-                    createNosferatuCooldownDisplay(resolvedOwner, tick() + HUNTERS_FEAST_COOLDOWN, "Hunter's Feast")
+        conn = v.AncestryChanged:Connect(function()
+            if v and v.Parent then return end
+            if conn then conn:Disconnect() end
+            local ent = entries[v]
+            if ent and not ent.consumed then
+                ent.consumed = true
+                if ent.owner and ent.owner.Parent then
+                    createNosferatuCooldownDisplay(ent.owner, tick() + HUNTERS_FEAST_COOLDOWN, "Hunter's Feast")
                 end
             end
+            entries[v] = nil
         end)
+    end
+
+    for _, v in ipairs(ingame:GetChildren()) do
+        if v.Name == "Bats" then register(v) end
+    end
+
+    local added = ingame.ChildAdded:Connect(function(c)
+        if c.Name == "Bats" then register(c) end
     end)
-    return watcher
+
+    local pollToken = true
+    task.spawn(function()
+        while pollToken and nosferatuTrackerEnabled do
+            task.wait(0.05)
+            local ig = workspace.Map and workspace.Map:FindFirstChild("Ingame")
+            if ig then
+                for _, v in ipairs(ig:GetChildren()) do
+                    if v.Name == "Bats" then
+                        local e = entries[v]
+                        if not e or e.consumed then
+                            register(v)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    return {
+        Disconnect = function()
+            pollToken = false
+            if added then added:Disconnect() end
+        end,
+    }
 end
 
 function listenForNosferatuAbilities(n)
