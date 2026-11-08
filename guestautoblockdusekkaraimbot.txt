@@ -104,7 +104,7 @@ autoBlockTriggerSounds = {
     ["114481520550129"] = true, ["137809737339569"] = true, ["118562842802948"] = true,
     ["122398404613193"] = true, ["132160759837000"] = true, ["111295935549452"] = true,
     ["123835423223220"] = true, ["100600301396617"] = true, ["120749612844426"] = true,
-    ["86506028049034"] = true, ["113413858159336"] = true,
+    ["86506028049034"] = true, ["113413858159336"] = true, ["98866992038428"] = true,
 }
 
 autoBlockTriggerAnimations = {
@@ -199,6 +199,7 @@ KILL_ANIMATIONS = {
 }
 BLOOD_ORB_SOUND_ID = "7837536770"
 BLOOD_HUNT_DURATION = 25
+-- 25 -> 30
 VOID_RUSH_INSTANT_ANIMATIONS = {
     "86185540502966", "138973708225026", "72288188654477", "139321362207112",
     "129613827182782", "120976159116654", "125279161782730", "103858090634577",
@@ -207,19 +208,72 @@ VOID_RUSH_INSTANT_ANIMATIONS = {
     "94302409429630", "100945669207347", "122693350878258",
     "87042478930709", "108534311112324", "136369059019327", "124867038627553",
     "112818679896338", "139154207728558",
+    -- NEW: AdminNoli (EndDash, EndDashNonChar, EndDashCrashed, CutsceneKillerRig)
+    "110873558561599", "83547117708834", "88113448797951",
+    -- NEW: SigilNoli (EndDash, EndDashCrashed, EndDashNonChar)
+    "88496608208953", "92869217734653",
 }
+
+-- 12 -> 32
 VOID_RUSH_START_ANIMATIONS = {
     "106723424455179", "92243093913547", "131633352475052", "119441657389159",
     "134083594808875", "86363696826555", "118601826285810", "113625429863256",
     "95977028582843", "100767584148154",
     "73498373257774", "73299175135173",
+    -- NEW
+    "106423233214688", -- SigilNoli WeakHit
+    "107032335460679", -- NarratorNoli StartDashInit
+    "112818679896338", -- #CCNoli StartCharge/StartDashInit/StartDashCombo
+    "114356208094580", -- base/Milestone75/Milestone100/!Special StartDashCombo
+    "125719960147158", -- SigilNoli StartDashInit/StartDashCombo
+    "129002299536917", -- ConductorNoli StartDashCombo
+    "132221505301108", -- ArtfulNoli StartDashInit/StartDashCombo
+    "132438928784874", -- AdminNoli StartDashInit/StartDashCombo
+    "132701717398544", -- IllusionaryNoli/!cameamanNoli StartCharge/CancelCharge
+    "133272285191941", -- NarratorNoli StartDashCombo
+    "133637207919863", -- ConductorNoli StartDashInit
+    "137642639873297", -- ArtfulNoli StartCharge
+    "139613699193400", -- !cameamanNoli StartDashInit/StartDashCombo
+    "139835501033932", -- base Noli StartDashInit
+    "80518799815283",  -- DevestoNoli StartCharge/StartDashInit/StartDashCombo
+    "85379652729528",  -- NarratorNoli StartCharge/LoopCharge
+    "85568995953372",  -- SigilNoli StartCharge
+    "86359813627024",  -- IllusionaryNoli StartCharge/StartDashInit/StartDashCombo
+    "87345297964335",  -- AdminNoli WeakHit
+    "91758760621955",  -- base Noli StartCharge/CancelCharge
 }
+
+-- 17 -> 45
 VOID_RUSH_CANCEL_ANIMATIONS = {
     "132221505301108", "114356208094580", "129002299536917", "133272285191941",
     "126654961540956", "91758760621955",
     "118601826285810", "113625429863256", "132701717398544", "86359813627024",
     "85379652729528", "95977028582843", "80518799815283", "125279161782730",
     "137642639873297", "139613699193400", "112818679896338",
+    -- NEW: loop dash / loop charge
+    "100358581940485", -- ArtfulNoli LoopDashCombo
+    "102740535958511", -- SigilNoli LoopDashInit/LoopDashCombo
+    "103526858588753", -- #CCNoli LoopCharge/LoopDashInit/LoopDashCombo
+    "110146633029148", -- DevestoNoli LoopDashInit/LoopDashCombo
+    "112135252467978", -- NarratorNoli LoopDashInit
+    "122100542198115", -- TrollNoli LoopDashInit
+    "124724779362675", -- ConductorNoli LoopDashCombo
+    "126896426760253", -- base Noli LoopDashInit
+    "129717107332668", -- Milestone75Noli LoopDashCombo
+    "135884061951801", -- base Noli LoopDashCombo
+    "70530646232333",  -- TrollNoli LoopDashCombo
+    "70901805505719",  -- AdminNoli LoopDashInit/LoopDashCombo
+    "71321270439448",  -- SigilNoli CancelCharge
+    "76312020299624",  -- !cameamanNoli LoopCharge
+    "81803417290685",  -- ConductorNoli LoopDashInit
+    "82823860303750",  -- NarratorNoli LoopDashCombo
+    "84449964607732",  -- Milestone75/Milestone100/!Special LoopDashInit/LoopDashCombo
+    "93841120533318",  -- base + 8 skins LoopCharge
+    "94634594529334",  -- ArtfulNoli LoopDashInit
+    "98021909071392",  -- IllusionaryNoli LoopDashInit/LoopDashCombo
+    -- NEW: start/charge animations (same overlap convention as your original entries)
+    "100767584148154", "107032335460679", "125719960147158", "132438928784874",
+    "133637207919863", "139835501033932", "85568995953372", "86363696826555",
 }
 CORRUPT_NATURE_ANIMATIONS = {
     "18885919947", "82818822023693", "124243639579224", "96167639214189", "109198380290924",
