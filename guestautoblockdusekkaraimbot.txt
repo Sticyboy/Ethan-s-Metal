@@ -5195,6 +5195,7 @@ function setupInputHook()
         local isc00lkidd = (myTeam == "Killer" and myCharacter == "c00lkidd")
         local isNoli = (myTeam == "Killer" and myCharacter == "Noli")
         local isAzureChar = (myTeam == "Killer" and myCharacter == "Azure")
+        local isNosferatuChar = (myTeam == "Killer" and myCharacter == "Nosferatu")
 
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if not aimbotEnabled then return end
@@ -5254,6 +5255,7 @@ function setupInputHook()
                     startNormalStab(tk)
                 end
             elseif isNoli then startNoliAimbot()
+            elseif isNosferatuChar then startGeneralAimbot(0.9)
             elseif isSixer then startGeneralAimbot(1.45)
             elseif isJohnDoe then startGeneralAimbot(4.5)
             elseif isShedletsky then startGeneralAimbot(1.1)
@@ -5280,7 +5282,11 @@ function setupInputHook()
         end
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.R then
             if not aimbotEnabled then return end
-            if isGuest1337 then startGeneralAimbot(0.95) end
+            if isGuest1337 then
+                startGeneralAimbot(0.95)
+            elseif isNosferatuChar then
+                startGeneralAimbot(0.4)
+            end
         end
     end)
 end
