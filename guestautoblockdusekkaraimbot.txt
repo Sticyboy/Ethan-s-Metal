@@ -115,7 +115,7 @@ autoBlockTriggerSounds = {
     -- added: Sounds.Swing (8)
     ["105207247877248"] = true, ["108360420637223"] = true, ["115343460993527"] = true,
     ["135256560060972"] = true, ["72085713525541"] = true, ["94273783714662"] = true,
-    ["95863147467940"] = true, ["99918466107008"] = true,
+    ["95863147467940"] = true, ["99918466107008"] = true, ["138047522440301"] = true,
 }
 
 autoBlockTriggerAnimations = {
@@ -322,10 +322,27 @@ UNSTOPPABLE_ANIMATIONS = {
 ANNIHILATION_CORRUPT_ENERGY = "114620047310688"
 ANNIHILATION_UNSTOPPABLE_TRIGGER = "111710065813108"
 
-BLOODHOOK_ANIMATION = "79282445348798"
-BLOODHOOK_RESET_ANIMATION = "113403615979705"
-CATACLYSM_ANIMATION = "72186169160926"
-ASCENSION_ANIMATION = "97279203534534"
+BLOODHOOK_ANIMATIONS_DEFAULT = { ["79282445348798"] = true }
+BLOODHOOK_RESET_ANIMATIONS_DEFAULT = { ["113403615979705"] = true }
+CATACLYSM_ANIMATIONS_DEFAULT = { ["72186169160926"] = true }
+ASCENSION_ANIMATIONS_DEFAULT = { ["97279203534534"] = true }
+
+MILESTONE100 = "Milestone100Nosferatu"
+BLOODHOOK_ANIMATIONS_M4 = { ["77825942252920"] = true }
+BLOODHOOK_RESET_ANIMATIONS_M4 = { ["131185234121348"] = true }
+CATACLYSM_ANIMATIONS_M4 = { ["93144165594470"] = true }
+ASCENSION_ANIMATIONS_M4 = { ["93144165594470"] = true } -- same id; priority handled below
+-- Sounds fired at the same instant as the shared 93144165594470 animation.
+-- Used to disambiguate Cataclysm (Spire) from Ascension (Ascent) on Milestone IV.
+NOSFERATU_CATACLYSM_SOUNDS = {
+    ["83428781642755"] = true,  -- default SpireStart
+    ["98858418235579"] = true,  -- M4 SpireStart
+}
+NOSFERATU_ASCENSION_SOUNDS = {
+    ["88000454882343"] = true,  -- default AscentStart / AscentBiteStart
+    ["123356727212395"] = true, -- default AscentTransform (also M4 AscentTransform)
+    ["92337815974618"] = true,  -- M4 AscentStart
+}
 
 BLOODHOOK_COOLDOWN = 24
 CATACLYSM_COOLDOWN = 22
@@ -3795,33 +3812,170 @@ local function startNosferatuBatsWatcher()
     }
 end
 
-function listenForNosferatuAbilities(n)
-    if not n then return end
-    if isLocalPlayer(n) then return end
-    if n:GetAttribute("NosferatuListener") then return end
-    n:SetAttribute("NosferatuListener", true)
-    local hum = n:FindFirstChildOfClass("Humanoid")
-    if hum then
-        local function setupAnim(anim)
-            if not anim then return end
-            anim.AnimationPlayed:Connect(function(track)
-                if not nosferatuTrackerEnabled then return end
-                local id = extractNumericAnimationId(track.Animation.AnimationId)
-                if id == BLOODHOOK_ANIMATION then
-                    createNosferatuCooldownDisplay(n, tick() + BLOODHOOK_COOLDOWN, "Bloodhook")
-                elseif id == BLOODHOOK_RESET_ANIMATION then
-                    resetNosferatuBloodhookCooldown(n)
-                elseif id == CATACLYSM_ANIMATION then
-                    createNosferatuCooldownDisplay(n, tick() + CATACLYSM_COOLDOWN, "Cataclysm")
-                elseif id == ASCENSION_ANIMATION then
-                    createNosferatuCooldownDisplay(n, tick() + ASCENSION_COOLDOWN, "Ascension")
+-- Skins that reuse the "M4" animation set where SpireStart == Ascent
+-- (93144165594470) and must be disambiguated via sounds / Y-check.
+M4_FAMILY_SKINS = {
+    ["Milestone100Nosferatu"] = true,
+    ["Milestone75Nosferatu"] = true,
+}
+
+local function isMilestone100Nosferatu(n)
+    if not n then return false end
+    local skin = n:GetAttribute("SkinName")
+    if not skin then return false end
+    return M4_FAMILY_SKINS[skin] == true
+end
+
+-- Resolves the Milestone IV shared animation id (93144165594470) into either
+-- "Cataclysm" or "Ascension" (or nil if undetermined, in which case the
+-- display is scheduled by a delayed Y-elevation check).
+--
+-- Priority:
+--   1. Sound that fired at the same instant (most reliable, instant)
+--   2. Player-local FlightTimeRemaining UI (instant, only if WE are Nosferatu)
+--   3. Deferred Y-elevation check ~0.9s later (fallback if sound muted)
+local function resolveNosferatuSharedId(n)
+    if not n then return nil end
+
+    -- ---- Signal 1: sound played alongside the animation ----
+    local deadline = tick() + 0.05
+    local soundVerdict = nil
+    while tick() < deadline do
+        for _, s in ipairs(n:GetDescendants()) do
+            if s:IsA("Sound") and s.IsPlaying and s.TimePosition < 0.15 then
+                local id = extractNumericSoundId(s)
+                if id then
+                    if NOSFERATU_CATACLYSM_SOUNDS[id] then
+                        soundVerdict = "Cataclysm"
+                        break
+                    elseif NOSFERATU_ASCENSION_SOUNDS[id] then
+                        soundVerdict = "Ascension"
+                        break
+                    end
                 end
-            end)
+            end
         end
-        local a = hum:FindFirstChildOfClass("Animator")
-        if a then setupAnim(a) end
-        hum.ChildAdded:Connect(function(c) if c:IsA("Animator") then setupAnim(c) end end)
+        if soundVerdict then break end
+        task.wait(0.01)
     end
+    if soundVerdict then return soundVerdict end
+
+    -- ---- Signal 2: local-player flight UI (instant only for the caster) ----
+    local pg = lp and lp:FindFirstChild("PlayerGui")
+    local tmp = pg and pg:FindFirstChild("TemporaryUI")
+    if tmp and tmp:FindFirstChild("FlightTimeRemaining") then
+        return "Ascension"
+    end
+
+    -- ---- Signal 3 (fallback): defer to a Y-elevation check ----
+    local hrp0 = n:FindFirstChild("HumanoidRootPart")
+    if not hrp0 then return nil end
+    local startY = hrp0.Position.Y
+
+    task.delay(0.9, function()
+        if not n or not n.Parent then return end
+        local hrp1 = n:FindFirstChild("HumanoidRootPart")
+        if not hrp1 then return end
+        local roseY = hrp1.Position.Y - startY
+        if roseY > 4 then
+            createNosferatuCooldownDisplay(n, tick() + ASCENSION_COOLDOWN, "Ascension")
+        else
+            createNosferatuCooldownDisplay(n, tick() + CATACLYSM_COOLDOWN, "Cataclysm")
+        end
+    end)
+
+    return nil
+end
+
+function listenForNosferatuAbilities(n)
+    if not n then
+        return
+    end
+    if isLocalPlayer(n) then
+        return
+    end
+    if n:GetAttribute("NosferatuListener") then
+        return
+    end
+    n:SetAttribute("NosferatuListener", true)
+
+    local hum = n:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        return
+    end
+
+    local function handleAnim(id)
+        local isM4 = isMilestone100Nosferatu(n)
+
+        -- ===== Shared-ID resolution for Milestone IV =====
+        -- 93144165594470 is used for BOTH SpireStart (Cataclysm) and
+        -- Ascent (Ascension) on the Milestone IV skin, so it must be
+        -- disambiguated before falling through to the per-ability tables.
+        if isM4 and id == "93144165594470" then
+            local verdict = resolveNosferatuSharedId(n)
+            if verdict == "Ascension" then
+                createNosferatuCooldownDisplay(n, tick() + ASCENSION_COOLDOWN, "Ascension")
+            elseif verdict == "Cataclysm" then
+                createNosferatuCooldownDisplay(n, tick() + CATACLYSM_COOLDOWN, "Cataclysm")
+            end
+            -- verdict == nil -> delayed Y-check will create the display
+            return
+        end
+
+        -- ===== Bloodhook =====
+        local bh = isM4 and BLOODHOOK_ANIMATIONS_M4 or BLOODHOOK_ANIMATIONS_DEFAULT
+        if bh[id] then
+            createNosferatuCooldownDisplay(n, tick() + BLOODHOOK_COOLDOWN, "Bloodhook")
+            return
+        end
+
+        -- ===== Bloodhook Reset =====
+        local bhr = isM4 and BLOODHOOK_RESET_ANIMATIONS_M4 or BLOODHOOK_RESET_ANIMATIONS_DEFAULT
+        if bhr[id] then
+            resetNosferatuBloodhookCooldown(n)
+            return
+        end
+
+        -- ===== Cataclysm =====
+        local cat = isM4 and CATACLYSM_ANIMATIONS_M4 or CATACLYSM_ANIMATIONS_DEFAULT
+        if cat[id] then
+            createNosferatuCooldownDisplay(n, tick() + CATACLYSM_COOLDOWN, "Cataclysm")
+            return
+        end
+
+        -- ===== Ascension =====
+        local asc = isM4 and ASCENSION_ANIMATIONS_M4 or ASCENSION_ANIMATIONS_DEFAULT
+        if asc[id] then
+            createNosferatuCooldownDisplay(n, tick() + ASCENSION_COOLDOWN, "Ascension")
+            return
+        end
+    end
+
+    local function setupAnim(anim)
+        if not anim then
+            return
+        end
+        anim.AnimationPlayed:Connect(function(track)
+            if not nosferatuTrackerEnabled then
+                return
+            end
+            local id = extractNumericAnimationId(track.Animation.AnimationId)
+            if not id then
+                return
+            end
+            handleAnim(id)
+        end)
+    end
+
+    local a = hum:FindFirstChildOfClass("Animator")
+    if a then
+        setupAnim(a)
+    end
+    hum.ChildAdded:Connect(function(c)
+        if c:IsA("Animator") then
+            setupAnim(c)
+        end
+    end)
 end
 
 function scanForAllNosferatus()
