@@ -1,0 +1,146 @@
+-- Disable collisions for all objects in workspace.Players.Killers (Except Yourself)
+-- Does NOT disable collisions when playing as Veeronica
+-- RESTORES collisions when you become Veeronica
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local lp = Players.LocalPlayer
+
+local killersFolder = Workspace:FindFirstChild("Players")
+if killersFolder then
+    killersFolder = killersFolder:FindFirstChild("Killers")
+end
+
+if not killersFolder then
+    warn("Could not find workspace.Players.Killers")
+    return
+end
+
+print("[No Collision] Found Killers folder! Disabling collisions for other killers...")
+
+-- Track which parts we disabled so we can restore them
+local disabledParts = {}
+
+-- Track Veeronica state
+local wasVeeronica = false
+
+-- Function to check if a killer is the local player
+local function isLocalPlayerKiller(killer)
+    local usernameAttr = killer:GetAttribute("Username")
+    return usernameAttr and usernameAttr == lp.Name
+end
+
+-- Function to check if the local player is playing as Veeronica
+local function amIVeeronica()
+    local playersFolder = Workspace:FindFirstChild("Players")
+    if not playersFolder then return false end
+    local survivorsFolder = playersFolder:FindFirstChild("Survivors")
+    if not survivorsFolder then return false end
+    
+    for _, survivor in ipairs(survivorsFolder:GetChildren()) do
+        if survivor.Name == "Veeronica" then
+            local usernameAttr = survivor:GetAttribute("Username")
+            if usernameAttr and usernameAttr == lp.Name then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Function to recursively disable collisions on all parts in a model
+local function disableCollisionsOnModel(model)
+    if not model then return end
+    if isLocalPlayerKiller(model) then return end
+    
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BasePart") then
+            -- Only track if we haven't already disabled it
+            if descendant.CanCollide == true then
+                disabledParts[descendant] = true
+                descendant.CanCollide = false
+            end
+        end
+    end
+end
+
+-- Function to restore collisions on all parts we disabled
+local function restoreAllCollisions()
+    for part, _ in pairs(disabledParts) do
+        if part and part.Parent then
+            pcall(function()
+                part.CanCollide = true
+            end)
+        end
+    end
+    disabledParts = {}
+    print("[No Collision] Restored all collisions (Veeronica mode)")
+end
+
+-- Function to process all killers
+local function processAllKillers()
+    if amIVeeronica() then return end
+    
+    for _, killer in ipairs(killersFolder:GetChildren()) do
+        if killer:IsA("Model") and not isLocalPlayerKiller(killer) then
+            disableCollisionsOnModel(killer)
+        end
+    end
+end
+
+-- Process all existing killers immediately
+processAllKillers()
+
+-- Watch for new killers being added
+killersFolder.ChildAdded:Connect(function(killer)
+    if amIVeeronica() then return end
+    if killer:IsA("Model") and not isLocalPlayerKiller(killer) then
+        task.wait(0.1)
+        disableCollisionsOnModel(killer)
+    end
+end)
+
+-- Handle killer removal - clean up disabledParts
+killersFolder.ChildRemoved:Connect(function(killer)
+    -- Remove any tracked parts that belonged to this killer
+    for part, _ in pairs(disabledParts) do
+        if part and not part.Parent then
+            disabledParts[part] = nil
+        end
+    end
+end)
+
+-- Constantly apply every frame
+RunService.Heartbeat:Connect(function()
+    local isVeeronica = amIVeeronica()
+    
+    -- Check if we just became Veeronica
+    if isVeeronica and not wasVeeronica then
+        print("[No Collision] Became Veeronica - restoring collisions")
+        restoreAllCollisions()
+    end
+    
+    -- Update state
+    wasVeeronica = isVeeronica
+    
+    -- Skip if playing as Veeronica
+    if isVeeronica then return end
+    
+    for _, killer in ipairs(killersFolder:GetChildren()) do
+        if killer:IsA("Model") and not isLocalPlayerKiller(killer) then
+            for _, descendant in ipairs(killer:GetDescendants()) do
+                if descendant:IsA("BasePart") and descendant.CanCollide == true then
+                    disabledParts[descendant] = true
+                    descendant.CanCollide = false
+                end
+            end
+        end
+    end
+end)
+
+print("[No Collision] ✅ All OTHER killer collisions disabled!")
+print("   - Your own killer is NOT affected")
+print("   - Other killers will have no collision")
+print("   - Veeronica players are NOT affected (collisions stay enabled)")
+print("   - If you become Veeronica, collisions are RESTORED")
