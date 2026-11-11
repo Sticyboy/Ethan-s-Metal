@@ -23,7 +23,7 @@ local DEFAULT_LMS_PATH     = { "Themes", "LastSurvivor" }
 
 local ALLOWED_OPPONENTS = {
     ["cminorpentscale"] = true,
-    ["afterlifeisnear"] = true,
+    ["vrreBLUX"] = true,
 }
 -- ==================================
 
