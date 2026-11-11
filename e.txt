@@ -1,0 +1,234 @@
+-- ===== LMS Custom Music Replacer =====
+-- Replaces the game's default Last Survivor theme (Workspace.Themes.LastSurvivor)
+-- with a custom LMSTestMusic track, but ONLY:
+--   • during LMS (exactly 1 killer + 1 survivor)
+--   • when the opponent is in the allowlist
+-- Client-side only. Vanilla players hear the default music.
+
+local Players       = game:GetService("Players")
+local Workspace     = game:GetService("Workspace")
+local SoundService  = game:GetService("SoundService")
+local RunService    = game:GetService("RunService")
+
+local lp = Players.LocalPlayer
+
+-- ============ CONFIG ============
+local CUSTOM_AUDIO_URL  = "https://raw.githubusercontent.com/Sticyboy/Ethan-s-Metal/main/e.mp3"
+local CUSTOM_FILE_NAME  = "LMSTestMusic.mp3"
+local CUSTOM_SOUND_NAME = "LMSTestMusic"
+local CUSTOM_VOLUME     = 1
+
+local DEFAULT_LMS_SOUND_ID = "71057332615441"
+local DEFAULT_LMS_PATH     = { "Themes", "LastSurvivor" }
+
+local ALLOWED_OPPONENTS = {
+    ["cminorpentscale"] = true,
+    ["afterlifeisnear"] = true,
+}
+-- ==================================
+
+local getAsset = getcustomasset or getsynasset
+if not (writefile and getAsset) then
+    return
+end
+
+if not isfile(CUSTOM_FILE_NAME) then
+    local ok = pcall(function()
+        local data = game:HttpGet(CUSTOM_AUDIO_URL)
+        if type(data) == "string" and #data > 0 then
+            writefile(CUSTOM_FILE_NAME, data)
+        else
+            error("Download empty")
+        end
+    end)
+    if not ok then
+        return
+    end
+end
+
+local ok, customAssetId = pcall(getAsset, CUSTOM_FILE_NAME)
+if not ok or not customAssetId then
+    return
+end
+
+local customSound = SoundService:FindFirstChild(CUSTOM_SOUND_NAME)
+if customSound then customSound:Destroy() end
+customSound = Instance.new("Sound")
+customSound.Name    = CUSTOM_SOUND_NAME
+customSound.SoundId = customAssetId
+customSound.Volume  = CUSTOM_VOLUME
+customSound.Looped  = true
+customSound.Parent  = SoundService
+
+local activeLmsSound = nil
+local mutedOriginalVolume = nil
+local connectedLmsSound = nil
+
+local function getPlayerCounts()
+    local pf = Workspace:FindFirstChild("Players")
+    if not pf then return nil end
+    local kf = pf:FindFirstChild("Killers")
+    local sf = pf:FindFirstChild("Survivors")
+    if not kf or not sf then return nil end
+    return #kf:GetChildren(), #sf:GetChildren()
+end
+
+local function getOpponentUsername()
+    local pf = Workspace:FindFirstChild("Players")
+    if not pf then return nil end
+    local myTeam
+    for _, folder in ipairs(pf:GetChildren()) do
+        for _, c in ipairs(folder:GetChildren()) do
+            if c:GetAttribute("Username") == lp.Name then
+                myTeam = folder.Name
+                break
+            end
+        end
+        if myTeam then break end
+    end
+    if not myTeam then return nil end
+    local oppTeam = (myTeam == "Killers") and "Survivors" or "Killers"
+    local oppFolder = pf:FindFirstChild(oppTeam)
+    if not oppFolder then return nil end
+    local opp = oppFolder:GetChildren()[1]
+    return opp and opp:GetAttribute("Username") or nil
+end
+
+local function getDefaultLmsSound()
+    local node = Workspace
+    for _, seg in ipairs(DEFAULT_LMS_PATH) do
+        node = node and node:FindFirstChild(seg)
+        if not node then return nil end
+    end
+    if node:IsA("Sound") then return node end
+    return node:FindFirstChildWhichIsA("Sound")
+end
+
+local function isMatchingLmsSound(s)
+    if not s then return false end
+    local sid = tostring(s.SoundId):match("(%d+)")
+    return sid == DEFAULT_LMS_SOUND_ID
+end
+
+local function shouldReplaceLms()
+    local k, s = getPlayerCounts()
+    if not (k == 1 and s == 1) then return false end
+    local opp = getOpponentUsername()
+    return opp and ALLOWED_OPPONENTS[opp] == true
+end
+
+local function applyReplacement(gameSound)
+    if activeLmsSound == gameSound then return end
+    if activeLmsSound and activeLmsSound.Parent then
+        pcall(function()
+            activeLmsSound.Volume = mutedOriginalVolume or 0.5
+            if not activeLmsSound.IsPlaying then activeLmsSound:Resume() end
+        end)
+    end
+    if connectedLmsSound then
+        connectedLmsSound:Disconnect()
+        connectedLmsSound = nil
+    end
+
+    activeLmsSound = gameSound
+    mutedOriginalVolume = gameSound.Volume
+    pcall(function()
+        gameSound.Volume = 0
+        gameSound:Pause()
+    end)
+    if not customSound.IsPlaying then
+        customSound:Play()
+    end
+
+    connectedLmsSound = gameSound.AncestryChanged:Connect(function()
+        if not gameSound:IsDescendantOf(Workspace) then
+            if connectedLmsSound then
+                connectedLmsSound:Disconnect()
+                connectedLmsSound = nil
+            end
+            activeLmsSound = nil
+            mutedOriginalVolume = nil
+            if customSound.IsPlaying then customSound:Stop() end
+        end
+    end)
+end
+
+local function clearReplacement()
+    if connectedLmsSound then
+        connectedLmsSound:Disconnect()
+        connectedLmsSound = nil
+    end
+    if activeLmsSound and activeLmsSound.Parent then
+        pcall(function()
+            activeLmsSound.Volume = mutedOriginalVolume or 0.5
+            if not activeLmsSound.IsPlaying then activeLmsSound:Resume() end
+        end)
+    end
+    activeLmsSound = nil
+    mutedOriginalVolume = nil
+    if customSound.IsPlaying then customSound:Stop() end
+end
+
+local function tryHandleLmsSound()
+    if not shouldReplaceLms() then return end
+    local s = getDefaultLmsSound()
+    if s and isMatchingLmsSound(s) then
+        applyReplacement(s)
+    end
+end
+
+local themes = Workspace:FindFirstChild("Themes")
+if not themes then
+    Workspace.ChildAdded:Connect(function(c)
+        if c.Name == "Themes" then
+            themes = c
+            themes.ChildAdded:Connect(function(child)
+                if child.Name == "LastSurvivor" then
+                    task.wait(0.05)
+                    tryHandleLmsSound()
+                end
+            end)
+        end
+    end)
+end
+
+if themes then
+    themes.ChildAdded:Connect(function(child)
+        if child.Name == "LastSurvivor" then
+            task.wait(0.05)
+            tryHandleLmsSound()
+        end
+    end)
+    themes.ChildRemoved:Connect(function(child)
+        if child.Name == "LastSurvivor" then
+            clearReplacement()
+        end
+    end)
+end
+
+RunService.Heartbeat:Connect(function()
+    if not shouldReplaceLms() then
+        if activeLmsSound then clearReplacement() end
+        return
+    end
+
+    local s = getDefaultLmsSound()
+    if s and isMatchingLmsSound(s) then
+        if not activeLmsSound then
+            if s.IsPlaying or s.PlaybackState == Enum.PlaybackState.Playing then
+                applyReplacement(s)
+            elseif not s.IsPlaying and not customSound.IsPlaying then
+                applyReplacement(s)
+            end
+        elseif activeLmsSound ~= s then
+            clearReplacement()
+            applyReplacement(s)
+        end
+    else
+        if activeLmsSound then clearReplacement() end
+    end
+end)
+
+lp.CharacterAdded:Connect(function()
+    if activeLmsSound then clearReplacement() end
+end)
