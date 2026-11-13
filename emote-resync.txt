@@ -1,0 +1,164 @@
+-- ===== Emote Resync: "Looping The Burger" =====
+-- Restarts the emote's AnimationTrack whenever its Sound loops,
+-- so the two stay phase-aligned.
+--
+-- FIX: capture `game` at top level so nested closures (Heartbeat,
+-- task.spawn, etc.) don't lose the global binding in some executors.
+
+local game = game
+
+local Players      = game:GetService("Players")
+local Workspace    = game:GetService("Workspace")
+local SoundService = game:GetService("SoundService")
+local RunService   = game:GetService("RunService")
+
+local lp = Players.LocalPlayer
+
+-- ============ CONFIG ============
+local ANIMATION_ID   = "107080060610320"
+local SFX_IDS        = {
+    ["117896850745417"] = true,   -- common
+    ["138613803302924"] = true,   -- rare
+}
+local POLL_INTERVAL  = 0.016     
+-- ==================================
+
+-- Extract numeric id from a "rbxassetid://N" or "N" string
+local function numericId(s)
+    if not s then return nil end
+    return tostring(s):match("(%d+)")
+end
+
+-- Keep refs to any AnimationTrack + Sound we're currently tracking
+local activeTrack = nil
+local activeSound = nil
+local lastTimePosition = 0
+local trackEndedConn = nil
+local soundDestroyedConn = nil
+
+local function stopTracking()
+    if trackEndedConn then trackEndedConn:Disconnect(); trackEndedConn = nil end
+    if soundDestroyedConn then soundDestroyedConn:Disconnect(); soundDestroyedConn = nil end
+    activeTrack = nil
+    activeSound = nil
+    lastTimePosition = 0
+end
+
+-- Restart the animation from 0 and re-anchor
+local function restartAnimation()
+    if not activeTrack then return end
+    pcall(function()
+        activeTrack:Stop(0)
+        activeTrack:Play(0)
+    end)
+end
+
+-- Try to find the Sound the emote just created. Emotes usually parent
+-- their Sound to the character's HumanoidRootPart, but some systems use
+-- SoundService or Workspace. Search all three.
+local function findEmoteSound()
+    local myChar = lp.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local candidates = {}
+
+    if myRoot then
+        for _, d in ipairs(myRoot:GetDescendants()) do
+            if d:IsA("Sound") then table.insert(candidates, d) end
+        end
+    end
+    if myChar then
+        for _, d in ipairs(myChar:GetDescendants()) do
+            if d:IsA("Sound") then table.insert(candidates, d) end
+        end
+    end
+    local ssChildren = SoundService:GetChildren()
+    for _, d in ipairs(ssChildren) do
+        if d:IsA("Sound") then table.insert(candidates, d) end
+    end
+
+    for _, s in ipairs(candidates) do
+        local id = numericId(s.SoundId)
+        if id and SFX_IDS[id] then
+            return s
+        end
+    end
+    return nil
+end
+
+-- Attach our tracker to the AnimationTrack that just started.
+-- Called from AnimationPlayed on the local Animator.
+local function onAnimationPlayed(track)
+    local id = numericId(track.Animation and track.Animation.AnimationId)
+    if id ~= ANIMATION_ID then return end
+
+    stopTracking()
+    activeTrack = track
+    lastTimePosition = 0
+
+    -- Listen for the track ending (via Stop button) — tear down
+    trackEndedConn = track.Stopped:Connect(function()
+        stopTracking()
+    end)
+
+    -- Find the sound. The emote system often creates the Sound *after*
+    -- the animation starts, so poll for up to ~1s.
+    task.spawn(function()
+        local deadline = tick() + 1
+        while tick() < deadline and activeTrack == track do
+            local s = findEmoteSound()
+            if s then
+                activeSound = s
+                lastTimePosition = s.TimePosition
+                soundDestroyedConn = s.AncestryChanged:Connect(function()
+                    if not s:IsDescendantOf(game) then stopTracking() end
+                end)
+                return
+            end
+            task.wait(0.05)
+        end
+    end)
+end
+
+-- Hook the local Animator so we see every animation the player plays
+local function hookLocalAnimator()
+    local char = lp.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then return end
+    animator.AnimationPlayed:Connect(onAnimationPlayed)
+end
+
+-- Re-hook on respawn
+lp.CharacterAdded:Connect(function()
+    stopTracking()
+    task.wait(0.5)
+    hookLocalAnimator()
+end)
+
+-- Initial hook (character may already exist)
+hookLocalAnimator()
+
+-- =====================================================
+-- Loop-wrap detection. Poll activeSound.TimePosition;
+-- if it drops backwards by more than POLL_INTERVAL + a
+-- safety margin, we've looped → restart the animation.
+-- =====================================================
+local WRAP_TOLERANCE = 0.08   -- seconds of "slack" for jitter
+local lastPollTime = 0
+
+RunService.Heartbeat:Connect(function()
+    if not activeSound or not activeTrack then return end
+    if not activeSound:IsDescendantOf(game) then stopTracking(); return end
+    if not activeSound.IsPlaying then return end
+
+    local now = tick()
+    if now - lastPollTime < POLL_INTERVAL then return end
+    lastPollTime = now
+
+    local tp = activeSound.TimePosition
+    if tp < lastTimePosition - WRAP_TOLERANCE then
+        restartAnimation()
+    end
+    lastTimePosition = tp
+end)
