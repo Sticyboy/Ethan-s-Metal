@@ -1,10 +1,3 @@
--- ===== LMS Custom Music Replacer =====
--- Replaces the game's default Last Survivor theme (Workspace.Themes.LastSurvivor)
--- with a custom LMSTestMusic track, but ONLY:
---   • during LMS (exactly 1 killer + 1 survivor)
---   • when the opponent is in the allowlist
--- Client-side only. Vanilla players hear the default music.
-
 local Players       = game:GetService("Players")
 local Workspace     = game:GetService("Workspace")
 local SoundService  = game:GetService("SoundService")
