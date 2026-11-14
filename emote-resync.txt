@@ -29,6 +29,11 @@ local EMOTES = {
         },
     },
     {
+        Name        = "Split",
+        AnimationId = "72820840589864",
+        SFX = { ["107460652237034"] = true },
+    },
+    {
         Name        = "Aura Farmer",
         AnimationId = "129908934628348",
         SFX = { ["101770487619891"] = true },
